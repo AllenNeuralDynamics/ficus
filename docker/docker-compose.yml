@@ -1,3 +1,7 @@
+# This is a sample docker-compose for setting up a PostgreSQL database
+# You shouldn't need to run this unless you want to setup your own database
+# Check readme.md for more information about where this database was setup
+
 services: 
   pg_db: 
     image: postgres
