@@ -20,14 +20,7 @@ import yaml
 from yaml import loader
 from yaml.parser import ParserError
 from kazoo.client import KazooClient
-from kazoo.handlers.threading import KazooTimeoutError
 
-
-# from .config_server import ConfigServer
-
-# from .log import WebHandler, setup_logging, default_logging_dict  # noqa  for backwards compatiblity
-
-resource_path = f"{os.path.dirname(__file__)}/resources"
 
 default_config_dict = """
 linux_install_paths:
@@ -35,15 +28,27 @@ linux_install_paths:
     local_config: config
     local_log_config: logs
     python: /opt/mcpython3
+darwin_install_paths:
+  install: /var/log/aibs_mpe
+  local_config: config
+  local_log_config: logs
 services:
     log_server: eng-logtools.corp.alleninstitute.org:9000
-    python_index: http://eng-logtools.corp.alleninstitute.org:3141/aibs/dev
-    zookeeper: eng-logtools.corp.alleninstitute.org:2181
+    python_index: http://eng-tools:3141/aibs/dev
+    zookeeper: eng-logtools:2181
+    issue_url: http://mpe-redirects/MPETracking
+    gsid:
+        host: eng-tools
+        port: 6379
+        db: 5 
 windows_install_paths:
-    install: /ProgramData/AIBS_MPE
+    install: C:/ProgramData/AIBS_MPE
     local_config: config
     local_log_config: logs
-    python: /mcpython3
+    python: C:/mcpython3
+credentials:
+    keepass_keyfile: C:\ProgramData\AIBS_MPE\.secrets\sipe_sw_passwords.keyx
+    keepass_db: //allen/aibs/mpe/keepass/sipe_sw_passwords.kdbx
 """
 
 
@@ -93,16 +98,11 @@ class ConfigServer(KazooClient):
 def source_configuration(
     project_name: str,
     hosts: str = "eng-logtools:2181",
-    use_local_config: bool = False,
-    send_start_log: bool = True,
-    # fetch_logging_config: bool = True,
-    # fetch_project_config: bool = True,
     config_type: Literal["configuration", "logging_v2"] = "configuration",
     version: str = None,
     rig_id: str = None,
     comp_id: str = None,
     serialization: str = "yaml",
-    always_pass_exc_info=False,
 ):
     """
     Connects to the quorum and searches for the following paths:
@@ -111,25 +111,15 @@ def source_configuration(
     /rigs/<rig_id>/[projects | hardware]/[configuration | logging]
     /rigs/<rig_id>
 
-    :param fetch_project_config: set to False if you do not want to source a project configuration
-    :param fetch_logging_config: set to False if you do not want to source a logging configuration
     :param project_name: The name of the configuration, usually project name, you want to find
-    :param use_local_config: whether to use the local cache [default = True]
     :param hosts: The quorum to connect to
-    :param send_start_log: Whether to send a log to the webserver (not desirable for libraries) [default = True]
     :param version: Current software version.  Can be specified but will be auto-detected if None
     :param rig_id: override for rig_id
     :param comp_id: override for comp_id
     :param serialization: the format for the document in zookeeper ['yaml', 'ini', 'json', 'xml']
-    :param always_pass_exc_info: whether to always check for exc_info
     :raises: KeyError if it can't find the default configuration
-    :return:
+    :return: dict[str, Any] of the configuration
     """
-
-    # if use_local_config:
-    #     return build_local_configuration(
-    #         project_name, fetch_logging_config, fetch_project_config, send_start_log, version, serialization
-    #     )
 
     with ConfigServer(hosts=hosts, randomize_hosts=False) as zk:
         """
@@ -139,98 +129,14 @@ def source_configuration(
         if not version:
             version = "unknown"
 
-        # if not zk.connected:
-        #     print("Looking for local configurations ...")
-        #     return build_local_configuration(project_name, fetch_logging_config, fetch_project_config, send_start_log)
-
-        # mpe_defaults = fetch_configuration(zk, f"/mpe_defaults/configuration", required=True)
-        # local_log_path, local_config_path = get_platform_paths(mpe_defaults, project_name)
-        config = None
-
         config = compile_remote_configuration(
             zk, project_name, config_type, rig_id=rig_id, comp_id=comp_id, serialization=serialization
         )
-
-        # if fetch_project_config:
-        #     config = compile_remote_configuration(
-        #         zk, project_name, "configuration", rig_id=rig_id, comp_id=comp_id, serialization=serialization
-        #     )
-        #     # local_log_path, local_config_path = get_platform_paths(project_config, project_name)
-        #     # os.makedirs(os.path.dirname(local_config_path), exist_ok=True)
-        #     # cache_remote_config(project_config, local_config_path)
-
-        # # elif config_type == "Logging":
-        # if fetch_logging_config:
-        #     config = compile_remote_configuration(zk, project_name, "logging_v2", rig_id=rig_id, comp_id=comp_id)
-        #     # setup_logging(project_name, os.path.expandvars(local_log_path), log_config, send_start_log, version=version,
-        #     #               rig_id=rig_id,
-        #     #               comp_id=comp_id,
-        #     #               always_pass_exc_info=always_pass_exc_info)
-        #     # cache_remote_config(log_config, local_log_path)
 
         if config is None:
             raise ConnectionError("Error retrieving configuration from zookeeper.")
 
         return config
-
-
-# def build_local_configuration(
-#     project_name, fetch_logging_config=True, fetch_project_config=True, send_start_log=True, version=None,
-#     serialization="yaml"  # noqa
-# ):
-#     """
-#     Builds logging and project configuration from local files and mpeconfig defaults as necessary.  This can be useful
-#     for one-off configurations for testing when you don't want to edit the zookeeper rig / comp configuration.
-#     :param fetch_project_config: set to False if you do not want to source a project configuration
-#     :param fetch_logging_config: set to False if you do not want to source a logging configuration
-#     :param project_name: The name of the configuration, usually project name, you want to find
-#     :param send_start_log: Whether to send a log to the webserver (not desirable for libraries) [default = True]
-#     :param version: Module version to add to log_record
-#     :param serialization: What document format to parse
-#     :return:
-#     """
-#     default_config = yaml.load(default_config_dict, Loader=loader.Loader)
-#     default_logging = yaml.load(default_logging_dict, Loader=loader.Loader)
-#     local_log_path, local_config_path = get_platform_paths(default_config, project_name)
-
-#     # setup logging configuration
-#     if fetch_logging_config:
-#         if os.path.isfile(local_log_path):
-#             log_config = yaml.load(open(local_log_path, "r"), Loader=loader.Loader)
-#         else:
-#             print("Didn't find a local logging configuration:  Using the default MPE logging.")
-#             log_config = default_logging
-#             cache_remote_config(log_config, local_log_path)
-#         setup_logging(project_name, local_log_path, log_config, send_start_log, version)
-
-#     # setup project configuration
-#     if fetch_project_config:
-#         if os.path.isfile(local_config_path):
-#             project_config = yaml.load(open(local_config_path, "r"), Loader=loader.Loader)
-#             project_config = deep_merge(copy.deepcopy(default_config), project_config)
-#         else:
-#             logging.warning(f"Could not find a local project configuration: {local_config_path}.")
-#             project_config = default_config
-
-#         return project_config
-
-
-# def get_platform_paths(config, project_name):
-#     """
-#     Installation and other meta-data is described in the mpe defaults configuration.  This function figures out the
-#     proper pathing for a given OS based on that configuration and returns it.
-#     :param config: configuration dictionary containing the installation paths
-#     :param project_name: The name of the configuration, usually project name, you want to find
-#     :return: (local_log_path: str, local_config_path: str)
-#     """
-#     if "windows" in platform.platform().lower():
-#         paths = config["windows_install_paths"]
-#     else:
-#         paths = config["linux_install_paths"]
-#         paths["install"] = os.path.expanduser(paths["install"])
-#     local_log_path = f'{paths["install"]}/{project_name}/{paths["local_log_config"]}/logging.yml'
-#     local_config_path = f'{paths["install"]}/{project_name}/{paths["local_config"]}/{project_name}.yml'
-#     return os.path.expandvars(local_log_path), os.path.expandvars(local_config_path)
 
 
 def compile_remote_configuration(
@@ -326,48 +232,6 @@ def fetch_configuration(server, config_path, required=False, serialization="yaml
             exit(1)
 
     return config if config else {}
-
-
-# def md5_equal(a, b):
-#     a_s = str(a).encode()
-#     b_s = str(b).encode()
-#     return md5(a_s).hexdigest() == md5(b_s).hexdigest()
-
-
-# def cache_remote_config(configuration, config_path):
-#     """
-#     Creates a directory and saves the configuration data.  if a configuration exists, it will be renamed with a
-#     timestamp.
-#     :param configuration: dictionary to save to dist
-#     :param config_path: fully qualified path to save configuration.
-#     :return:
-#     """
-#     config_path = os.path.expandvars(config_path)
-#     os.makedirs(os.path.dirname(config_path), exist_ok=True)
-#     if os.path.isfile(config_path):
-#         config = yaml.load(open(config_path), Loader=loader.Loader)
-#         if config == configuration:
-#             return
-
-#         timestamp = datetime.datetime.strftime(datetime.datetime.now(), "%y%m%d-%H%M%S")
-#         backup_file = f"{config_path}.{timestamp}.bck"
-#         logging.info(f"Copying previous configuration to {backup_file}")
-#         shutil.copyfile(config_path, backup_file)
-
-#     with open(config_path, "w") as f:
-#         yaml.dump(configuration, f, default_flow_style=False)
-
-
-# def dict_to_namedtuple(dictionary):
-#     """
-#     Utility function to change dictionaries to namedtuples recursively
-#     :param dictionary: the dictionary to convert
-#     :return: a namedtuple version of the dictionary contents
-#     """
-#     for key, value in dictionary.items():
-#         if isinstance(value, dict):
-#             dictionary[key] = dict_to_namedtuple(value)
-#     return namedtuple("configDict", dictionary.keys())(**dictionary)
 
 
 def deep_merge(dict_prime, dict_mod):
