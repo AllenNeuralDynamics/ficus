@@ -7,4 +7,4 @@ router = APIRouter(prefix="/v1")
 
 router.include_router(rigs_router)
 router.include_router(calibrations_router)
-
+router.include_router(appconfigs_router)
