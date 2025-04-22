@@ -25,16 +25,16 @@ def get_config(
     These three levels get merged to form the final configuration.
 
     Args:
-        app (str): Application/project name, e.g. "waterlog", "mouse_director"
-        rig (str): Rig name, e.g. "MESO.1-Acq", "WL.2"
-        version (str): Application version. Currently configs are not versioned so this is unused
-        config_type (str): Type of configuration to retrieve, currently either "configuration" or "logging_v2"
+    - app (str): Application/project name, e.g. "waterlog", "mouse_director"
+    - rig (str): Rig name, e.g. "MESO.1-Acq", "WL.2"
+    - version (str): Application version. Currently configs are not versioned so this is unused
+    - config_type (str): Type of configuration to retrieve, currently either "configuration" or "logging_v2"
     Returns:
-        Dict[str, Any]: Configuration dictionary.
+    - Dict[str, Any]: Configuration dictionary.
 
-    Examples: 
-        >>> config = get_config('waterlog', 'WL.2')
-        >>> log_config = get_config('waterlog', 'WL.2', config_type='logging_v2')
+    Examples:
+    - http://127.0.0.1:8000/api/v1/appconfigs/?app=camstim&rig=NP.1-Stim
+    - http://host:port/api/v1/appconfigs/?app=waterlog?config_type=logging_v2
     """
     try:
         rig_type, instance, comp_type = parse_rig_name(rig)
