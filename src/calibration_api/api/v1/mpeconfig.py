@@ -1,6 +1,7 @@
 """
 A small module to specifically get MPE Configurations form our zookeeper quorum.
-It supports local configurations and default configurations in the cases where zookeeper is not available.
+
+Copied from AIBS mpetk.mpeconfig, original author Ross Hytnen
 """
 
 import copy
@@ -29,9 +30,9 @@ linux_install_paths:
     local_log_config: logs
     python: /opt/mcpython3
 darwin_install_paths:
-  install: /var/log/aibs_mpe
-  local_config: config
-  local_log_config: logs
+    install: /var/log/aibs_mpe
+    local_config: config
+    local_log_config: logs
 services:
     log_server: eng-logtools.corp.alleninstitute.org:9000
     python_index: http://eng-tools:3141/aibs/dev
