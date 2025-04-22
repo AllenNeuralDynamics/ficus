@@ -4,7 +4,7 @@ from typing import Any, Dict, Literal
 import traceback
 
 from calibration_api.api.v1.mpeconfig import source_configuration
-from calibration_api.api.v1.utils import parse_rig_name
+from calibration_api.utils.rig_parser import parse_rig_name
 
 
 router = APIRouter(prefix="/appconfigs", tags=["Application Configs"])
