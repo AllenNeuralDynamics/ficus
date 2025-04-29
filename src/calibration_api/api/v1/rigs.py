@@ -2,8 +2,8 @@ from fastapi import APIRouter
 
 from typing import Any, Dict, List, Optional
 
-from src.models.calibration import Calibration
-from src.models.rig import Rig
+from calibration_api.models.calibration import Calibration
+from calibration_api.models.rig import Rig
 
 
 router = APIRouter(prefix="/rigs", tags=["Rigs"])

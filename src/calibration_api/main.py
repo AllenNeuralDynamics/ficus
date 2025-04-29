@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from typing import Any, Dict
 
-from src.api import router
+from calibration_api.api import router
 
 
 app = FastAPI()

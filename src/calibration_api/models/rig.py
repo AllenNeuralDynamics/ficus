@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from src.models.partial import partial_model
+from calibration_api.models.partial import partial_model
 
 
 class Rig(BaseModel):
