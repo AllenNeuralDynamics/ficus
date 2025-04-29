@@ -51,3 +51,11 @@ Use tox to run testing, typing, and linting
 tox -e test,type,lint
 ```
 
+### Database Connection
+
+The PostgresSQL database is hosted on eng-tools:5432. Reach out to [Jessy](jessy.liao@alleninstitute.org) or someone from the SIPE team for credentials. 
+
+The sql script to setup the database can be found [here](database/setup.pgsql).
+
+
+
