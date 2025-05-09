@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from calibration_api.api.v1.rigs import router as rigs_router
 from calibration_api.api.v1.calibrations import router as calibrations_router
+from calibration_api.api.v1.appconfigs import router as appconfigs_router
 
 router = APIRouter(prefix="/v1")
 
