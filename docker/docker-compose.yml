@@ -3,28 +3,24 @@
 # Check readme.md for more information about where this database was setup
 
 services: 
-    api:
-      container_name: cal_api
-      ports: 
-        - "6969:80"
-#   pg_db: 
-#     image: postgres
-#     container_name: calibration
-#     restart: always
-#     environment:
-#       POSTGRES_USER: calibration 
-#       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-#       POSTGRES_DB: calibration
-#     secrets:
-#       - db_password
-#     ports:
-#       - "5432:5432"
-#     volumes:
-#       - pg_data:/var/lib/postgresql/data
+  pg_db: 
+    image: postgres
+    container_name: calibration
+    restart: always
+    environment:
+      POSTGRES_USER: calibration 
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: calibration
+    secrets:
+      - db_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
 
-# secrets:
-#   db_password:
-#     file: ./secrets/db_password.txt
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
 
-# volumes:
-#   pg_data:
+volumes:
+  pg_data:

@@ -1,0 +1,7 @@
+# This is the docker compose file to spin up the calibration API 
+services: 
+    api:
+      build: .
+      container_name: cal_api
+      ports: 
+        - "6969:80"
