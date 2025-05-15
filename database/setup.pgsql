@@ -9,11 +9,11 @@
 --         INTEGER
 --         PRIMARY KEY
 --         GENERATED ALWAYS AS IDENTITY,
---     full_name text,
+--     rig_name text UNIQUE,
 --     rig_type text,
 --     comp_type text,
 --     instance text,
---     host_name varchar(255)
+--     hostname varchar(255)
 -- );
 
 -- CREATE TABLE calibrations(
@@ -29,4 +29,3 @@
 --     output_data json,
 --     notes text
 -- );
-

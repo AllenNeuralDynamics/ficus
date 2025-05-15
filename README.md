@@ -8,9 +8,12 @@ Calibration API: an API to store calibration data for various rigs at the Allen 
 
 ### Endpoints
 
+
+TODO: This list is out-of-date, remove it and replace with openapi docs
+
 | Endpoint                              | HTTP Method | Description                | Query Param                              |
 | ------------------------------------- | ----------- | -------------------------- | ---------------------------------------- |
-| /api/v1/rigs/                         | GET         | Get all rigs               | rig_type, comp_type, instance, host_name |
+| /api/v1/rigs/                         | GET         | Get all rigs               | rig_type, comp_type, instance, hostname |
 | /api/v1/rigs/                         | POST        | Add new rig                |                                          |
 | /api/v1/rigs/{rig_name}/              | GET         | Get rig based on full name | *rig_name                                |
 | /api/v1/rigs/{rig_name}/calibrations/ | GET         | Get calibrations for rig   | *rig_name, device_name                   |

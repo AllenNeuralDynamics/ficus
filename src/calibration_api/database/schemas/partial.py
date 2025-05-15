@@ -4,7 +4,7 @@ from pydantic.fields import FieldInfo
 from copy import deepcopy
 
 
-def partial_model(model: Type[BaseModel], required: Optional[List[str]] = None) -> Type[BaseModel]:
+def partial_model(model: Type[BaseModel], required: List[str] = []) -> Type[BaseModel]:
     """Returns pydantic model based on model given but the fields are all optional, 
     unless the field is listed in required list
 
@@ -27,6 +27,6 @@ def partial_model(model: Type[BaseModel], required: Optional[List[str]] = None) 
         **{
             field_name: make_field_optional(field_info)
             for field_name, field_info in model.model_fields.items() 
-            if required and field_name not in required
+            if field_name not in required
         }
     )
