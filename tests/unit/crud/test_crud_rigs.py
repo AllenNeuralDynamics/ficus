@@ -6,7 +6,7 @@ from tests.unit.mock_database import db_session, Rigs
 
 from calibration_api.crud.rigs import (
     get_rigs,
-    get_rig_by_name,
+    read_rigs_by_name,
     create_rigs,
     update_rig,
     delete_rig_by_name
@@ -82,12 +82,12 @@ def test_get_rig_by_name(db_test):
     """Test fetching a rig by its name."""
 
     # Test fetching an existing rig
-    result = get_rig_by_name(db_test, "frg_1_prod")
+    result = read_rigs_by_name(db_test, "frg_1_prod")
     assert result is not None
     assert result.rig_name == "frg_1_prod"
 
     # Test fetching a non-existing rig
-    result = get_rig_by_name(db_test, "frg_1_butt")
+    result = read_rigs_by_name(db_test, "frg_1_butt")
     assert result is None
 
 ################################################################################
@@ -163,7 +163,7 @@ def test_update_rig(db_test):
         "rig_name": "frg_1_new",
         "hostname": "w10testf1_new"
     }))
-    updated_rig = get_rig_by_name(db_test, "frg_1_new")
+    updated_rig = read_rigs_by_name(db_test, "frg_1_new")
 
     assert updated_rig.rig_name == "frg_1_new"
     assert updated_rig.rig_type == "frg"
@@ -177,7 +177,7 @@ def test_update_rig_single_parameter(db_test):
     update_rig(db_test, "frg_1_prod", PartialRigInput(**{
         "rig_name": "frg_1_new"
     }))
-    updated_rig = get_rig_by_name(db_test, "frg_1_new")
+    updated_rig = read_rigs_by_name(db_test, "frg_1_new")
 
     assert updated_rig.rig_name == "frg_1_new"
     assert updated_rig.rig_type == "frg"
@@ -189,7 +189,7 @@ def test_update_rig_single_parameter(db_test):
     update_rig(db_test, "frg_1_new", PartialRigInput(**{
         "hostname": "w10testf1_new"
     }))
-    updated_rig = get_rig_by_name(db_test, "frg_1_new")
+    updated_rig = read_rigs_by_name(db_test, "frg_1_new")
 
     assert updated_rig.rig_name == "frg_1_new"
     assert updated_rig.rig_type == "frg"
@@ -210,7 +210,7 @@ def test_delete_rig_by_name(db_test):
     # Delete an existing rig
     delete_rig_by_name(db_test, "frg_1_prod")
     assert len(get_rigs(db_test)) == initial_rig_count - 1
-    result = get_rig_by_name(db_test, "frg_1_prod")
+    result = read_rigs_by_name(db_test, "frg_1_prod")
     assert result is None
 
     # Try to delete a non-existing rig
