@@ -23,7 +23,8 @@ def get_rigs(
 ) -> dict[str, Any]:
     """Get all rigs from the database."""
     rigs = crud_rigs.get_rigs(db, rig_type, instance, comp_type, hostname)
-    return {"message": "Query successful", "output": f"{rigs}"}
+    rigs = [rig.to_dict() for rig in rigs]  
+    return {"message": "Query successful", "output": rigs}
 
 
 @router.post("/")
@@ -31,6 +32,7 @@ def add_rigs(rig_inputs: list[RigAddUpdate], db: Any = Depends(get_db)) -> dict[
     """Add rig to database."""
     try:
         rigs = crud_rigs.create_rigs(db, rig_inputs)
+        rigs = [rig.to_dict() for rig in rigs]  
         return {"message": "Added rig", "output": f"{rigs}"}
     except IntegrityError as e:
         raise HTTPException(
@@ -46,7 +48,7 @@ def get_rig(rig_name: str, db: Any = Depends(get_db)) -> dict[str, Any]:
         rig = crud_rigs.get_rig_by_name(db, rig_name)
     except HTTPException as e:
         raise e
-    return {"message": "Query successful", "output": f"{rig}"}
+    return {"message": "Query successful", "output": rig.to_dict()}
 
 
 @router.patch("/{rig_name}/")
@@ -56,7 +58,7 @@ def update_rig(rig_name: str, rig_updates: PartialRigAddUpdate, db: Any = Depend
         rig = crud_rigs.update_rig(db, rig_name, rig_updates)
     except HTTPException as e:
         raise e
-    return {"message": "Query successful", "output": f"{rig}"}
+    return {"message": "Query successful", "output": rig.to_dict()}
 
 
 # Maybe hide this endpoint until authentication is added
@@ -67,7 +69,7 @@ def delete_rig(rig_name: str, db: Any = Depends(get_db)) -> dict[str, Any]:
         rig = crud_rigs.delete_rig_by_name(db, rig_name)
     except HTTPException as e:
         raise e
-    return {"message": "Deleted rig", "output": f"{rig}"}
+    return {"message": "Deleted rig", "output": rig.to_dict()}
 
 
 ################################################################################
@@ -83,7 +85,8 @@ def get_calibrations_by_rig(
 ) -> dict[str, Any]:
     """Get calibrations for a specific rig."""
     calibrations = crud_calibrations.get_calibrations(db, rig_name, device_name, date)
-    return {"message": "Query successful", "input": f"{calibrations}"}
+    calibrations = [calibration.to_dict() for calibration in calibrations]  
+    return {"message": "Query successful", "input": calibrations}
 
 
 @router.post("/{rig_name}/calibrations/")
@@ -93,9 +96,10 @@ def create_calibrations(
     """Add calibrations."""
     try:
         calibrations = crud_calibrations.create_calibrations(db, rig_name, calibration_inputs)
+        calibrations = [calibration.to_dict() for calibration in calibrations]  
     except HTTPException as e:
         raise e
-    return {"message": "Added calibrations", "inputs": f"{calibrations}"}
+    return {"message": "Added calibrations", "inputs": calibrations}
 
 
 @router.patch("/{rig_name}/calibrations/{device_name}/")
@@ -110,7 +114,7 @@ def update_calibration(
         calibration = crud_calibrations.update_calibration(db, rig_name, device_name, calibration_updates)
     except HTTPException as e:
         raise e
-    return {"message": "Query successful", "output": f"{calibration}"}
+    return {"message": "Query successful", "output": calibration.to_dict()}
 
 
 # Maybe hide this endpoint until authentication is added
@@ -118,7 +122,7 @@ def update_calibration(
 def delete_calibration(rig_name: str, device_name: str, db: Any = Depends(get_db)) -> dict[str, Any]:
     """Delete calibration given the rig its on and the device name."""
     try:
-        rig = crud_calibrations.delete_calibration(db, rig_name, device_name)
+        calibration = crud_calibrations.delete_calibration(db, rig_name, device_name)
     except HTTPException as e:
         raise e
-    return {"message": "Deleted rig", "output": f"{rig}"}
+    return {"message": "Deleted rig", "output": calibration.to_dict()}

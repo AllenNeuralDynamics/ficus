@@ -1,3 +1,5 @@
+import json 
+
 from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -18,9 +20,24 @@ class Calibrations(Base):
 
     __table_args__ = (UniqueConstraint("rig_name", "device_name", name="unique_rig_device"),)
 
+    def to_dict(self):
+        return {
+            "rig_name": self.rig_name,
+            "device_name": self.device_name,
+            "description": self.description,
+            "date": self.date,
+            "input_data": self.input_data,
+            "output_data": self.output_data,
+            "notes": self.notes
+        }
+
     def __repr__(self) -> str:
-        return (
-            f"Calibrations(id={self.id}, rig_name={self.rig_name}, device_name={self.device_name}, "
-            f"description={self.description}, date={self.date}, input_data={self.input_data}, "
-            f"output_data={self.output_data}, notes={self.notes})"
-        )
+        return json.dumps({
+            "rig_name": self.rig_name,
+            "device_name": self.device_name,
+            "description": self.description,
+            "date": self.date,
+            "input_data": self.input_data,
+            "output_data": self.output_data,
+            "notes": self.notes
+        })

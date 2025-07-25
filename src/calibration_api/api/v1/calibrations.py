@@ -20,7 +20,8 @@ def get_calibrations(
 ) -> dict[str, Any]:
     """Get all calibrations"""
     calibrations = crud_calibrations.get_calibrations(db, rig_name, device_name, datetime)
-    return {"message": "Query successful", "inputs": f"{calibrations}"}
+    calibrations = [calibration.to_dict() for calibration in calibrations]   
+    return {"message": "Query successful", "inputs": calibrations}
 
 
 @router.get("/{device_name}")
@@ -29,10 +30,10 @@ def get_calibration(
 ) -> dict[str, Any]:
     """Get a specific calibration for a device given the rig name and device name."""
     try:
-        calibrations = crud_calibrations.get_calibration(db, rig_name, device_name, datetime)
+        calibration = crud_calibrations.get_calibration(db, rig_name, device_name, datetime)
     except HTTPException as e:
         raise e
-    return {"message": "Query successful", "inputs": f"{calibrations}"}
+    return {"message": "Query successful", "inputs": calibration.to_dict()}
 
 
 @router.post("/")
@@ -42,7 +43,8 @@ def add_calibrations(
     """Add calibration(s) to a rig."""
     try:
         calibrations = crud_calibrations.create_calibrations(db, rig_name, calibration_inputs)
-        return {"message": "Added calibrations", "inputs": f"{calibrations}"}
+        calibrations = [calibration.to_dict() for calibration in calibrations]   
+        return {"message": "Added calibrations", "inputs": calibrations}
     except HTTPException as e:
         raise e
 
@@ -57,7 +59,7 @@ def update_calibration(
     """Update calibration for a device given the rig name and device name."""
     try:
         calibration = crud_calibrations.update_calibration(db, rig_name, device_name, calibration_updates)
-        return {"message": "Updated calibration", "inputs": f"{calibration}"}
+        return {"message": "Updated calibration", "inputs": calibration.to_dict()}
     except HTTPException as e:
         raise e
 
@@ -67,7 +69,7 @@ def update_calibration(
 def delete_calibration(rig_name: str, device_name: str, db: Any = Depends(get_db)) -> dict[str, Any]:
     """Delete calibration given the rig its on and the device name."""
     try:
-        rig = crud_calibrations.delete_calibration(db, rig_name, device_name)
+        calibration = crud_calibrations.delete_calibration(db, rig_name, device_name)
     except HTTPException as e:
         raise e
-    return {"message": "Deleted rig", "output": f"{rig}"}
+    return {"message": "Deleted rig", "output": calibration.to_dict()}

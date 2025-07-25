@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,8 +14,20 @@ class Rigs(Base):
     instance: Mapped[str] = mapped_column(String)
     hostname: Mapped[str] = mapped_column(String(255))
 
+    def to_dict(self):
+        return {
+            "rig_name": self.rig_name,
+            "rig_type": self.rig_type,
+            "comp_type": self.comp_type,
+            "instance": self.instance,
+            "hostname": self.hostname,
+        }
+
     def __repr__(self) -> str:
-        return (
-            f"Rigs(rig_name={self.rig_name}, rig_type={self.rig_type}, "
-            f"comp_type={self.comp_type}, instance={self.instance}, hostname={self.hostname})"
-        )
+        return json.dumps({
+            "rig_name": self.rig_name,
+            "rig_type": self.rig_type,
+            "comp_type": self.comp_type,
+            "instance": self.instance,
+            "hostname": self.hostname,
+        })
