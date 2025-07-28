@@ -21,7 +21,7 @@ def get_calibrations(
     """Get all calibrations"""
     calibrations = crud_calibrations.get_calibrations(db, rig_name, device_name, datetime)
     calibrations = [calibration.to_dict() for calibration in calibrations]   
-    return {"message": "Query successful", "inputs": calibrations}
+    return {"message": "Query successful", "output": calibrations}
 
 
 @router.get("/{device_name}")
@@ -33,7 +33,7 @@ def get_calibration(
         calibration = crud_calibrations.get_calibration(db, rig_name, device_name, datetime)
     except HTTPException as e:
         raise e
-    return {"message": "Query successful", "inputs": calibration.to_dict()}
+    return {"message": "Query successful", "output": calibration.to_dict()}
 
 
 @router.post("/")
@@ -44,7 +44,7 @@ def add_calibrations(
     try:
         calibrations = crud_calibrations.create_calibrations(db, rig_name, calibration_inputs)
         calibrations = [calibration.to_dict() for calibration in calibrations]   
-        return {"message": "Added calibrations", "inputs": calibrations}
+        return {"message": "Added calibrations", "output": calibrations}
     except HTTPException as e:
         raise e
 
@@ -59,7 +59,7 @@ def update_calibration(
     """Update calibration for a device given the rig name and device name."""
     try:
         calibration = crud_calibrations.update_calibration(db, rig_name, device_name, calibration_updates)
-        return {"message": "Updated calibration", "inputs": calibration.to_dict()}
+        return {"message": "Updated calibration", "output": calibration.to_dict()}
     except HTTPException as e:
         raise e
 

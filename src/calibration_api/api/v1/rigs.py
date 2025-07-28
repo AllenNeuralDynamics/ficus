@@ -33,7 +33,7 @@ def add_rigs(rig_inputs: list[RigAddUpdate], db: Any = Depends(get_db)) -> dict[
     try:
         rigs = crud_rigs.create_rigs(db, rig_inputs)
         rigs = [rig.to_dict() for rig in rigs]  
-        return {"message": "Added rig", "output": f"{rigs}"}
+        return {"message": "Added rig", "output": rigs}
     except IntegrityError as e:
         raise HTTPException(
             status_code=409,
@@ -86,7 +86,7 @@ def get_calibrations_by_rig(
     """Get calibrations for a specific rig."""
     calibrations = crud_calibrations.get_calibrations(db, rig_name, device_name, date)
     calibrations = [calibration.to_dict() for calibration in calibrations]  
-    return {"message": "Query successful", "input": calibrations}
+    return {"message": "Query successful", "output": calibrations}
 
 
 @router.post("/{rig_name}/calibrations/")
@@ -99,7 +99,7 @@ def create_calibrations(
         calibrations = [calibration.to_dict() for calibration in calibrations]  
     except HTTPException as e:
         raise e
-    return {"message": "Added calibrations", "inputs": calibrations}
+    return {"message": "Added calibrations", "output": calibrations}
 
 
 @router.patch("/{rig_name}/calibrations/{device_name}/")
