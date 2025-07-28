@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from calibration_api.database.models.rigs import Rigs
@@ -36,19 +37,36 @@ def get_rig_by_name(db: Session, rig_name: str) -> Rigs:
 
 def create_rigs(db: Session, rig_inputs: list[RigAddUpdate]) -> list[Rigs]:
     """Create a new rig."""
-    rigs_added = []
-    for rig in rig_inputs:
-        rig_dict = rig.model_dump()
-        rig_full_name_list = rig_dict["rig_name"].split("_")
-        rig_dict["rig_type"] = rig_full_name_list[0]
-        rig_dict["instance"] = rig_full_name_list[1]
-        rig_dict["comp_type"] = rig_full_name_list[2]
+    try:
+        rigs_added = []
+        for rig in rig_inputs:
+            rig_dict = rig.model_dump()
+            rig_full_name_list = rig_dict["rig_name"].split("_")
+            rig_dict["rig_type"] = rig_full_name_list[0]
+            rig_dict["instance"] = rig_full_name_list[1]
+            rig_dict["comp_type"] = rig_full_name_list[2]
 
-        rig_to_add = Rigs(**rig_dict)
-        db.add(rig_to_add)
-        rigs_added.append(rig_to_add)
-    db.commit()
-    return rigs_added
+            rig_to_add = Rigs(**rig_dict)
+            db.add(rig_to_add)
+            rigs_added.append(rig_to_add)
+        db.commit()
+        return rigs_added
+    except IntegrityError as e:
+        if e.orig and hasattr(e.orig, "pgcode") and e.orig.pgcode == "23505":  # Unique column violation
+            raise HTTPException(
+                status_code=409,
+                detail=f"Calibration with the same name already exists for that rig (pgcode: {e.orig.pgcode})",
+            )
+        elif e.orig and hasattr(e.orig, "pgcode"):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Error writing to database (pgcode: {e.orig.pgcode})",
+            )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Error writing to database (no pgcode available)",
+            )
 
 
 def update_rig(db: Session, rig_name: str, rig_updates: PartialRigAddUpdate) -> Rigs:  # type: ignore

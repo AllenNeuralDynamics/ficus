@@ -1,7 +1,6 @@
 import pytest
 
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
 from tests.unit.mock_database import Rigs, db_session  # noqa: F401
 
 from calibration_api.crud.rigs import get_rigs, get_rig_by_name, create_rigs, update_rig, delete_rig_by_name
@@ -122,7 +121,7 @@ def test_create_existing_rig(db_session):  # noqa: F811
     """
     rigs_to_create = [RigAddUpdate(**{"rig_name": "frg_1_test", "hostname": "W10TEST"})]
     create_rigs(db_session, rigs_to_create)
-    with pytest.raises(IntegrityError):
+    with pytest.raises(HTTPException):
         create_rigs(db_session, rigs_to_create)
     db_session.rollback()
 

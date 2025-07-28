@@ -10,7 +10,7 @@ from calibration_api.main import app
 from calibration_api.database.models.rigs import Rigs
 from calibration_api.database.models.calibrations import Calibrations
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def db_engine():
     # Create a temp file-based SQLite DB
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -19,9 +19,10 @@ def db_engine():
     )
     Base.metadata.create_all(bind=engine)
     yield engine
+    engine.dispose()
     tmp.close()  # deletes the file
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 def db_session(db_engine):
     TestingSessionLocal = sessionmaker(bind=db_engine)
     session = TestingSessionLocal()
@@ -30,7 +31,7 @@ def db_session(db_engine):
     finally:
         session.close()
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 def client(db_session):
     # Override get_db dependency
     def override_get_db():
