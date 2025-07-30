@@ -10,6 +10,7 @@ from calibration_api.main import app
 from calibration_api.database.models.rigs import Rigs
 from calibration_api.database.models.calibrations import Calibrations
 
+
 @pytest.fixture(scope="function")
 def db_engine():
     # Create a temp file-based SQLite DB
@@ -22,6 +23,23 @@ def db_engine():
     engine.dispose()
     tmp.close()  # deletes the file
 
+
+@pytest.fixture(scope="function")
+def setup_test_db(db_engine):
+    TestingSessionLocal = sessionmaker(bind=db_engine)
+    session = TestingSessionLocal()
+
+    # Seed data once for all tests
+ 
+    session.add(Rigs(rig_name="foo_1_a", rig_type="foo", comp_type="a", instance="1", hostname="w11test-foo", ))
+    session.add(Rigs(rig_name="bar_2_b", rig_type="bar", comp_type="b", instance="2", hostname="w11test-bar", ))
+    session.commit()
+
+    yield  
+
+    session.close()
+
+
 @pytest.fixture(scope="function")
 def db_session(db_engine):
     TestingSessionLocal = sessionmaker(bind=db_engine)
@@ -31,14 +49,12 @@ def db_session(db_engine):
     finally:
         session.close()
 
+
 @pytest.fixture(scope="function")
-def client(db_session):
+def client(db_session, setup_test_db):
     # Override get_db dependency
     def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app)
