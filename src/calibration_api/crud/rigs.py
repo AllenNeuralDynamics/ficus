@@ -55,7 +55,7 @@ def create_rigs(db: Session, rig_inputs: list[RigAddUpdate]) -> list[Rigs]:
         if e.orig and hasattr(e.orig, "pgcode") and e.orig.pgcode == "23505":  # Unique column violation
             raise HTTPException(
                 status_code=409,
-                detail=f"Calibration with the same name already exists for that rig (pgcode: {e.orig.pgcode})",
+                detail=f"Rig with the same name already exists (pgcode: {e.orig.pgcode})",
             )
         elif e.orig and hasattr(e.orig, "pgcode"):
             raise HTTPException(
@@ -79,13 +79,31 @@ def update_rig(db: Session, rig_name: str, rig_updates: PartialRigAddUpdate) -> 
         )
     if rig_updates.hostname:  # type: ignore
         rig_to_update.hostname = rig_updates.hostname  # type: ignore
-    if rig_updates.rig_name:  # type: ignore
-        rig_to_update.rig_name = rig_updates.rig_name  # type: ignore
-        rig_full_name_list = rig_to_update.rig_name.split("_")
-        rig_to_update.rig_type = rig_full_name_list[0]
-        rig_to_update.instance = rig_full_name_list[1]
-        rig_to_update.comp_type = rig_full_name_list[2]
-    db.commit()
+    try: 
+        if rig_updates.rig_name:  # type: ignore
+            rig_to_update.rig_name = rig_updates.rig_name  # type: ignore
+            rig_full_name_list = rig_to_update.rig_name.split("_")
+            rig_to_update.rig_type = rig_full_name_list[0]
+            rig_to_update.instance = rig_full_name_list[1]
+            rig_to_update.comp_type = rig_full_name_list[2]
+        db.commit()
+    except IntegrityError as e:
+        if e.orig and hasattr(e.orig, "pgcode") and e.orig.pgcode == "23505":  # Unique column violation
+            raise HTTPException(
+                status_code=409,
+                detail=f"Rig with the same name already exists (pgcode: {e.orig.pgcode})",
+            )
+        elif e.orig and hasattr(e.orig, "pgcode"):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Error writing to database (pgcode: {e.orig.pgcode})",
+            )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Error writing to database (no pgcode available)",
+            )
+
     return rig_to_update
 
 
