@@ -11,6 +11,11 @@ from calibration_api.database.models.rigs import Rigs
 from calibration_api.database.models.calibrations import Calibrations
 
 
+@pytest.fixture(scope="session")
+def api_prefix():
+    return "/api/v1beta"
+
+
 @pytest.fixture(scope="function")
 def db_engine():
     # Create a temp file-based SQLite DB
