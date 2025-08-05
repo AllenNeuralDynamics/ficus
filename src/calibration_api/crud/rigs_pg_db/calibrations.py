@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from calibration_api.database.rigs_pg_db.models.calibrations import Calibrations
 from calibration_api.database.rigs_pg_db.models.rigs import Rigs
 from calibration_api.database.rigs_pg_db.schemas.calibration import CalibrationAdd, PartialCalibrationUpdate
-import calibration_api.crud.rigs as crud_rigs
+import calibration_api.crud.rigs_pg_db.rigs as crud_rigs
 
 
 def get_calibration(

@@ -3,8 +3,8 @@ import pytest
 from fastapi import HTTPException
 from tests.unit.mock_database import Rigs, db_session  # noqa: F401
 
-from calibration_api.crud.rigs import get_rigs, get_rig_by_name, create_rigs, update_rig, delete_rig_by_name
-from calibration_api.database.schemas.rig import RigAddUpdate, PartialRigAddUpdate
+from calibration_api.crud.rigs_pg_db.rigs import get_rigs, get_rig_by_name, create_rigs, update_rig, delete_rig_by_name
+from calibration_api.database.rigs_pg_db.schemas.rig import RigAddUpdate, PartialRigAddUpdate
 
 
 @pytest.fixture(scope="function")
