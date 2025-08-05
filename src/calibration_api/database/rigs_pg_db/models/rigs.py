@@ -3,7 +3,7 @@ import json
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from calibration_api.database.session import Base
+from calibration_api.database.rigs_pg_db.session import Base
 
 
 class Rigs(Base):

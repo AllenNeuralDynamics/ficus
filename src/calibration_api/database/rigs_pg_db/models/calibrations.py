@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from calibration_api.database.session import Base
+from calibration_api.database.rigs_pg_db.session import Base
 
 
 class Calibrations(Base):

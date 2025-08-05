@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, StringConstraints
 from typing import Annotated
 
-from calibration_api.database.schemas.partial import partial_model
+from calibration_api.database.rigs_pg_db.schemas.partial import partial_model
 
 
 class RigAddUpdate(BaseModel):

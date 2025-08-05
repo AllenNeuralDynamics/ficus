@@ -5,10 +5,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from calibration_api.database.session import Base, get_db
+from calibration_api.database.rigs_pg_db.session import Base, get_db
 from calibration_api.main import app
-from calibration_api.database.models.rigs import Rigs
-from calibration_api.database.models.calibrations import Calibrations
+from calibration_api.database.rigs_pg_db.models.rigs import Rigs
+from calibration_api.database.rigs_pg_db.models.calibrations import Calibrations
 
 
 @pytest.fixture(scope="session")

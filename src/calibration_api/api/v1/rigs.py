@@ -5,9 +5,9 @@ from typing import Any
 
 import calibration_api.crud.calibrations as crud_calibrations
 import calibration_api.crud.rigs as crud_rigs
-from calibration_api.database.session import get_db
-from calibration_api.database.schemas.calibration import CalibrationAdd, PartialCalibrationUpdate
-from calibration_api.database.schemas.rig import RigAddUpdate, PartialRigAddUpdate
+from calibration_api.database.rigs_pg_db.session import get_db
+from calibration_api.database.rigs_pg_db.schemas.calibration import CalibrationAdd, PartialCalibrationUpdate
+from calibration_api.database.rigs_pg_db.schemas.rig import RigAddUpdate, PartialRigAddUpdate
 
 
 router = APIRouter(prefix="/rigs", tags=["Rigs"])

@@ -2,8 +2,8 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from calibration_api.database.models.rigs import Rigs
-from calibration_api.database.schemas.rig import RigAddUpdate, PartialRigAddUpdate
+from calibration_api.database.rigs_pg_db.models.rigs import Rigs
+from calibration_api.database.rigs_pg_db.schemas.rig import RigAddUpdate, PartialRigAddUpdate
 
 
 def get_rigs(

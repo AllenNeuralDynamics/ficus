@@ -3,7 +3,7 @@ import datetime
 from pydantic import BaseModel, Field, StringConstraints
 from typing import Annotated, Any 
 
-from calibration_api.database.schemas.partial import partial_model
+from calibration_api.database.rigs_pg_db.schemas.partial import partial_model
 
 
 class CalibrationAdd(BaseModel):

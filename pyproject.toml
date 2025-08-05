@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.115.12",
+    "kazoo>=2.10.0",
     "mypy>=1.15.0",
     "psycopg2>=2.9.10",
     "pydantic>=2.11.3",

@@ -3,8 +3,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from calibration_api.database.session import Base
-from calibration_api.database.models.rigs import Rigs  # noqa: F401
+from calibration_api.database.rigs_pg_db.session import Base
+from calibration_api.database.rigs_pg_db.models.rigs import Rigs  # noqa: F401
 
 
 @pytest.fixture(scope="function")
