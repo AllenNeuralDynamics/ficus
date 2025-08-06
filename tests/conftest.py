@@ -2,13 +2,23 @@
 import pytest
 import tempfile
 from fastapi.testclient import TestClient
+from kazoo.exceptions import NoNodeError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from unittest.mock import MagicMock
 
 from calibration_api.database.rigs_pg_db.session import Base, get_db
 from calibration_api.main import app
 from calibration_api.database.rigs_pg_db.models.rigs import Rigs
 from calibration_api.database.rigs_pg_db.models.calibrations import Calibrations
+from calibration_api.database.zookeeper.config_server import get_zk_client
+
+
+################################################################################
+#
+#   MOCK POSTGRESQL DB
+#
+################################################################################
 
 
 @pytest.fixture(scope="session")
@@ -56,10 +66,37 @@ def db_session(db_engine):
 
 
 @pytest.fixture(scope="function")
-def client(db_session, setup_test_db):
+def pg_client(db_session, setup_test_db):
     # Override get_db dependency
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)
+
+################################################################################
+#
+#   MOCK ZOOKEEPER
+#
+################################################################################
+
+
+@pytest.fixture
+def zk_mock():
+    zk = MagicMock()
+    def get_side_effect(path):
+        if path == "/projects/test_project/defaults/configuration":
+            return (b"test_key_default: test_value_default", None)
+        elif path == "/rigs/test_rig/projects/test_project/configuration":
+            return (b"test_key_rig: test_value_rig", None) 
+        else:
+            raise NoNodeError()
+    zk.get.side_effect = get_side_effect
+    return zk
+
+
+@pytest.fixture(scope="function")
+def zk_client(zk_mock):
+
+    app.dependency_overrides[get_zk_client] = lambda: zk_mock
     return TestClient(app)
