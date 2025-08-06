@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from calibration_api.database.zookeeper.config_server import get_zk_client
 from kazoo.client import KazooClient
 
-from calibration_api.crud.configs import get_configs
+from calibration_api.crud.zookeeper.configs import get_configs
 
 
 router = APIRouter(prefix="/configs", tags=["Configs"])
