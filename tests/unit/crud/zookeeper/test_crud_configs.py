@@ -1,7 +1,6 @@
 import pytest
 
 from fastapi.exceptions import HTTPException
-from kazoo.exceptions import NoNodeError
 
 from calibration_api.crud.zookeeper.configs import get_configs
 
