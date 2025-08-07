@@ -1,10 +1,12 @@
+import logging
 import yaml
 
 from fastapi import HTTPException
+from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 
 
-def get_configs(zk, project_name: str, rig_name: str | None = None):
+def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None) -> dict:
     
     try:
         path = f"/projects/{project_name}/defaults/configuration" 
@@ -23,7 +25,7 @@ def get_configs(zk, project_name: str, rig_name: str | None = None):
             rig_content = yaml.safe_load(rig_data.decode("utf-8")) 
             content = deep_merge(content, rig_content)
         except NoNodeError: 
-            print("using default, rig config not found")
+            logging.debug("using default, rig config not found")
             pass
     
     return content

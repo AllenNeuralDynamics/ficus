@@ -19,4 +19,4 @@ def get_project_config(project_name: str, rig_name: str | None = None, zk: Kazoo
     #   yaml_output = yaml.dump(parsed_yaml, sort_keys=False)
     #   return PlainTextResponse(yaml_output, media_type="text/yaml")
 
-    return {"message": "Query successful", "output": data}
+    return data
