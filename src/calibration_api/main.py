@@ -4,7 +4,8 @@ from typing import Any, Dict
 from calibration_api.api import router
 
 
-app = FastAPI()
+app = FastAPI(root_path="/calibration_api", docs_url="/docs", openapi_url="/openapi.json")
+
 
 app.include_router(router)
 
