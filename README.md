@@ -4,12 +4,6 @@
 
 Calibration API: an API to store calibration data for various rigs at the Allen Institute.
 
-## Design 
-
-### Calibration Database Schema
-
-![](assets/database.svg)
-
 ##  Developers Guide
 
 ### Local Installation
