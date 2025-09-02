@@ -20,12 +20,11 @@ def parse_rigs(rig_input: str):
             raise ValueError(f"Invalid rig format: {rig_input}")
         rig_type, comp_type, instance = parts
 
-    return get_zk_rig_name(f"{rig_type} {comp_type} {instance}")
+    return get_zk_rig_name(rig_type, comp_type, instance)
 
 # This is unsightly but it is what it is
 # Ideally we would connect to the database to get this mapping. 
-# The deployment infrastructure might change so I am leaving this as the temporary solution.
-def get_zk_rig_name(rig: str):
+def get_zk_rig_name(rig_type: str, comp_type: str, instance: str) -> str:
     rigs_list = {
         "aifi-dtn 1 comp": "AIFI-DTN.1-Comp",
         "beh b control": "BEH.B-Control",
@@ -244,4 +243,4 @@ def get_zk_rig_name(rig: str):
         "platform_9_vm win tools-win10": "platform_9_vm.win-tools-win10"
     }
 
-    return rigs_list[rig.lower()]
+    return rigs_list.get(f"{rig_type} {comp_type} {instance}", f"{rig_type}.{instance}-{comp_type}")
