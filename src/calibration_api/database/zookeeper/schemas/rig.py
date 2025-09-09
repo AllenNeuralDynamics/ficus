@@ -1,3 +1,4 @@
+import logging
 import re
 from pydantic import BaseModel
 
@@ -17,7 +18,8 @@ def parse_rigs(rig_input: str):
         # Split by common separators
         parts = re.split(r'[-_ ]', rig_input)
         if len(parts) != 3: 
-            raise ValueError(f"Invalid rig format: {rig_input}")
+            logging.warning(f"Invalid rig format: {rig_input}")
+            return rig_input
         rig_type, comp_type, instance = parts
 
     return get_zk_rig_name(rig_type, comp_type, instance)
@@ -228,14 +230,15 @@ def get_zk_rig_name(rig_type: str, comp_type: str, instance: str) -> str:
         "vm_sandbox mfish_lightsheet vm": "VM_Sandbox.mfish_lightsheet-vm",
         "vs200 1 acq": "VS200.1-Acq",
         "washer 1 control": "WASHER.1-Control",
-        "wl 1 acq": "WL.1-Acq",
-        "wl 2 acq": "WL.2-Acq",
-        "wl 3 acq": "WL.3-Acq",
-        "wl 4 acq": "WL.4-Acq",
-        "wl 5 acq": "WL.5-Acq",
-        "wl 6 acq": "WL.6-Acq",
-        "wl 7 acq": "WL.7-Acq",
-        "wl 8 acq": "WL.8-Acq",
+        "wl 0 acq": "WL.0",
+        "wl 1 acq": "WL.1",
+        "wl 2 acq": "WL.2",
+        "wl 3 acq": "WL.3",
+        "wl 4 acq": "WL.4",
+        "wl 5 acq": "WL.5",
+        "wl 6 acq": "WL.6",
+        "wl 7 acq": "WL.7",
+        "wl 8 acq": "WL.8",
         "zeiss 3 acq": "Zeiss.3-Acq",
         "zeiss 4 acq": "Zeiss.4-Acq",
         "zeiss 5 acq": "Zeiss.5-Acq",

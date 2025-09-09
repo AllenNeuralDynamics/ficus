@@ -32,7 +32,7 @@ def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None)
                                 Using rig config as is (overrides defaults)")
                 content = rig_content
         except NoNodeError: 
-            logging.debug("using default, rig config not found")
+            logging.debug(f"using default, rig config not found for {parsed_rig_name}")
             pass
     
     return content
