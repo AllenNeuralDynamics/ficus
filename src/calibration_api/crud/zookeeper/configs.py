@@ -21,18 +21,19 @@ def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None)
 
     # Deep merge with rig-specific configuration if filetype is yaml or json
     if rig_name: 
-        parsed_rig_name = parse_rigs(rig_name)
+        # TODO: fix later
+        # parsed_rig_name = parse_rigs(rig_name)
         try: 
-            rig_path = f"/rigs/{parsed_rig_name}/projects/{project_name}/configuration"
+            rig_path = f"/rigs/{rig_name}/projects/{project_name}/configuration"
             rig_content = get_zk_node(zk, rig_path)
             if isinstance(rig_content, dict):
                 content = deep_merge(content, rig_content)
             else: 
-                logging.debug(f"Cannot merge rig config for {parsed_rig_name} not a valid format (yaml or json) \
+                logging.debug(f"Cannot merge rig config for {rig_name} not a valid format (yaml or json) \
                                 Using rig config as is (overrides defaults)")
                 content = rig_content
         except NoNodeError: 
-            logging.debug(f"using default, rig config not found for {parsed_rig_name}")
+            logging.debug(f"using default, rig config not found for {rig_name}")
             pass
     
     return content

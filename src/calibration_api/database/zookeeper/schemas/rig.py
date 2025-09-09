@@ -22,7 +22,7 @@ def parse_rigs(rig_input: str):
             return rig_input
         rig_type, comp_type, instance = parts
 
-    return get_zk_rig_name(rig_type, comp_type, instance)
+    return get_zk_rig_name(rig_type.lower(), comp_type.lower(), instance.lower())
 
 # This is unsightly but it is what it is
 # Ideally we would connect to the database to get this mapping. 
