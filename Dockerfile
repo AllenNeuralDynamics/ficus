@@ -14,4 +14,4 @@ RUN uv sync --frozen --no-cache
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Run the application.
-CMD ["fastapi", "run", "/app/src/calibration_api/main.py", "--port", "8000", "--host", "0.0.0.0"]
+CMD ["fastapi", "run", "/app/src/ficus/main.py", "--port", "8000", "--host", "0.0.0.0"]

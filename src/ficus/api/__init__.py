@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from calibration_api.api.v1beta import router as v1_router
+from ficus.api.v1beta import router as v1_router
 
 router = APIRouter(prefix="/api")
 

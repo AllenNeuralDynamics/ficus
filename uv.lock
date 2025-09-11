@@ -35,33 +35,6 @@ wheels = [
 ]
 
 [[package]]
-name = "calibration-api"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastapi", extra = ["standard"] },
-    { name = "kazoo" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "tox" },
-    { name = "tox-uv" },
-    { name = "types-pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
-    { name = "kazoo", specifier = ">=2.10.0" },
-    { name = "mypy", specifier = ">=1.15.0" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "ruff", specifier = ">=0.11.5" },
-    { name = "tox", specifier = ">=4.25.0" },
-    { name = "tox-uv", specifier = ">=1.25.0" },
-    { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
-]
-
-[[package]]
 name = "certifi"
 version = "2025.1.31"
 source = { registry = "https://pypi.org/simple" }
@@ -172,6 +145,33 @@ wheels = [
 [package.optional-dependencies]
 standard = [
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[[package]]
+name = "ficus"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "kazoo" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "tox" },
+    { name = "tox-uv" },
+    { name = "types-pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
+    { name = "kazoo", specifier = ">=2.10.0" },
+    { name = "mypy", specifier = ">=1.15.0" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "ruff", specifier = ">=0.11.5" },
+    { name = "tox", specifier = ">=4.25.0" },
+    { name = "tox-uv", specifier = ">=1.25.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
 ]
 
 [[package]]

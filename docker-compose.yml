@@ -1,5 +1,5 @@
 services: 
-    calibration:
+    ficus:
       build: 
         context: .
         dockerfile: Dockerfile

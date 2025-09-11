@@ -2,7 +2,7 @@ import pytest
 
 from fastapi.exceptions import HTTPException
 
-from calibration_api.crud.zookeeper.configs import get_configs
+from ficus.crud.zookeeper.configs import get_configs
 
 
 def test_get_configs_project_only(zk_mock):
