@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
-from calibration_api.database.zookeeper.config_server import get_zk_client
+from ficus.database.zookeeper.config_server import get_zk_client
 from kazoo.client import KazooClient
 
-from calibration_api.crud.zookeeper.configs import get_configs
+from ficus.crud.zookeeper.configs import get_configs
 
 
 router = APIRouter(prefix="/configs", tags=["Configs"])

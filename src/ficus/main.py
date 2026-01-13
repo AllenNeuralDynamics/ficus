@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from typing import Any, Dict
 
-from calibration_api.api import router
+from ficus.api import router
 
 
-app = FastAPI(root_path="/calibration_api", docs_url="/docs", openapi_url="/openapi.json")
+app = FastAPI(root_path="/ficus", docs_url="/docs", openapi_url="/openapi.json")
 
 
 app.include_router(router)

@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 
-from calibration_api.database.zookeeper.schemas.rig import parse_rigs
+from ficus.database.zookeeper.schemas.rig import parse_rigs
 
 
 def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None) -> dict | str:

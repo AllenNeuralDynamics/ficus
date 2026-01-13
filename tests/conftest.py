@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 from kazoo.exceptions import NoNodeError
 from unittest.mock import MagicMock
 
-from calibration_api.main import app
-from calibration_api.database.zookeeper.config_server import get_zk_client
+from ficus.main import app
+from ficus.database.zookeeper.config_server import get_zk_client
 
 
 ################################################################################
