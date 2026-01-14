@@ -1,17 +1,54 @@
 import json
-import logging
 import yaml
 
 from fastapi import HTTPException
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
+from loguru import logger
 
-from ficus.database.zookeeper.schemas.rig import parse_rigs
+from ficus.schemas.configs import ConfigData
 
 
-def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None) -> dict | str:
+def get_configs(zk: KazooClient, path) -> ConfigData:
     try:
-        path = f"/projects/{project_name}/defaults/configuration" 
+        content = get_zk_node(zk, path)
+        return content
+    except NoNodeError:
+        logger.info(f"No node found for path: {path}")
+
+
+################################################################################
+#
+#   Utilities
+#
+################################################################################
+
+
+def get_zk_node(zk: KazooClient, path: str):
+    data, _ = zk.get(path)
+    decoded_data = data.decode("utf-8")
+    try:
+        content = yaml.safe_load(decoded_data)
+    except yaml.YAMLError as e:
+        logger.error(f"Failed to decode file as YAML for node @ {path}: {e}")
+        try:
+            content = json.loads(decoded_data)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode file as JSON for node @ {path}: {e}")
+            content = decoded_data
+    return content
+
+
+################################################################################
+#
+#   OLD CONFIGURATION FETCHING - TO BE DEPRECATED
+#
+################################################################################
+
+
+def get_configs_old(zk: KazooClient, project_name: str, rig_name: str | None = None) -> dict | str:
+    try:
+        path = f"/projects/{project_name}/defaults/configuration"
         content = get_zk_node(zk, path)
     except NoNodeError:
         raise HTTPException(
@@ -20,33 +57,28 @@ def get_configs(zk: KazooClient, project_name: str, rig_name: str | None = None)
         )
 
     # Deep merge with rig-specific configuration if filetype is yaml or json
-    if rig_name: 
-        # TODO: fix later
+    if rig_name:
+        # fix later
         # parsed_rig_name = parse_rigs(rig_name)
-        try: 
+        try:
             rig_path = f"/rigs/{rig_name}/projects/{project_name}/configuration"
             rig_content = get_zk_node(zk, rig_path)
             if isinstance(rig_content, dict):
                 content = deep_merge(content, rig_content)
-            else: 
-                logging.debug(f"Cannot merge rig config for {rig_name} not a valid format (yaml or json) \
-                                Using rig config as is (overrides defaults)")
+            else:
+                logger.debug(
+                    f"Cannot merge rig config for {rig_name} not a valid format (yaml or json) \
+                                Using rig config as is (overrides defaults)"
+                )
                 content = rig_content
-        except NoNodeError: 
-            logging.debug(f"using default, rig config not found for {rig_name}")
+        except NoNodeError:
+            logger.debug(f"using default, rig config not found for {rig_name}")
             pass
-    
+
     return content
 
 
-################################################################################
-#
-#   Utilities 
-#
-################################################################################
-
-
-def deep_merge(dict_prime, dict_mod): 
+def deep_merge(dict_prime, dict_mod):
     for key, value in dict_mod.items():
         if isinstance(value, dict):
             if key not in dict_prime:
@@ -55,17 +87,3 @@ def deep_merge(dict_prime, dict_mod):
         else:
             dict_prime[key] = value
     return dict_prime
-
-def get_zk_node(zk: KazooClient, path: str): 
-    data, _ = zk.get(path)
-    decoded_data = data.decode("utf-8")
-    try: 
-        content = yaml.safe_load(decoded_data)
-    except yaml.YAMLError as e: 
-        logging.error(f"Failed to decode file as YAML for node @ {path}: {e}")
-        try:
-            content = json.loads(decoded_data)
-        except json.JSONDecodeError as e: 
-            logging.error(f"Failed to decode file as JSON for node @ {path}: {e}")
-            content = decoded_data
-    return content
