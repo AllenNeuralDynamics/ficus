@@ -9,12 +9,25 @@ from loguru import logger
 from ficus.schemas.configs import ConfigData
 
 
-def get_configs(zk: KazooClient, path) -> ConfigData:
+def get_node(zk: KazooClient, path) -> ConfigData:
     try:
         content = get_zk_node(zk, path)
         return content
     except NoNodeError:
         logger.info(f"No node found for path: {path}")
+
+
+def add_node(zk: KazooClient, path: str, data: bytes | None= None):
+    # Create the node if it doesn't exist
+    if not zk.exists(path):
+        zk.create(path, b"")    
+        if not data: 
+            logger.info(f"Created node without data @ '{path}'")
+
+    if data: 
+        # Set the data for the node
+        zk.set(path, data)
+        logger.info(f"Created node with data @ '{path}'")
 
 
 ################################################################################

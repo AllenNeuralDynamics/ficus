@@ -1,8 +1,7 @@
-from fastapi import APIRouter
-
+from fastapi import APIRouter, UploadFile
 
 from ficus.services.configs import ConfigStore
-from ficus.schemas.configs import ConfigInput, ConfigResponse, DataSources
+from ficus.schemas.configs import ConfigResponse, ConfigScope, DataSources
 
 
 router = APIRouter(prefix="/configs", tags=["Configs"])
@@ -16,8 +15,9 @@ def get_configuration_file(
     group_name: str | None = None,
     rig_name: str | None = None,
 ) -> ConfigResponse:
-    config_input = ConfigInput(namespace=namespace, file_name=file_name, group_name=group_name, rig_name=rig_name)
-    config, paths = ConfigStore(datasource=datasource).get_configs(config_input)
+    config, paths = ConfigStore(datasource=datasource).get_config(
+        namespace=namespace, file_name=file_name, group_name=group_name, rig_name=rig_name
+    )
     return ConfigResponse(
         message="Successfully retrieved data",
         data=config,
@@ -25,9 +25,32 @@ def get_configuration_file(
     )
 
 
-# TODO: Create write endpoint (object input)
 @router.post("/")
-def post_configuration_file(config_input): ...
+def post_configuration_data(
+    data: dict,
+    namespace: str,
+    file_name: str,
+    config_scope: ConfigScope = ConfigScope.DEFAULTS,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config(namespace, file_name, config_scope, data)
+    return ConfigResponse(
+        message="Successfully saved data",
+        data={},
+        details={"source": datasource, "scope": config_scope},
+    )
 
 
-# TODO: Create write endpoint (file input)
+@router.post("/uploadfile")
+async def post_configuration_upload_file(
+    file: UploadFile,
+    namespace: str,
+    config_scope: ConfigScope = ConfigScope.DEFAULTS,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config_file(namespace, file.filename, config_scope, await file.read())
+    return ConfigResponse(
+        message="Successfully saved data",
+        data={},
+        details={"source": datasource, "scope": config_scope},
+    )
