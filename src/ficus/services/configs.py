@@ -4,9 +4,14 @@ import yaml
 from loguru import logger
 from typing import Protocol, runtime_checkable
 
-from ficus.crud.zookeeper.configs import get_node, add_node
+from ficus.crud.zookeeper.configs import get_node, add_node, get_all_nodes_in_path
 from ficus.database.zookeeper.config_server import get_zk_client
 from ficus.schemas.configs import ConfigData, DataSources, ConfigScope
+
+
+DEFAULTS_PATH_PREFIX = "/testing/defaults"
+GROUPS_PATH_PREFIX = "/testing/groups"
+RIGS_PATH_PREFIX = "/testing/rigs"
 
 
 @runtime_checkable
@@ -43,10 +48,29 @@ class BaseConfigStrategy:
 
 
 class ZookeeperConfigStrategy(BaseConfigStrategy):
+    def get_list_of_all_configs(self, namespace: str):
+        files = {
+            "defaults": [],
+            "groups": [],
+            "rigs": [],
+        }
+
+        with get_zk_client() as client:
+
+            def get_files_in_path(path):
+                nodes = get_all_nodes_in_path(client, path)
+                return [node for node in nodes if f"{namespace}/" in node]
+
+            files["defaults"] = get_files_in_path(f"{DEFAULTS_PATH_PREFIX}/{namespace}")
+            files["groups"] = get_files_in_path(GROUPS_PATH_PREFIX)
+            files["rigs"] = get_files_in_path(RIGS_PATH_PREFIX)
+
+        return files
+
     def get_config(self, namespace: str, file_name: str, group_name: str, rig_name: str) -> tuple[ConfigData, dict]:
-        DEFAULT_PATH = f"/testing/defaults/{namespace}/{file_name}"
-        GROUP_PATH = f"/testing/groups/{group_name}/{namespace}/{file_name}"
-        RIG_PATH = f"/testing/rigs/{rig_name}/{namespace}/{file_name}"
+        DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{file_name}"
+        GROUP_PATH = f"{GROUPS_PATH_PREFIX}/{group_name}/{namespace}/{file_name}"
+        RIG_PATH = f"{RIGS_PATH_PREFIX}/{rig_name}/{namespace}/{file_name}"
 
         valid_paths = {}
 
