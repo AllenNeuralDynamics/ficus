@@ -38,34 +38,86 @@ def get_configuration_file(
     )
 
 
-@router.post("/")
-def post_configuration_data(
+@router.post("/defaults")
+def post_configuration_data_defaults(
     data: dict,
     namespace: str,
     file_name: str,
-    config_scope: ConfigScope = ConfigScope.DEFAULTS,
     datasource: DataSources = DataSources.ZOOKEEPER,
 ) -> ConfigResponse:
-    # TODO: This doesn't work for group/rig scope. I need to feed a second namespace for group/rig (hostname, FRG, etc)
-    ConfigStore(datasource=datasource).save_config(namespace, file_name, config_scope, data)
+    ConfigStore(datasource=datasource).save_config(namespace, file_name, ConfigScope.DEFAULTS, data)
+    return ConfigResponse(message="Successfully saved data", data={}, details={})
+
+
+@router.post("/groups")
+def post_configuration_data_groups(
+    data: dict,
+    namespace: str,
+    file_name: str,
+    group_name: str,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config(namespace, file_name, ConfigScope.GROUPS, data, group_name)
+    return ConfigResponse(message="Successfully saved data", data={}, details={})
+
+
+@router.post("/rigs")
+def post_configuration_data_rigs(
+    data: dict,
+    namespace: str,
+    file_name: str,
+    rig_name: str,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config(namespace, file_name, ConfigScope.RIGS, data, rig_name)
+    return ConfigResponse(message="Successfully saved data", data={}, details={})
+
+
+@router.post("/defaults/uploadfile")
+async def post_configuration_upload_file_defaults(
+    file: UploadFile,
+    namespace: str,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config_file(
+        namespace, file.filename, ConfigScope.DEFAULTS, await file.read()
+    )
     return ConfigResponse(
         message="Successfully saved data",
         data={},
-        details={"source": datasource, "scope": config_scope},
+        details={},
     )
 
 
-@router.post("/uploadfile")
-async def post_configuration_upload_file(
+@router.post("/groups/uploadfile")
+async def post_configuration_upload_file_groups(
     file: UploadFile,
     namespace: str,
-    config_scope: ConfigScope = ConfigScope.DEFAULTS,
+    group_name: str,
     datasource: DataSources = DataSources.ZOOKEEPER,
 ) -> ConfigResponse:
-    # TODO: This doesn't work for group/rig scope. I need to feed a second namespace for group/rig (hostname, FRG, etc)
-    ConfigStore(datasource=datasource).save_config_file(namespace, file.filename, config_scope, await file.read())
+    ConfigStore(datasource=datasource).save_config_file(
+        namespace, file.filename, ConfigScope.GROUPS, await file.read(), group_name
+    )
     return ConfigResponse(
         message="Successfully saved data",
         data={},
-        details={"source": datasource, "scope": config_scope},
+        details={},
+    )
+
+
+@router.post("/rigs/uploadfile")
+async def post_configuration_upload_file_rigs(
+    file: UploadFile,
+    namespace: str,
+    rig_name: str,
+    datasource: DataSources = DataSources.ZOOKEEPER,
+) -> ConfigResponse:
+    ConfigStore(datasource=datasource).save_config_file(
+        namespace, file.filename, ConfigScope.RIGS, await file.read(), rig_name
+    )
+    return ConfigResponse(
+        message="Successfully saved data",
+        data={},
+        details={},
     )

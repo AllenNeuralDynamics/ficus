@@ -91,9 +91,22 @@ class ZookeeperConfigStrategy(BaseConfigStrategy):
 
             return config, valid_paths
 
-    def save_config(self, namespace: str, file_name: str, config_scope: ConfigScope, data):
-        namespace_path = f"/testing/{config_scope.value}/{namespace}"
-        file_path = f"/testing/{config_scope.value}/{namespace}/{file_name}"
+    def save_config(
+        self,
+        namespace: str,
+        file_name: str,
+        config_scope: ConfigScope,
+        data: dict,
+        config_scope_namespace: str | None = None,
+    ):
+        if config_scope == ConfigScope.DEFAULTS:
+            config_scope_namespace_path = None
+            namespace_path = f"/testing/{config_scope.value}/{namespace}"
+            file_path = f"/testing/{config_scope.value}/{namespace}/{file_name}"
+        else:
+            config_scope_namespace_path = f"/testing/{config_scope.value}/{config_scope_namespace}"
+            namespace_path = f"/testing/{config_scope.value}/{config_scope_namespace}/{namespace}"
+            file_path = f"/testing/{config_scope.value}/{config_scope_namespace}/{namespace}/{file_name}"
 
         # If it's a dict/list, serialize to the format suggested by the file name
         if not isinstance(data, (bytes, str)):
@@ -108,12 +121,21 @@ class ZookeeperConfigStrategy(BaseConfigStrategy):
             data = data.encode("utf-8")
 
         with get_zk_client() as client:
+            if config_scope_namespace_path:
+                add_node(client, config_scope_namespace_path)  # Add config scope namespace node if not exists (no data)
             add_node(client, namespace_path)  # Add namespace node if not exists (no data)
             add_node(client, file_path, data)  # Add file node with data
 
-    def save_config_file(self, namespace: str, file_name: str, config_scope: ConfigScope, data: bytes):
+    def save_config_file(
+        self,
+        namespace: str,
+        file_name: str,
+        config_scope: ConfigScope,
+        data: bytes,
+        config_scope_namespace: str | None = None,
+    ):
         self._validate_content(file_name, data)
-        self.save_config(namespace, file_name, config_scope, data)
+        self.save_config(namespace, file_name, config_scope, data, config_scope_namespace)
 
 
 class GithubConfigStrategy(BaseConfigStrategy):
