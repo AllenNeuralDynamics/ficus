@@ -22,6 +22,10 @@ pythonpath = ["src", "tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+lint.select = ["E", "F", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [build-system]
 requires = ["hatchling"]
@@ -29,3 +33,4 @@ build-backend = "hatchling.build"
 
 [tool.mypy]
 ignore_missing_imports = true
+

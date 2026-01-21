@@ -10,8 +10,9 @@ from ficus.schemas.configs import ConfigData
 
 
 def get_all_nodes_in_path(zk: KazooClient, path: str) -> list[str]:
+    """Get all nodes under a given path recursively"""
     if not zk.exists(path):
-        logger.info(f"No node found for path: {path}")
+        logger.info(f"No nodes found for path: {path}")
         return []
 
     nodes = [path]
@@ -23,18 +24,22 @@ def get_all_nodes_in_path(zk: KazooClient, path: str) -> list[str]:
             nodes.extend(get_all_nodes_in_path(zk, child_path))
         return nodes
     except NoNodeError:
-        logger.info(f"No node found for path: {path}")
+        logger.info(f"No node found for subpath: {path}")
+        return []
 
 
 def get_node(zk: KazooClient, path) -> ConfigData:
+    """Get node data at a given path"""
     try:
-        content = get_zk_node(zk, path)
+        content = get_node_content(zk, path)
         return content
     except NoNodeError:
         logger.info(f"No node found for path: {path}")
+        return {}
 
 
 def add_node(zk: KazooClient, path: str, data: bytes | None = None):
+    """Add a node at a given path with optional data"""
     # Create the node if it doesn't exist
     if not zk.exists(path):
         zk.create(path, b"")
@@ -54,9 +59,15 @@ def add_node(zk: KazooClient, path: str, data: bytes | None = None):
 ################################################################################
 
 
-def get_zk_node(zk: KazooClient, path: str):
+def get_node_content(zk: KazooClient, path: str):
+    """Get node contents at a given path, attempting to decode as YAML or JSON"""
     data, _ = zk.get(path)
+
+    if data is None:
+        return None
+
     decoded_data = data.decode("utf-8")
+
     try:
         content = yaml.safe_load(decoded_data)
     except yaml.YAMLError as e:
@@ -79,7 +90,7 @@ def get_zk_node(zk: KazooClient, path: str):
 def get_configs_old(zk: KazooClient, project_name: str, rig_name: str | None = None) -> dict | str:
     try:
         path = f"/projects/{project_name}/defaults/configuration"
-        content = get_zk_node(zk, path)
+        content = get_node_content(zk, path)
     except NoNodeError:
         raise HTTPException(
             status_code=404,
@@ -92,7 +103,7 @@ def get_configs_old(zk: KazooClient, project_name: str, rig_name: str | None = N
         # parsed_rig_name = parse_rigs(rig_name)
         try:
             rig_path = f"/rigs/{rig_name}/projects/{project_name}/configuration"
-            rig_content = get_zk_node(zk, rig_path)
+            rig_content = get_node_content(zk, rig_path)
             if isinstance(rig_content, dict):
                 content = deep_merge(content, rig_content)
             else:

@@ -1,6 +1,5 @@
 import logging
 import re
-from pydantic import BaseModel
 
 
 # class Rig(BaseModel):

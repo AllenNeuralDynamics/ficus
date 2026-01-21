@@ -9,11 +9,6 @@ from ficus.database.zookeeper.config_server import get_zk_client
 from ficus.schemas.configs import ConfigData, DataSources, ConfigScope
 
 
-DEFAULTS_PATH_PREFIX = "/testing/defaults"
-GROUPS_PATH_PREFIX = "/testing/groups"
-RIGS_PATH_PREFIX = "/testing/rigs"
-
-
 @runtime_checkable
 class ConfigStrategy(Protocol):
     def get_config(self, *args, **kwargs): ...
@@ -21,7 +16,7 @@ class ConfigStrategy(Protocol):
 
 
 class BaseConfigStrategy:
-    def _merge_configs(self, dict_prime, dict_mod):
+    def _merge_configs(self, dict_prime: dict, dict_mod: dict) -> dict:
         """Merge two configuration dictionaries, dict_mod has higher precedence (will overwrite)"""
         for key, value in dict_mod.items():
             if isinstance(value, dict):
@@ -44,12 +39,18 @@ class BaseConfigStrategy:
                 logger.warning(f"File extension of '{file_name}' not recognized, skipping content validation.")
                 pass
         except (json.JSONDecodeError, yaml.YAMLError) as e:
-            raise ValueError(f"Content of '{file_name}' is not valid: {e}")
+            logger.warning(f"Content of '{file_name}' is not valid: {e}")
+            pass
+
+
+DEFAULTS_PATH_PREFIX = "/testing/defaults"
+GROUPS_PATH_PREFIX = "/testing/groups"
+RIGS_PATH_PREFIX = "/testing/rigs"
 
 
 class ZookeeperConfigStrategy(BaseConfigStrategy):
-    def get_list_of_all_configs(self, namespace: str):
-        files = {
+    def get_list_of_all_configs(self, namespace: str) -> dict:
+        file_scopes: dict = {
             "defaults": [],
             "groups": [],
             "rigs": [],
@@ -61,11 +62,11 @@ class ZookeeperConfigStrategy(BaseConfigStrategy):
                 nodes = get_all_nodes_in_path(client, path)
                 return [node for node in nodes if f"{namespace}/" in node]
 
-            files["defaults"] = get_files_in_path(f"{DEFAULTS_PATH_PREFIX}/{namespace}")
-            files["groups"] = get_files_in_path(GROUPS_PATH_PREFIX)
-            files["rigs"] = get_files_in_path(RIGS_PATH_PREFIX)
+            file_scopes["defaults"] = get_files_in_path(f"{DEFAULTS_PATH_PREFIX}/{namespace}")
+            file_scopes["groups"] = get_files_in_path(GROUPS_PATH_PREFIX)
+            file_scopes["rigs"] = get_files_in_path(RIGS_PATH_PREFIX)
 
-        return files
+        return file_scopes
 
     def get_config(self, namespace: str, file_name: str, group_name: str, rig_name: str) -> tuple[ConfigData, dict]:
         DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{file_name}"
@@ -84,10 +85,10 @@ class ZookeeperConfigStrategy(BaseConfigStrategy):
                     valid_paths["group"] = GROUP_PATH
                     config = self._merge_configs(config, group_config)
             if rig_name:
-                rig_name = get_node(client, RIG_PATH)
-                if rig_name:
+                rig_config = get_node(client, RIG_PATH)
+                if rig_config:
                     valid_paths["rig"] = RIG_PATH
-                    config = self._merge_configs(config, rig_name)
+                    config = self._merge_configs(config, rig_config)
 
             return config, valid_paths
 
@@ -96,19 +97,21 @@ class ZookeeperConfigStrategy(BaseConfigStrategy):
         namespace: str,
         file_name: str,
         config_scope: ConfigScope,
-        data: dict,
+        data: dict | bytes | str,
         config_scope_namespace: str | None = None,
     ):
         if config_scope == ConfigScope.DEFAULTS:
+            # DEFAULT scope does not have an extra namespace
             config_scope_namespace_path = None
             namespace_path = f"/testing/{config_scope.value}/{namespace}"
             file_path = f"/testing/{config_scope.value}/{namespace}/{file_name}"
         else:
+            # GROUPS & RIGS scopes have an extra namespace (group_name/rig_name)
             config_scope_namespace_path = f"/testing/{config_scope.value}/{config_scope_namespace}"
             namespace_path = f"/testing/{config_scope.value}/{config_scope_namespace}/{namespace}"
             file_path = f"/testing/{config_scope.value}/{config_scope_namespace}/{namespace}/{file_name}"
 
-        # If it's a dict/list, serialize to the format suggested by the file name
+        # If it's a dict/list, serialize to the format based on file name
         if not isinstance(data, (bytes, str)):
             if file_name.endswith((".json")):
                 data = json.dumps(data).encode("utf-8")
