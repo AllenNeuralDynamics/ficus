@@ -2,69 +2,56 @@
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 
-Ficus: API to handle configuration management to SIPE's internal configuration storage. 
+Ficus: REST API to handle configuration management to SIPE's internal configuration storage (zookeeper). 
 
-**Current status:** read/write from zookeeper. Other datasources maybe added later.
+## Configuration Organization Structure
 
-## Zookeeper Structure
+Here are some key vocabulary this API uses:
 
-Before going into the zookeeper structure, lets go over some key vocabulary this API uses: 
-
-- namespace: abstract identifier to group configuration files with (ex. stagewidget, waterlog, etc) 
-- groups: identifier for a group of computers, for now this corresponds to comp-type from SIPE rig's nomenclature (FRG, BEH, etc)
-- rigs: identifier for a specific computer (hostnames)
-- scopes: the scope in which the configuration gets applied to
-  - default = applies to all rigs
-  - group = applies to a group of computers
-  - rig = applies to a single computer
+- namespace: abstract identifier to group configuration files with (ex. stagewidget, waterlog, open-ephys, etc) 
+- hostnames: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
 
 Below is the directory structure in which config files are stored in zookeeper
 
 ```
 defaults/
-├── stagewidget/
+├── open_ephys/
+│   ├── default.yml
 │   ├── config.yml
-│   └── device.yml
+│   └── galen.yml
+├── vr_frg/
+│   ├── default.yml
+│   └── with_sniff_detector.yml
 └── waterlog/
-    └── config.yml
-groups/
-├── FRG/
-│   ├── waterlog/
-│   │   └── config.yml
-│   └── stagewidget/
-│       └── device.yml
-└── BEH/
-    └── waterlog/
-        └── config.yml
-rigs/
-└── SAKUMA/
-    └── stagewidget/
-        ├── config.yml
-        └── device.yml
+    └── default.yml
+computer/
+├── w10dtburno/
+│   └── vr_frg/
+│       ├── default.yml
+│       └── task_specific_setting.yml
+├── w10dt123123/
+│   └── waterlog/
+│       ├── default.yml
+│       └── config.yml
+└── w10dtgawk/
+    └── open_ephys/
+        └── galen.yml
 ```
 
-There are three main directories (scopes) that configs get organized to: 
+This organizational structure contains two layers. The layers contain configuration files, and based on the layer, determines how the config file should be applied. 
 
-- defaults: these are default configurations applied to **all computers**
-- groups: these are configurations that are applied to a specific **group of computers**
-- rigs: these are configurations that are applied to a specific **computer**
+1. Default layer - applied to all rigs
+  - Starts with ``defaults/{namespace}/default.yml`` 
+  - Merge ``defaults/{namespace}/{filename}`` with above
+2. Computer layer (applied to specific rigs)
+  - Merge ``computers/{hostname}/{namespace}/default.yml`` with config in default layer  
+  - Merge ``computers/{hostname}/{namespace}/{filename}`` with above
 
-Below are examples of how the defaults/groups/rigs (scopes) are used to retrieve configuration files: 
+Precedence of merging (lowest to highest): 
 
-- Given namespace and file name, it will return config file in defaults scope with that namespace. Example:
-  - namespace = stagewidget, file_name = config.yml
-  - This will get ``defaults/stagewidget/config.yml``
-- Given namespace, file name, group name, it will return config file in defaults scope, but also override/append values in groups if possible. Example:
-  - namespace = stagewidget, file_name = device.yml, group = FRG
-  - Gets ``defaults/stagewidget/device.yml``
-  - Override values in defaults with anything in ``groups/FRG/stagewidget/device.yml``
-- Given namespace, file name, group name, & rig name, same behavior as group but now rigs has highest precedence when overriding. Example:
-  - namespace = stagewidget, file_name = device.yml, group = FRG, rig=SAKUMA
-  - Gets ``defaults/stagewidget/device.yml``
-  - Override values in defaults with anything in ``groups/FRG/stagewidget/device.yml``
-  - Override values in defaults + groups with anything in ``rigs/SAKUMA/stagewidget/device.yml``
+``defaults/{namespace}/default.yml`` -> ``defaults/{namespace}/{filename}`` -> ``computers/{hostname}/{namespace}/default.yml`` -> ``computers/{hostname}/{namespace}/{filename}`` 
 
-With this paradigm, the configs in rigs or groups can be partial configs containing overrides only. They can also be used as different copies of configuration as well. There will be an endpoint that performs merging and endpoint to grab a specific file with no merging at all. 
+Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended.
 
 ##  Developers Guide
 
