@@ -5,7 +5,7 @@ from kazoo.exceptions import NoNodeError
 from unittest.mock import MagicMock
 
 from ficus.main import app
-from ficus.database.zookeeper.config_server import get_zk_client
+from ficus.database.zookeeper import get_zk_client
 
 
 ################################################################################

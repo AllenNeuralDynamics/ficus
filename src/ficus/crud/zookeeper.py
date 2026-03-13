@@ -3,53 +3,43 @@ import yaml
 
 from fastapi import HTTPException
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NoNodeError, NotEmptyError
 from loguru import logger
 
-from ficus.schemas.configs import ConfigData
 
+def get_node(zk: KazooClient, path: str) -> tuple[dict, list]:
+    """Get content for a node and list of children for that node.
 
-def get_all_nodes_in_path(zk: KazooClient, path: str) -> list[str]:
-    """Get all nodes under a given path recursively"""
-    if not zk.exists(path):
-        logger.info(f"No nodes found for path: {path}")
-        return []
-
-    nodes = [path]
-
-    try:
-        children = zk.get_children(path)
-        for child in children:
-            child_path = f"{path}/{child}"
-            nodes.extend(get_all_nodes_in_path(zk, child_path))
-        return nodes
-    except NoNodeError:
-        logger.info(f"No node found for subpath: {path}")
-        return []
-
-
-def get_node(zk: KazooClient, path) -> ConfigData:
-    """Get node data at a given path"""
-    try:
-        content = get_node_content(zk, path)
-        return content
-    except NoNodeError:
-        logger.info(f"No node found for path: {path}")
-        return {}
+    :param zk: kazoo client.
+    :param path: path to node.
+    """
+    logger.debug(f"Getting node content & children in: {path}")
+    content = get_node_content(zk, path)
+    children = zk.get_children(path)
+    return content, children
 
 
 def add_node(zk: KazooClient, path: str, data: bytes | None = None):
-    """Add a node at a given path with optional data"""
-    # Create the node if it doesn't exist
-    if not zk.exists(path):
-        zk.create(path, b"")
-        if not data:
-            logger.info(f"Created node without data @ '{path}'")
+    """Add a node at a given path with optional data.
 
-    if data:
-        # Set the data for the node
-        zk.set(path, data)
-        logger.info(f"Created node with data @ '{path}'")
+    :param zk: kazoo client.
+    :param path: path to node.
+    :param data: data to save to node.
+    """
+    zk.ensure_path(path)
+    zk.set(path, data)
+
+
+def delete_node(zk: KazooClient, path: str):
+    """Delete a node at a given path.
+
+    :param zk: kazoo client.
+    :param path: path to node.
+    """
+    try:
+        zk.delete(path)
+    except NotEmptyError:
+        raise NotEmptyError(f"Failed to delete node, node contains children: {path}")
 
 
 ################################################################################
@@ -59,8 +49,12 @@ def add_node(zk: KazooClient, path: str, data: bytes | None = None):
 ################################################################################
 
 
-def get_node_content(zk: KazooClient, path: str):
-    """Get node contents at a given path, attempting to decode as YAML or JSON"""
+def get_node_content(zk: KazooClient, path: str) -> dict:
+    """Get node contents at a given path, attempts to decode as YAML or JSON
+
+    :param zk: kazoo client.
+    :param path: path to node.
+    """
     data, _ = zk.get(path)
 
     if data is None:

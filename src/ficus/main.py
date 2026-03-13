@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
 from typing import Any, Dict
 
-from ficus.api import router
+from ficus.routers import router
+from ficus.database.zookeeper import kazoo_timeout_handler
 
 
 @asynccontextmanager
@@ -17,6 +19,7 @@ app = FastAPI(root_path="/ficus", docs_url="/docs", openapi_url="/openapi.json",
 
 
 app.include_router(router)
+app.add_exception_handler(KazooTimeoutError, kazoo_timeout_handler)
 
 
 @app.get("/")
