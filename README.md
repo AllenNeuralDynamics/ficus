@@ -17,6 +17,7 @@ Below is the directory structure in which config files are stored in zookeeper
 defaults/
 ├── open_ephys/
 │   ├── default.yml
+│   ├── default.json
 │   ├── config.yml
 │   └── galen.yml
 ├── vr_frg/
@@ -27,11 +28,11 @@ defaults/
 computer/
 ├── w10dtburno/
 │   └── vr_frg/
-│       ├── default.yml
+│       ├── default.yaml
 │       └── task_specific_setting.yml
 ├── w10dt123123/
 │   └── waterlog/
-│       ├── default.yml
+│       ├── default.json
 │       └── config.yml
 └── w10dtgawk/
     └── open_ephys/
@@ -41,17 +42,23 @@ computer/
 This organizational structure contains two layers. The layers contain configuration files, and based on the layer, determines how the config file should be applied. 
 
 1. Default layer - applied to all rigs
-  - Starts with ``defaults/{namespace}/default.yml`` 
-  - Merge ``defaults/{namespace}/{filename}`` with above
+    - Starts with ``defaults/{namespace}/default.yml`` 
+    - Merge ``defaults/{namespace}/{filename}`` with above
 2. Computer layer (applied to specific rigs)
-  - Merge ``computers/{hostname}/{namespace}/default.yml`` with config in default layer  
-  - Merge ``computers/{hostname}/{namespace}/{filename}`` with above
+    - Merge ``computers/{hostname}/{namespace}/default.yml`` with config in default layer  
+    - Merge ``computers/{hostname}/{namespace}/{filename}`` with above
 
-Precedence of merging (lowest to highest): 
+When looking for default files in either Default or Computer layer, it will check the following file extensions in this specific order, first one found will be the primary default file. 
 
-``defaults/{namespace}/default.yml`` -> ``defaults/{namespace}/{filename}`` -> ``computers/{hostname}/{namespace}/default.yml`` -> ``computers/{hostname}/{namespace}/{filename}`` 
+    .yml -> .yaml -> .json
 
-Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended.
+Below is the precedence of merging from lowest to highest. Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended. 
+
+    defaults/{namespace}/default.yml -> defaults/{namespace}/{filename} -> computers/{hostname}/{namespace}/default.yml -> computers/{hostname}/{namespace}/{filename} 
+
+
+
+
 
 ##  Developers Guide
 

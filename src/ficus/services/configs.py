@@ -10,8 +10,8 @@ DEFAULTS_PATH_PREFIX = "/scratch/defaults"
 COMPUTERS_PATH_PREFIX = "/scratch/computers"
 
 
-def get_config(namespace: str, filename: str, hostname: str | None, merge: bool = True) -> tuple[ConfigData, dict]:
-    """Get configs from zookeeper. Handles merging defaults and partial config override.
+def get_config(namespace: str, filename: str, hostname: str | None, merge: bool = True) -> tuple[ConfigData, list]:
+    """Get configs from zookeeper. Handles merging defaults and partial config override for specific computers.
 
     :param namespace: namespace to search for file (in default and computers/<hostname>).
     :param filename: name of the file.
@@ -19,22 +19,47 @@ def get_config(namespace: str, filename: str, hostname: str | None, merge: bool 
     :param merge: if true merge default config with partial config override.
     :return: config data and dictionary denoting paths of the partial files used to create the config data
     """
-    DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
-    COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
+    DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
+    COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
 
-    valid_paths = {}
+    valid_paths = []
 
     with get_zk_client() as client:
-        config, _children = get_node(client, DEFAULT_PATH)
-        if config:
-            valid_paths["default"] = DEFAULT_PATH
-        if hostname:
-            hostname_config, _children = get_node(client, COMPUTER_PATH)
-            if hostname_config:
-                valid_paths["hostname"] = COMPUTER_PATH
-                config = _merge_configs(config, hostname_config) if merge else hostname_config
+        def get_default_file(path: str):
+            # In order of what it treats as primary default
+            default_files = ["default.yml", "default.yaml", "default.json"]
+            children = client.get_children(path)
+            for default in default_files:
+                if default in children:
+                    default_data, _ = get_node(client, path + "/" + default)
+                    valid_paths.append(f"{path}/{default}")
+                    return default_data
+            return {}
 
-        return config, valid_paths
+        def get_regular_file(path: str):
+            config, _children = get_node(client, path)
+            if config:
+                valid_paths.append(path)
+                return config
+            return {}
+         
+        defaults_default_file = get_default_file(DEFAULT_PATH)
+        defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
+        hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
+        hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
+
+    if merge: 
+        config = _merge_configs(defaults_default_file, defaults_regular_file)
+        config = _merge_configs(config, hostname_default_file)
+        config = _merge_configs(config, hostname_regular_file)
+    else: 
+        if hostname:
+            return hostname_regular_file, [f"{DEFAULT_PATH}/{filename}"]
+        else:
+            return defaults_regular_file, [f"{COMPUTER_PATH}/{filename}"]
+            
+
+    return config, valid_paths
 
 
 def save_config_obj(namespace: str, filename: str, data: dict, hostname: str | None, override: bool = False) -> str:
@@ -49,7 +74,9 @@ def save_config_obj(namespace: str, filename: str, data: dict, hostname: str | N
     :returns: path where file was saved.
     """
     data_as_bytes = _validate_and_convert_to_bytes(filename, data)
-    return _save_config(namespace=namespace, filename=filename, data=data_as_bytes, hostname=hostname, override=override)
+    return _save_config(
+        namespace=namespace, filename=filename, data=data_as_bytes, hostname=hostname, override=override
+    )
 
 
 def save_config_file(
