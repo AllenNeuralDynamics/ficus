@@ -33,8 +33,8 @@ def get_configuration(
             details={"files": paths},
         )
     except NoNodeError:
-        config = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
-        raise HTTPException(status_code=404, detail=f"Config {config} not found")
+        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
+        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
 @router.post("/")
@@ -55,7 +55,8 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
 async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
-        path = save_config_file(namespace=namespace, filename=file.filename, data=raw, hostname=hostname)
+        filename = file.filename if file.filename else ""
+        path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname)
         return ConfigResponse(
             message="Successfully added configuration file",
             details={"path": path},
@@ -84,7 +85,8 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
 async def replace_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
-        path = save_config_file(namespace=namespace, filename=file.filename, data=raw, hostname=hostname, override=True)
+        filename = file.filename if file.filename else ""
+        path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True)
         return ConfigResponse(
             message="Successfully replaced configuration file",
             details={"path": path},
@@ -117,8 +119,9 @@ async def update_configuration_file(
 ) -> ConfigResponse:
     try:
         raw = await file.read()
+        partial_filename = file.filename if file.filename else ""
         path = update_config_file(
-            namespace=namespace, filename=filename, partial_filename=file.filename, data=raw, hostname=hostname
+            namespace=namespace, filename=filename, partial_filename=partial_filename, data=raw, hostname=hostname
         )
         return ConfigResponse(
             message="Successfully updated configuration file",

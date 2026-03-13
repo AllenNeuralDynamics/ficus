@@ -48,8 +48,8 @@ def save_config_obj(namespace: str, filename: str, data: dict, hostname: str | N
     :param override: if true and file exists, overwrite the file.
     :returns: path where file was saved.
     """
-    data = _validate_and_convert_to_bytes(filename, data)
-    return _save_config(namespace=namespace, filename=filename, data=data, hostname=hostname, override=override)
+    data_as_bytes = _validate_and_convert_to_bytes(filename, data)
+    return _save_config(namespace=namespace, filename=filename, data=data_as_bytes, hostname=hostname, override=override)
 
 
 def save_config_file(
@@ -225,12 +225,12 @@ def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
     """
     try:
         if filename.endswith((".json")):
-            data = json.dumps(data).encode("utf-8")
+            data_as_bytes = json.dumps(data).encode("utf-8")
         elif filename.endswith((".yml", ".yaml")):
-            data = yaml.safe_dump(data).encode("utf-8")
+            data_as_bytes = yaml.safe_dump(data).encode("utf-8")
         else:
             raise ValueError(f"Unsupported file type: {filename}")
-        return data
+        return data_as_bytes
     except ValueError:
         raise
     except (TypeError, yaml.YAMLError):
@@ -246,12 +246,12 @@ def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
     """
     try:
         if filename.endswith((".json")):
-            data = json.loads(data)  # Throw away - decoding for validation only
+            data_as_dict = json.loads(data)  # Throw away - decoding for validation only
         elif filename.endswith((".yml", ".yaml")):
-            data = yaml.safe_load(data)  # Throw away - decoding for validation only
+            data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
         else:
             raise ValueError(f"Unsupported file type: {filename}")
-        return data
+        return data_as_dict
     except ValueError:
         raise
     except (json.JSONDecodeError, yaml.YAMLError):

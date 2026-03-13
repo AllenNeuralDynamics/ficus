@@ -58,7 +58,7 @@ def get_node_content(zk: KazooClient, path: str) -> dict:
     data, _ = zk.get(path)
 
     if data is None:
-        return None
+        return {}
 
     decoded_data = data.decode("utf-8")
 

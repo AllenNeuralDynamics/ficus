@@ -8,7 +8,7 @@ class ConfigResponse(BaseModel):
 
 
 class ConfigDataResponse(ConfigResponse):
-    data: dict
+    data: dict | list
 
 
 ConfigData: TypeAlias = dict[str, Any]
