@@ -18,6 +18,26 @@ from ficus.schemas.configs import ConfigResponse, ConfigDataResponse
 router = APIRouter(prefix="/configs", tags=["Configs"])
 
 
+@router.get("/list_paths/{namespace}/{filename}")
+def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse:
+    data = get_all_paths(namespace, filename)
+    return ConfigDataResponse(
+        message=f"Successfully retrieved list of paths containing {namespace}/{filename}",
+        data=data,
+        details={},
+    )
+
+
+@router.get("/list_files/{namespace}")
+def get_all_files_in_path(namespace: str, hostname: str | None = None) -> ConfigDataResponse:
+    data = get_all_files(namespace, hostname)
+    return ConfigDataResponse(
+        message=f"Successfully retrieved list of files in path defaults/{namespace} and {hostname}/{namespace}",
+        data=data,
+        details={},
+    )
+
+
 @router.get("/{namespace}/{filename}")
 def get_configuration(
     namespace: str,
@@ -146,23 +166,3 @@ def delete_configuration(namespace: str, filename: str, hostname: str | None = N
     except NoNodeError:
         config = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
         raise HTTPException(status_code=404, detail=f"Config {config} not found")
-
-
-@router.get("/list_paths/{namespace}/{filename}")
-def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse:
-    data = get_all_paths(namespace, filename)
-    return ConfigDataResponse(
-        message=f"Successfully retrieved list of paths containing {namespace}/{filename}",
-        data=data,
-        details={},
-    )
-
-
-@router.get("/list_files/{namespace}")
-def get_all_files_in_path(namespace: str, hostname: str | None = None) -> ConfigDataResponse:
-    data = get_all_files(namespace, hostname)
-    return ConfigDataResponse(
-        message=f"Successfully retrieved list of files in path defaults/{namespace} and {hostname}/{namespace}",
-        data=data,
-        details={},
-    )
