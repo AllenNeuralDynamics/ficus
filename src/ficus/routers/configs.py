@@ -18,7 +18,7 @@ from ficus.schemas.configs import ConfigResponse, ConfigDataResponse
 router = APIRouter(prefix="/configs", tags=["Configs"])
 
 
-@router.get("/")
+@router.get("/{namespace}/{filename}")
 def get_configuration(
     namespace: str,
     filename: str,
@@ -37,7 +37,7 @@ def get_configuration(
         raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
-@router.post("/")
+@router.post("/{namespace}/{filename}")
 def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
         path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
@@ -51,7 +51,7 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.post("/upload")
+@router.post("/upload/{namespace}")
 async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
@@ -67,7 +67,7 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.put("/")
+@router.put("/{namespace}/{filename}")
 def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
         path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname, override=True)
@@ -81,7 +81,7 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.put("/upload")
+@router.put("/upload/{namespace}")
 async def replace_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
@@ -97,7 +97,7 @@ async def replace_configuration_file(namespace: str, file: UploadFile, hostname:
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.patch("/")
+@router.patch("/{namespace}/{filename}")
 async def update_configuration(
     namespace: str, filename: str, data: dict, hostname: str | None = None
 ) -> ConfigResponse:
@@ -113,7 +113,7 @@ async def update_configuration(
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.patch("/upload")
+@router.patch("/upload/{namespace}/{filename}")
 async def update_configuration_file(
     namespace: str, filename: str, file: UploadFile, hostname: str | None = None
 ) -> ConfigResponse:
@@ -133,7 +133,7 @@ async def update_configuration_file(
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.delete("/")
+@router.delete("/{namespace}/{filename}")
 def delete_configuration(namespace: str, filename: str, hostname: str | None = None) -> ConfigResponse:
     try:
         path = delete_config(namespace=namespace, filename=filename, hostname=hostname)
@@ -148,7 +148,7 @@ def delete_configuration(namespace: str, filename: str, hostname: str | None = N
         raise HTTPException(status_code=404, detail=f"Config {config} not found")
 
 
-@router.get("/list_paths")
+@router.get("/list_paths/{namespace}/{filename}")
 def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse:
     data = get_all_paths(namespace, filename)
     return ConfigDataResponse(
@@ -158,7 +158,7 @@ def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse
     )
 
 
-@router.get("/list_files")
+@router.get("/list_files/{namespace}")
 def get_all_files_in_path(namespace: str, hostname: str | None = None) -> ConfigDataResponse:
     data = get_all_files(namespace, hostname)
     return ConfigDataResponse(
