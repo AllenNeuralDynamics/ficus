@@ -235,19 +235,20 @@ def _save_config(namespace: str, filename: str, data: bytes, hostname: str | Non
         CONFIG_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
 
     with get_zk_client() as client:
-        # Check default file doesn't already exist (if saving default)
-        if filename in DEFAULT_FILES:
-            for df in DEFAULT_FILES:
-                if client.exists(f"{CONFIG_PATH}/{df}"):
-                    raise FileExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+        if not override:
+            # Check default file doesn't already exist (if saving default)
+            if filename in DEFAULT_FILES:
+                for df in DEFAULT_FILES:
+                    if client.exists(f"{CONFIG_PATH}/{df}"):
+                        raise FileExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
 
-        # Check normal file doesn't already exist
-        if not override and client.exists(f"{CONFIG_PATH}/{filename}"):
-            raise FileExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
+            # Check normal file doesn't already exist
+            if client.exists(f"{CONFIG_PATH}/{filename}"):
+                raise FileExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
 
-        add_node(client, CONFIG_PATH, data)
+        add_node(client, f"{CONFIG_PATH}/{filename}", data)
 
-    return CONFIG_PATH
+    return f"{CONFIG_PATH}/{filename}"
 
 
 def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
