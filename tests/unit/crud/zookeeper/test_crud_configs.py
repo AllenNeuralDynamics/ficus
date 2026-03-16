@@ -1,50 +1,47 @@
 import pytest
 
-from fastapi.exceptions import HTTPException
+from kazoo.exceptions import NoNodeError
 
-from ficus.crud.zookeeper import get_node
-
-
-def test_get_configs_project_only(zk_mock):
-    result = get_node(zk_mock, "test_project")
-
-    # Make sure the path was built correctly
-    zk_mock.get.assert_called_once_with("/projects/test_project/defaults/configuration")
-
-    # Make sure the return value is correct
-    assert result == {"test_key_default": "test_value_default"}
+from ficus.crud.zookeeper import get_node, add_node, delete_node
 
 
-def test_get_configs_project_and_rig(zk_mock):
-    result = get_node(zk_mock, "test_project", "test_rig")
+def test_get_node(zk_mock):
+    result = get_node(zk_mock, "/scratch/defaults/software_a/config.yml")
+    assert result == ({"name": "config", "scope": "default", "default-layer-value": "beep beep"}, [])
 
-    # Make sure two calls were made (one for default config, one for rig config)
-    assert zk_mock.get.call_count == 2
 
-    # Make sure the paths were built correctly
-    zk_mock.get.assert_any_call("/projects/test_project/defaults/configuration")
-    zk_mock.get.assert_any_call("/rigs/test_rig/projects/test_project/configuration")
+def test_get_node_computers(zk_mock):
+    result = get_node(zk_mock, "/scratch/computers/w11dt000001/software_a/default.yml")
+    assert result == ({"computer-default-value": "to rule them all"}, [])
 
-    # Make sure the configurations were merged together
-    assert result == {"test_key_default": "test_value_default", "test_key_rig": "test_value_rig"}
 
-def test_get_configs_no_rigs(zk_mock):
-    result = get_node(zk_mock, "test_project", "test_bad_rig")
+def test_invalid_node_path(zk_mock):
+    with pytest.raises(NoNodeError):
+        get_node(zk_mock, "/scratch-bad/defaults/software_a/config.yml")
 
-    # Make sure two calls were made (one for default config, one for rig config)
-    assert zk_mock.get.call_count == 2
 
-    # Make sure the paths were built correctly
-    zk_mock.get.assert_any_call("/projects/test_project/defaults/configuration")
-    zk_mock.get.assert_any_call("/rigs/test_bad_rig/projects/test_project/configuration")
+def test_add_node(zk_mock):
+    with pytest.raises(NoNodeError):
+        get_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
 
-    # Make sure only default data was returned
-    assert result == {"test_key_default": "test_value_default"}
+    add_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml", {"test-add": "new data added"})
+    result = get_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
+    assert result == ({"test-add": "new data added"}, [])
 
-def test_get_configs_no_project(zk_mock):
-    # Make sure only default data was returned
-    with pytest.raises(HTTPException) as exception:
-        get_node(zk_mock, "test_bad_project")
 
-    assert exception.value.status_code == 404
-    assert exception.value.detail == "Project with name test_bad_project not found"
+def test_delete_no_node(zk_mock):
+    with pytest.raises(NoNodeError):
+        delete_node(zk_mock, "/scratch-bad/computers/w11dt000001/software_b/config.yml")
+
+
+def test_delete_node(zk_mock):
+    with pytest.raises(NoNodeError):
+        delete_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
+
+    add_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml", {"test-add": "new data added"})
+    result = get_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
+    assert result == ({"test-add": "new data added"}, [])
+
+    delete_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
+    with pytest.raises(NoNodeError):
+        delete_node(zk_mock, "/scratch/computers/w11dt000001/software_b/config.yml")
