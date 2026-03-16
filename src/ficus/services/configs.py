@@ -8,6 +8,7 @@ from ficus.schemas.configs import ConfigData
 
 DEFAULTS_PATH_PREFIX = "/scratch/defaults"
 COMPUTERS_PATH_PREFIX = "/scratch/computers"
+DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 
 
 def get_config(namespace: str, filename: str, hostname: str | None, merge: bool = True) -> tuple[ConfigData, list]:
@@ -25,11 +26,11 @@ def get_config(namespace: str, filename: str, hostname: str | None, merge: bool 
     valid_paths = []
 
     with get_zk_client() as client:
+
         def get_default_file(path: str):
             # In order of what it treats as primary default
-            default_files = ["default.yml", "default.yaml", "default.json"]
             children = client.get_children(path)
-            for default in default_files:
+            for default in DEFAULT_FILES:
                 if default in children:
                     default_data, _ = get_node(client, path + "/" + default)
                     valid_paths.append(f"{path}/{default}")
@@ -42,22 +43,21 @@ def get_config(namespace: str, filename: str, hostname: str | None, merge: bool 
                 valid_paths.append(path)
                 return config
             return {}
-         
+
         defaults_default_file = get_default_file(DEFAULT_PATH)
         defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
         hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
         hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
 
-    if merge: 
+    if merge:
         config = _merge_configs(defaults_default_file, defaults_regular_file)
         config = _merge_configs(config, hostname_default_file)
         config = _merge_configs(config, hostname_regular_file)
-    else: 
+    else:
         if hostname:
             return hostname_regular_file, [f"{DEFAULT_PATH}/{filename}"]
         else:
             return defaults_regular_file, [f"{COMPUTER_PATH}/{filename}"]
-            
 
     return config, valid_paths
 
@@ -230,13 +230,20 @@ def _save_config(namespace: str, filename: str, data: bytes, hostname: str | Non
     """
     # This function assumes that data has already been validated
     if hostname:
-        CONFIG_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
+        CONFIG_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
     else:
-        CONFIG_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
+        CONFIG_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
 
     with get_zk_client() as client:
-        if not override and client.exists(CONFIG_PATH):
-            raise FileExistsError(f"File already exists: {CONFIG_PATH}")
+        # Check default file doesn't already exist (if saving default)
+        if filename in DEFAULT_FILES:
+            for df in DEFAULT_FILES:
+                if client.exists(f"{CONFIG_PATH}/{df}"):
+                    raise FileExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+
+        # Check normal file doesn't already exist
+        if not override and client.exists(f"{CONFIG_PATH}/{filename}"):
+            raise FileExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
 
         add_node(client, CONFIG_PATH, data)
 
