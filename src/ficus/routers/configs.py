@@ -37,20 +37,6 @@ def get_configuration(
         raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
-@router.post("/{namespace}/{filename}")
-def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
-    try:
-        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
-        return ConfigResponse(
-            message="Successfully added configuration file",
-            details={"path": path},
-        )
-    except FileExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-
-
 @router.post("/upload/{namespace}")
 async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
@@ -67,12 +53,12 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.put("/{namespace}/{filename}")
-def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
+@router.post("/{namespace}/{filename}")
+def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
-        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname, override=True)
+        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
         return ConfigResponse(
-            message="Successfully replaced configuration file",
+            message="Successfully added configuration file",
             details={"path": path},
         )
     except FileExistsError as e:
@@ -97,14 +83,12 @@ async def replace_configuration_file(namespace: str, file: UploadFile, hostname:
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.patch("/{namespace}/{filename}")
-async def update_configuration(
-    namespace: str, filename: str, data: dict, hostname: str | None = None
-) -> ConfigResponse:
+@router.put("/{namespace}/{filename}")
+def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
-        path = update_config_object(namespace=namespace, filename=filename, data=data, hostname=hostname)
+        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname, override=True)
         return ConfigResponse(
-            message="Successfully updated configuration file",
+            message="Successfully replaced configuration file",
             details={"path": path},
         )
     except FileExistsError as e:
@@ -123,6 +107,22 @@ async def update_configuration_file(
         path = update_config_file(
             namespace=namespace, filename=filename, partial_filename=partial_filename, data=raw, hostname=hostname
         )
+        return ConfigResponse(
+            message="Successfully updated configuration file",
+            details={"path": path},
+        )
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=f"{e}")
+    except ValueError as e:
+        raise HTTPException(status_code=415, detail=f"{e}")
+
+
+@router.patch("/{namespace}/{filename}")
+async def update_configuration(
+    namespace: str, filename: str, data: dict, hostname: str | None = None
+) -> ConfigResponse:
+    try:
+        path = update_config_object(namespace=namespace, filename=filename, data=data, hostname=hostname)
         return ConfigResponse(
             message="Successfully updated configuration file",
             details={"path": path},
