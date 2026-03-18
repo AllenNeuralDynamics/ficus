@@ -46,11 +46,15 @@ def get_config(
                 valid_paths.append(path)
                 return config
             return {}
-
-        defaults_default_file = get_default_file(DEFAULT_PATH)
-        defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
-        hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
-        hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
+        if merge: 
+            defaults_default_file = get_default_file(DEFAULT_PATH)
+            defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
+            hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
+            hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
+        elif hostname: 
+            hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
+        else: 
+            defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
 
     if merge:
         config = _merge_configs(defaults_default_file, defaults_regular_file)

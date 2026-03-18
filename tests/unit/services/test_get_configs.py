@@ -23,6 +23,7 @@ def test_get_config_no_merge_computers(zk_mock):
     """Grab configs with following behavior:
     - no merging of files (grab filename directly)
     - grab from /computers directory
+    - /defaults/<namespace> doesn't exist 
     """
     result = get_config("software_a", "config.yml", "w11dt000001", merge=False)
     assert len(result) == 2
@@ -31,6 +32,20 @@ def test_get_config_no_merge_computers(zk_mock):
         "computer-layer-value": "boop boop",
     }
     assert result[1] == ["/scratch/computers/w11dt000001/software_a/config.yml"]
+
+def test_get_config_no_merge_computers_no_default(zk_mock):
+    """Grab configs with following behavior:
+    - no merging of files (grab filename directly)
+    - grab from /computers directory
+    - /defaults/<namespace> doesn't exist, doesn't matter because we are ignoring merge
+    """
+    result = get_config("software_b", "config.yml", "w11dt000001", merge=False)
+    assert len(result) == 2
+    assert result[0] == {
+        "scope": "w11dt000001",
+        "computer-layer-value": "one one one",
+    }
+    assert result[1] == ["/scratch/computers/w11dt000001/software_b/config.yml"]
 
 
 def test_get_config_defaults_default_file(zk_mock):
