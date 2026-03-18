@@ -1,4 +1,5 @@
 import json
+import copy
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
 
@@ -38,6 +39,19 @@ ZK_EXAMPLE = Node(
                                 ),
                             },
                         ),
+                        "software_a_default_only": Node(
+                            name="software_a_default_only",
+                            children={
+                                "config.yml": Node(
+                                    name="config.yml",
+                                    value={
+                                        "name": "config_defaults_only",
+                                        "scope": "default",
+                                        "default-layer-value": "beep beep",
+                                    },
+                                ),
+                            },
+                        ),
                     },
                 ),
                 "computers": Node(
@@ -49,8 +63,8 @@ ZK_EXAMPLE = Node(
                                 "software_a": Node(
                                     name="software_a",
                                     children={
-                                        "default.yml": Node(
-                                            name="default.yml",
+                                        "default.json": Node(
+                                            name="default.json",
                                             value={
                                                 "computer-default-value": "to rule them all",
                                             },
@@ -63,7 +77,25 @@ ZK_EXAMPLE = Node(
                                             },
                                         ),
                                     },
-                                )
+                                ),
+                                "software_b": Node(
+                                    name="software_b",
+                                    children={
+                                        "default.yml": Node(
+                                            name="default.yml",
+                                            value={
+                                                "Three Dogs Night": "one is the loneliest number",
+                                            },
+                                        ),
+                                        "config.yml": Node(
+                                            name="config.yml",
+                                            value={
+                                                "scope": "w11dt000001",  # overrides scope in default/software_a/config.yml
+                                                "computer-layer-value": "one one one",  # append
+                                            },
+                                        ),
+                                    },
+                                ),
                             },
                         )
                     },
@@ -76,6 +108,8 @@ ZK_EXAMPLE = Node(
 
 class FakeZK:
     def __init__(self, root: dict = ZK_EXAMPLE):
+        # Deep-copy so ZK_EXAMPLE isn't persisted between tests
+        root = copy.deepcopy(ZK_EXAMPLE)
         self.root = root
 
     def _get_zk_node(self, path):
@@ -97,6 +131,16 @@ class FakeZK:
             if part not in node.children:
                 node.children[part] = Node(name=part)
             node = node.children[part]
+
+    def exists(self, path):
+        parts = path.strip("/").split("/")
+        node = self.root
+        try:
+            for part in parts:
+                node = node.children[part]
+        except KeyError:
+            return False
+        return True
 
     def get(self, path):
         return self._get_zk_node(path)

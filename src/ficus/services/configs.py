@@ -11,7 +11,9 @@ COMPUTERS_PATH_PREFIX = "/scratch/computers"
 DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 
 
-def get_config(namespace: str, filename: str, hostname: str | None, merge: bool = True) -> tuple[ConfigData, list]:
+def get_config(
+    namespace: str, filename: str, hostname: str | None = None, merge: bool = True
+) -> tuple[ConfigData, list]:
     """Get configs from zookeeper. Handles merging defaults and partial config override for specific computers.
 
     :param namespace: namespace to search for file (in default and computers/<hostname>).
@@ -19,6 +21,7 @@ def get_config(namespace: str, filename: str, hostname: str | None, merge: bool 
     :param hostname: hostname to search for a partial config override.
     :param merge: if true merge default config with partial config override.
     :return: config data and dictionary denoting paths of the partial files used to create the config data
+    :notes: requires file to exist in defaults before grabbing computers override with hostname.
     """
     DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
     COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
@@ -55,14 +58,16 @@ def get_config(namespace: str, filename: str, hostname: str | None, merge: bool 
         config = _merge_configs(config, hostname_regular_file)
     else:
         if hostname:
-            return hostname_regular_file, [f"{DEFAULT_PATH}/{filename}"]
+            return hostname_regular_file, [f"{COMPUTER_PATH}/{filename}"]
         else:
-            return defaults_regular_file, [f"{COMPUTER_PATH}/{filename}"]
+            return defaults_regular_file, [f"{DEFAULT_PATH}/{filename}"]
 
     return config, valid_paths
 
 
-def save_config_obj(namespace: str, filename: str, data: dict, hostname: str | None, override: bool = False) -> str:
+def save_config_obj(
+    namespace: str, filename: str, data: dict, hostname: str | None = None, override: bool = False
+) -> str:
     """Save data (dictionary) as a config file in zookeeper.
     Saves to defaults if hostname is missing, else it will save to hostname location.
 
@@ -96,7 +101,7 @@ def save_config_file(
     return _save_config(namespace=namespace, filename=filename, data=data, hostname=hostname, override=override)
 
 
-def update_config_object(namespace: str, filename: str, hostname: str | None, data: dict) -> str:
+def update_config_object(namespace: str, filename: str, data: dict, hostname: str | None = None) -> str:
     """Update config file in zookeeper with new data (dictionary)
 
     :param namespace: namespace to save file to.
@@ -112,7 +117,9 @@ def update_config_object(namespace: str, filename: str, hostname: str | None, da
     return _save_config(namespace=namespace, filename=filename, data=config, hostname=hostname, override=True)
 
 
-def update_config_file(namespace: str, filename: str, partial_filename: str, hostname: str | None, data: bytes) -> str:
+def update_config_file(
+    namespace: str, filename: str, partial_filename: str, data: bytes, hostname: str | None = None
+) -> str:
     """Update config file in zookeeper with new data (bytes). Due to validation, if the file is a yaml file, it removes
     the comments from the file and reorders the field alphabetically.
 
@@ -129,7 +136,7 @@ def update_config_file(namespace: str, filename: str, partial_filename: str, hos
     return _save_config(namespace=namespace, filename=filename, data=config, hostname=hostname, override=True)
 
 
-def delete_config(namespace: str, filename: str, hostname: str | None) -> str | list[str]:
+def delete_config(namespace: str, filename: str, hostname: str | None = None) -> str | list[str]:
     """Delete config file from zookeeper. Deletes from defaults/ and computers/<hostname> if hostname is given.
 
     :param namespace: namespace to save file to.
@@ -170,7 +177,7 @@ def get_all_paths(namespace: str, filename: str) -> list[str]:
     return all_paths
 
 
-def get_all_files(namespace: str, hostname: str | None) -> list[str]:
+def get_all_files(namespace: str, hostname: str | None = None) -> list[str]:
     """Get all files under a specific namespace. If a specific hostname isn't provided, it returns all files under all
     hostnames with the specified namespace.
 
@@ -218,7 +225,9 @@ def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
     return dict_prime
 
 
-def _save_config(namespace: str, filename: str, data: bytes, hostname: str | None, override: bool = False) -> str:
+def _save_config(
+    namespace: str, filename: str, data: bytes, hostname: str | None = None, override: bool = False
+) -> str:
     """Helper function to save config file (as bytes, what zookeeper expects).
 
     :param namespace: namespace to save file to.

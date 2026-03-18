@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from ficus.main import app
 from ficus.database.zookeeper import get_zk_client
@@ -15,7 +16,10 @@ from tests.zk_data import FakeZK
 
 @pytest.fixture
 def zk_mock():
-    return FakeZK()
+    fake_zk = FakeZK()
+    with patch("ficus.services.configs.get_zk_client") as mock_client:
+        mock_client.return_value.__enter__.return_value = fake_zk
+        yield fake_zk
 
 
 @pytest.fixture(scope="function")
