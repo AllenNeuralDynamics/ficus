@@ -141,7 +141,7 @@ def update_config_file(
 
 
 def delete_config(namespace: str, filename: str, hostname: str | None = None) -> str | list[str]:
-    """Delete config file from zookeeper. Deletes from defaults/ and computers/<hostname> if hostname is given.
+    """Delete config file from zookeeper. Deletes from defaults/ OR computers/<hostname> if hostname is given.
 
     :param namespace: namespace to save file to.
     :param filename: name of the file.
@@ -150,12 +150,13 @@ def delete_config(namespace: str, filename: str, hostname: str | None = None) ->
     """
     DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
     with get_zk_client() as client:
-        delete_node(client, DEFAULT_PATH)
         if hostname:
             COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
             delete_node(client, COMPUTER_PATH)
-            return [DEFAULT_PATH, COMPUTER_PATH]
-    return DEFAULT_PATH
+            return COMPUTER_PATH
+        else: 
+            delete_node(client, DEFAULT_PATH)
+            return DEFAULT_PATH
 
 
 def get_all_paths(namespace: str, filename: str) -> list[str]:

@@ -131,6 +131,7 @@ def test_update_config_file_computers(zk_mock):
         "testing": "ni-haody",
     }
 
+
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 def test_update_config_file_invalid_missing_original_file(zk_mock, hostname):
     """Test updating config file (file) where original filename doesn't exist"""
@@ -210,74 +211,3 @@ def test_update_config_file_update_with_json(zk_mock):
         "computer-layer-value": "boop boop",
         "testing": "ni-haody",
     }
-
-
-# [x] test_get_config
-#   - [x] single file (no merge)
-#   - [x] default + default.yml
-#   - [x] no default + hostname - errors
-#   - [x] default + default.yml + hostname + default.yml
-#   - [x] invalid namespace
-#   - [x] invalid filename
-#   - [x] invalid file exists only in default, but tried to look for it in hostname
-#   - [x] invalid hostname
-
-# _save_config
-#   - [x] valid file
-#   - [x] valid hostname
-#   - [x] valid default.yml in default
-#   - [x] valid default.yml in hostname
-#   - [x] valid default (namespace is non-existing)
-#   - [x] valid hostname (namespace + hostname is non-existing)
-#   - [x] valid override
-#   - [x] valid no override
-#   - [x] invalid file (unsupported type)
-#   - [x] invalid normal already exists - NO OVERRIDE
-#   - [x] invalid default already exists (different because checks json,yml,yaml) - NO OVERRIDE
-
-# save_config_obj
-#   - [x] test valid - good
-#   - [x] invalid file type
-#   - [x] invalid file content
-
-# save_config_file
-#   - [x] test valid - good
-#   - [x] invalid file type
-#   - [x] invalid file content
-
-# update_config_obj
-#   - [x] merge correct defaults
-#   - [x] merge correct computers
-#   - [x] invalid file type
-#   - [x] invalid file contents (maybe cant for object)
-#   - [x] missing current config (namespace,filename) = what is behavior?
-
-# update_config_file
-#   - [x] merge correct
-#   - [x] invalid file contents (maybe cant for object)
-#   - [x] missing current config (namespace,filename) = what is behavior?
-#   - [x] partial name mismatched with update config type
-#   - [x] partial name bad file type
-
-# delete config
-#   - valid default
-#   - valid hostname
-#   - invalid doesn't exist
-
-# get all paths
-#   - valid (check defaults & hostname was found)
-#   - invalid namespace
-#   - invalid filename
-
-# get all paths
-#   - valid (check defaults & hostname was found)
-#   - invalid namespace
-#   - invalid hostname
-
-# _merge_configs
-#   - valid two good dicts
-#   - valid 1 empty prime (main)
-#   - valid 1 empty mod (override)
-#   - valid override precedence
-#   - valid append new keys
-#   - valid nested dict (merge these)

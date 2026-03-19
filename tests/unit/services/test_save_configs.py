@@ -14,9 +14,6 @@ NOTE: Some tests are parameterized to test saving configurations to the followin
 def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
     """Test saving config file where namespace already exists"""
     namespace = "software_a"  # exists in mock data
-    if hostname:
-        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
-    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
     filename = "config2.yml"
     if hostname:
         path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
