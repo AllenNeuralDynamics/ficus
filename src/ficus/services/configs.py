@@ -1,6 +1,8 @@
 import json
 import yaml
 
+from kazoo.exceptions import NoNodeError
+
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
@@ -46,14 +48,15 @@ def get_config(
                 valid_paths.append(path)
                 return config
             return {}
-        if merge: 
+
+        if merge:
             defaults_default_file = get_default_file(DEFAULT_PATH)
             defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
             hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
             hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
-        elif hostname: 
+        elif hostname:
             hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
-        else: 
+        else:
             defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
 
     if merge:
@@ -154,7 +157,7 @@ def delete_config(namespace: str, filename: str, hostname: str | None = None) ->
             COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
             delete_node(client, COMPUTER_PATH)
             return COMPUTER_PATH
-        else: 
+        else:
             delete_node(client, DEFAULT_PATH)
             return DEFAULT_PATH
 
@@ -172,6 +175,8 @@ def get_all_paths(namespace: str, filename: str) -> list[str]:
         default_subpath = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
         if client.exists(default_subpath):
             all_paths.append(default_subpath)
+        else: 
+            raise NoNodeError(f"File doesn't exist in defaults: {default_subpath}")
 
         # Check if computer/hostname/namespace/filename exists for all hostnames
         _, hostnames = get_node(client, COMPUTERS_PATH_PREFIX)
@@ -179,6 +184,8 @@ def get_all_paths(namespace: str, filename: str) -> list[str]:
             hostname_subpath = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
             if client.exists(hostname_subpath):
                 all_paths.append(hostname_subpath)
+            else: 
+                raise NoNodeError(f"File doesn't exist in computers/hostname: {hostname_subpath}")
     return all_paths
 
 

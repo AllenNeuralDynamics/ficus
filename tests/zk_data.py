@@ -99,7 +99,29 @@ ZK_EXAMPLE = Node(
                                     },
                                 ),
                             },
-                        )
+                        ),
+                        "w11dt000002": Node(
+                            name="w11dt000002",
+                            children={
+                                "software_a": Node(
+                                    name="software_a",
+                                    children={
+                                        "default.yaml": Node(
+                                            name="default.yaml",
+                                            value={},
+                                        ),
+                                        "config2.yml": Node(
+                                            name="config2.yml",
+                                            value={},
+                                        ),
+                                        "config3.json": Node(
+                                            name="config3.json",
+                                            value={},
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
                     },
                 ),
             },
