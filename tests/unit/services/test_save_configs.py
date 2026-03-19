@@ -2,9 +2,17 @@ import pytest
 
 from ficus.services.configs import get_config, save_config_file, save_config_obj, _save_config
 
+"""
+NOTE: Some tests are parameterized to test saving configurations to the following: 
+        1. /defaults/... path where default configurations live
+        2. /computers/... path where override configurations live
+    This is determined by whether a hostname is given or not. 
+"""
+
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
+    """Test saving config file where namespace already exists"""
     namespace = "software_a"  # exists in mock data
     if hostname:
         assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
@@ -26,11 +34,8 @@ def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
 
 @pytest.mark.parametrize("hostname", [None, "w10test"])
 def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
-    """Test saving config file to defaults and computers where namespace doesn't exist yet"""
+    """Test saving config file where namespace doesn't exist yet"""
     namespace = "software_test"  # doesn't exist in mock data
-    assert not zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
-    assert not zk_mock.exists(f"/scratch/defaults/{namespace}")
-
     filename = "config.yml"
     if hostname:
         # TODO: This is saving a configuration file into a new <hostname> with a new <namespace>.
@@ -54,7 +59,7 @@ def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
 @pytest.mark.parametrize("hostname", [None, "w10test"])
 @pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
 def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
-    """Test saving a default config file (all file types - yml,yaml,json) to both defaults and computers"""
+    """Test saving a default config file (all file types - yml, yaml, json)"""
     namespace = "software_test"
     if hostname:
         path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
@@ -72,11 +77,8 @@ def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 def test__save_config_override(zk_mock, encode_data, hostname):
-    """Test that config exists in defaults/hostname override and can still save config if override is True"""
+    """Test saving a config file that will override an existing file, when override=True"""
     namespace = "software_a"  # exists in mock data
-    if hostname:
-        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
-    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
     filename = "config.yml"
     if hostname:
         path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
@@ -97,11 +99,8 @@ def test__save_config_override(zk_mock, encode_data, hostname):
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
-    """Test that config exists in defaults/hostname override and can't override when override is False"""
+    """Test saving a config - throws errors when saving to an existing file, when override=False"""
     namespace = "software_a"  # exists in mock data
-    if hostname:
-        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
-    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
     filename = "config.yml"
     data = {"testing": "ni-haody"}
 
@@ -111,7 +110,7 @@ def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 def test__save_config_invalid_file_content(zk_mock, hostname):
-    """Test throwing error if data isn't bytes"""
+    """Test _save_config throws an error if data isn't bytes"""
     namespace = "software_a"
     filename = "config.yml"
     data = "not bytes"
@@ -121,27 +120,10 @@ def test__save_config_invalid_file_content(zk_mock, hostname):
 
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-def test__save_config_file_exists(zk_mock, encode_data, hostname):
-    """Test error occurs when trying to add file that currently exists (with override = False)"""
-    namespace = "software_a"
-    filename = "config.yml"
-    if hostname:
-        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}/{filename}")
-    assert zk_mock.exists(f"/scratch/defaults/{namespace}/{filename}")
-    data = {"testing": "ni-haody"}
-
-    with pytest.raises(FileExistsError):
-        _save_config(namespace, filename, encode_data(data), hostname)
-
-
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
 @pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
 def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filename):
-    """Test error occurs when trying to add file that currently exists (with override = False)"""
+    """Test _save_config throws error when trying to add default file that currently exists (override = False)"""
     namespace = "software_a"
-    if hostname:
-        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}/default.json")
-    assert zk_mock.exists(f"/scratch/defaults/{namespace}/default.yml")
     data = {"testing": "ni-haody"}
 
     with pytest.raises(FileExistsError):
@@ -177,9 +159,9 @@ def test_save_config_obj_invalid_file_type(zk_mock, hostname):
 @pytest.mark.parametrize("hostname", [None, "w10test"])
 @pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
 def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
-    """Test save config (object) with an invalid file content (dictionary contains object - fails for yaml and json)"""
+    """Test save config (object) with an invalid file content"""
     namespace = "software_test"
-    data = {"key": object()}
+    data = {"key": object()}  # python object, invalid for converting to json or yaml
 
     with pytest.raises(ValueError):
         save_config_obj(namespace, filename, data, hostname)
@@ -214,80 +196,9 @@ def test_save_config_file_invalid_file_type(zk_mock, hostname):
 @pytest.mark.parametrize("hostname", [None, "w10test"])
 @pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
 def test_save_config_file_invalid_file_content(zk_mock, filename, hostname):
-    """Test save config (file) with an invalid file content (dictionary contains object - fails for yaml and json)"""
+    """Test save config (file) with an invalid file content"""
     namespace = "software_test"
-    data = b"\x01"
+    data = b"\x01"  # random byte, fails converting to json or yaml
 
     with pytest.raises(ValueError):
         save_config_file(namespace, filename, data, hostname)
-
-
-# [x] test_get_config
-#   - [x] single file (no merge)
-#   - [x] default + default.yml
-#   - [x] no default + hostname - errors
-#   - [x] default + default.yml + hostname + default.yml
-#   - [x] invalid namespace
-#   - [x] invalid filename
-#   - [x] invalid file exists only in default, but tried to look for it in hostname
-#   - [x] invalid hostname
-
-# _save_config
-#   - [x] valid file
-#   - [x] valid hostname
-#   - [x] valid default.yml in default
-#   - [x] valid default.yml in hostname
-#   - [x] valid default (namespace is non-existing)
-#   - [x] valid hostname (namespace + hostname is non-existing)
-#   - [x] valid override
-#   - [x] valid no override
-#   - [x] invalid file (unsupported type)
-#   - [x] invalid normal already exists - NO OVERRIDE
-#   - [x] invalid default already exists (different because checks json,yml,yaml) - NO OVERRIDE
-
-# save_config_obj
-#   - [x] test valid - good
-#   - [x] invalid file type
-#   - [x] invalid file content
-
-# save_config_file
-#   - [x] test valid - good
-#   - [x] invalid file type
-#   - [x] invalid file content
-
-# update_config_obj
-#   - merge correct
-#   - invalid file type
-#   - invalid file contents (maybe cant for object)
-#   - missing current config (namespace,filename) = what is behavior?
-#   - invalid partial_filename = what is behavior?
-
-# update_config_file
-#   - merge correct
-#   - invalid file type
-#   - invalid file contents (maybe cant for object)
-#   - missing current config (namespace,filename) = what is behavior?
-#   - invalid partial_filename = what is behavior?
-
-# delete config
-#   - valid default
-#   - valid hostname
-#   - invalid doesn't exist
-
-# get all paths
-#   - valid (check defaults & hostname was found)
-#   - invalid namespace
-#   - invalid filename
-
-# get all paths
-#   - valid (check defaults & hostname was found)
-#   - invalid namespace
-#   - invalid hostname
-
-# _merge_configs
-#   - valid two good dicts
-#   - valid 1 empty prime (main)
-#   - valid 1 empty mod (override)
-#   - valid override precedence
-#   - valid append new keys
-#   - valid nested dict (merge these)

@@ -120,6 +120,6 @@ def test_invalid_namespace_hostname(zk_mock):
 
 
 def test_invalid_hostname(zk_mock):
-    """Test namespace/filename that exists in but hostname doesn't"""
+    """Test namespace/filename that exists but hostname doesn't"""
     with pytest.raises(NoNodeError):
         get_config("software_a", "config.yml", "w11dt000001typo")

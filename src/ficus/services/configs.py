@@ -114,8 +114,8 @@ def update_config_object(namespace: str, filename: str, data: dict, hostname: st
     :param data: config data as python dictionary
     :returns: path where file was updated.
     """
-    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname)
-    _validate_and_convert_to_bytes(filename="throwaway.json", data=data)  # Throw away value, only want to validate
+    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname, merge=False)
+    _validate_and_convert_to_bytes(filename=f"{filename}", data=data)  # Throw away value, only want to validate
     raw_config = _merge_configs(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
     return _save_config(namespace=namespace, filename=filename, data=config, hostname=hostname, override=True)
@@ -133,7 +133,7 @@ def update_config_file(
     :param data: config data as bytes
     :returns: path where file was updated.
     """
-    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname)
+    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname, merge=False)
     new_config = _validate_and_convert_to_dict(partial_filename, data)
     raw_config = _merge_configs(current_config, new_config)
     config = _validate_and_convert_to_bytes(filename, raw_config)
