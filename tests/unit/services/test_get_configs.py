@@ -1,4 +1,5 @@
 import pytest
+
 from kazoo.exceptions import NoNodeError
 
 from ficus.services.configs import get_config
@@ -23,7 +24,7 @@ def test_get_config_no_merge_computers(zk_mock):
     """Grab configs with following behavior:
     - no merging of files (grab filename directly)
     - grab from /computers directory
-    - /defaults/<namespace> doesn't exist 
+    - /defaults/<namespace> doesn't exist
     """
     result = get_config("software_a", "config.yml", "w11dt000001", merge=False)
     assert len(result) == 2
@@ -32,6 +33,7 @@ def test_get_config_no_merge_computers(zk_mock):
         "computer-layer-value": "boop boop",
     }
     assert result[1] == ["/scratch/computers/w11dt000001/software_a/config.yml"]
+
 
 def test_get_config_no_merge_computers_no_default(zk_mock):
     """Grab configs with following behavior:

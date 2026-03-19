@@ -124,7 +124,6 @@ class FakeZK:
 
     def ensure_path(self, path):
         parts = path.strip("/").split("/")
-        filename = parts[-1]
         node = self.root
 
         for part in parts[:-1]:
@@ -148,7 +147,12 @@ class FakeZK:
     def get_children(self, path):
         return self._get_zk_node(path)[1]
 
-    def set(self, path: str, data: dict):
+    def set(self, path: str, data: bytes):
+        if not isinstance(data, bytes):
+            raise TypeError()
+        
+        data = json.loads(data.decode())
+
         parts = path.strip("/").split("/")
         filename = parts[-1]
         node = self.root

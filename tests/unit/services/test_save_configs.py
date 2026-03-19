@@ -1,51 +1,152 @@
 import pytest
-from kazoo.exceptions import NoNodeError
 
 from ficus.services.configs import get_config, save_config_file, save_config_obj, _save_config
 
-# _save_config
-#   - [x] valid file
-#   - valid hostname - default exists
-#   - valid hostname - default doesnt exist (should have it)
-#   - valid default.yml in default
-#   - valid default.yml in hostname
-#   - valid default (namespace is non-existing)
-#   - valid hostname (namespace + hostname is non-existing)
-#   - valid override
-#   - valid no override
-#   - invalid file (unsupported type)
-#   - invalid normal already exists - NO OVERRIDE
-#   - invalid default already exists (different because checks json,yml,yaml) - NO OVERRIDE
 
-
-def test__save_config_defaults(zk_mock):
-    path = "/scratch/defaults/software_test/config.yml"
-    data = {"testing": "ni-haody"}
-    result = _save_config("software_test", "config.yml", data)
-    assert result == path
-    config = get_config("software_test", "config.yml")
-    assert config[0] == data
-    assert path in config[1]
-
-def test__save_config_computers(zk_mock):
-    """Add a new configuration file into <hostname>/<namespace> where defaults/<namespace> doesn't exist"""
-    # TODO: This is saving a configuration file into a new <hostname> with a new <namespace>.
-    #       This means a default doesn't exist yet for this <namespace>. Should we allow users to save a new <hostname>
-    #       if a default hasn't been given yet? Ask this because behavior of "get_config" is to error when no default
-    #       is given, regardless if hostname override exists. However, doing no merge will allow you to grab file.
-    # Current assumption is user allowed to create <hostname>/<namespace> regardless of default/<namespace> existing
-    namespace = "software_test"
-    hostname = "w10test"
-    filename = "config.yml"
-    path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
+    namespace = "software_a"  # exists in mock data
+    if hostname:
+        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
+    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
+    filename = "config2.yml"
+    if hostname:
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result = _save_config(namespace, filename, data, hostname)
+    result = _save_config(namespace, filename, encode_data(data), hostname)
     assert result == path
 
     config = get_config(namespace, filename, hostname, False)
     assert config[0] == data
     assert path in config[1]
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
+    """Test saving config file to defaults and computers where namespace doesn't exist yet"""
+    namespace = "software_test"  # doesn't exist in mock data
+    assert not zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
+    assert not zk_mock.exists(f"/scratch/defaults/{namespace}")
+
+    filename = "config.yml"
+    if hostname:
+        # TODO: This is saving a configuration file into a new <hostname> with a new <namespace>.
+        # This means a default doesn't exist yet for this <namespace>. Should we allow users to save a new <hostname>
+        # if a default hasn't been given yet? Ask this because behavior of "get_config" is to error when no default
+        # is given, regardless if hostname override exists. However, doing no merge will allow you to grab file.
+        # Current assumption is user allowed to create <hostname>/<namespace> regardless of default/<namespace> existing
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
+    data = {"testing": "ni-haody"}
+
+    result = _save_config(namespace, filename, encode_data(data), hostname)
+    assert result == path
+
+    config = get_config(namespace, filename, hostname, False)
+    assert config[0] == data
+    assert path in config[1]
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
+def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
+    """Test saving a default config file (all file types - yml,yaml,json) to both defaults and computers"""
+    namespace = "software_test"
+    if hostname:
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
+    data = {"testing": "ni-haody"}
+
+    result = _save_config(namespace, filename, encode_data(data), hostname)
+    assert result == path
+
+    config = get_config(namespace, filename, hostname, False)
+    assert config[0] == data
+    assert path in config[1]
+
+
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+def test__save_config_override(zk_mock, encode_data, hostname):
+    """Test that config exists in defaults/hostname override and can still save config if override is True"""
+    namespace = "software_a"  # exists in mock data
+    if hostname:
+        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
+    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
+    filename = "config.yml"
+    if hostname:
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
+    data = {"testing": "ni-haody"}
+
+    current_config = get_config(namespace, filename, hostname, False)
+
+    result = _save_config(namespace, filename, encode_data(data), hostname, True)
+    assert result == path
+
+    new_config = get_config(namespace, filename, hostname, False)
+    assert new_config[0] == data
+    assert path in new_config[1]
+    assert current_config != new_config
+
+
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
+    """Test that config exists in defaults/hostname override and can't override when override is False"""
+    namespace = "software_a"  # exists in mock data
+    if hostname:
+        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}")
+    assert zk_mock.exists(f"/scratch/defaults/{namespace}")
+    filename = "config.yml"
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(FileExistsError):
+        _save_config(namespace, filename, encode_data(data), hostname)  # Override default to false
+
+
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+def test__save_config_invalid_file_content(zk_mock, hostname):
+    """Test throwing error if data isn't bytes"""
+    namespace = "software_a"
+    filename = "config.yml"
+    data = "not bytes"
+
+    with pytest.raises(TypeError):
+        _save_config(namespace, filename, data, hostname, True)
+
+
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+def test__save_config_file_exists(zk_mock, encode_data, hostname):
+    """Test error occurs when trying to add file that currently exists (with override = False)"""
+    namespace = "software_a"
+    filename = "config.yml"
+    if hostname:
+        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}/{filename}")
+    assert zk_mock.exists(f"/scratch/defaults/{namespace}/{filename}")
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(FileExistsError):
+        _save_config(namespace, filename, encode_data(data), hostname)
+
+
+@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
+@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
+def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filename):
+    """Test error occurs when trying to add file that currently exists (with override = False)"""
+    namespace = "software_a"
+    if hostname:
+        assert zk_mock.exists(f"/scratch/computers/{hostname}/{namespace}/default.json")
+    assert zk_mock.exists(f"/scratch/defaults/{namespace}/default.yml")
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(FileExistsError):
+        _save_config(namespace, filename, encode_data(data), hostname)
+
 
 
 # [x] test_get_config
@@ -57,6 +158,19 @@ def test__save_config_computers(zk_mock):
 #   - [x] invalid filename
 #   - [x] invalid file exists only in default, but tried to look for it in hostname
 #   - [x] invalid hostname
+
+# _save_config
+#   - [x] valid file
+#   - [x] valid hostname
+#   - [x] valid default.yml in default
+#   - [x] valid default.yml in hostname
+#   - [x] valid default (namespace is non-existing)
+#   - [x] valid hostname (namespace + hostname is non-existing)
+#   - [x] valid override
+#   - [x] valid no override
+#   - [x] invalid file (unsupported type)
+#   - [x] invalid normal already exists - NO OVERRIDE
+#   - [x] invalid default already exists (different because checks json,yml,yaml) - NO OVERRIDE
 
 # save_config_obj
 #   - test dict validation works
