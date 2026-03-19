@@ -185,6 +185,43 @@ def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
         save_config_obj(namespace, filename, data, hostname)
 
 
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+def test_save_config_file(zk_mock, hostname):
+    """Test save config (file)"""
+    namespace = "software_test"
+    filename = "config.yml"
+    if hostname:
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
+    data = b"testing: ni-haody"
+
+    result = save_config_file(namespace, filename, data, hostname)
+    assert result == path
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+def test_save_config_file_invalid_file_type(zk_mock, hostname):
+    """Test save config (file) with an invalid file type"""
+    namespace = "software_test"
+    filename = "config.BADBAD"
+    data = b"testing: ni-haody"
+
+    with pytest.raises(ValueError):
+        save_config_obj(namespace, filename, data, hostname)
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
+def test_save_config_file_invalid_file_content(zk_mock, filename, hostname):
+    """Test save config (file) with an invalid file content (dictionary contains object - fails for yaml and json)"""
+    namespace = "software_test"
+    data = b"\x01"
+
+    with pytest.raises(ValueError):
+        save_config_file(namespace, filename, data, hostname)
+
+
 # [x] test_get_config
 #   - [x] single file (no merge)
 #   - [x] default + default.yml
@@ -214,9 +251,9 @@ def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
 #   - [x] invalid file content
 
 # save_config_file
-#   - test valid - good
-#   - invalid file type
-#   - invalid file content
+#   - [x] test valid - good
+#   - [x] invalid file type
+#   - [x] invalid file content
 
 # update_config_obj
 #   - merge correct
