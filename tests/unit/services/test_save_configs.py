@@ -148,6 +148,42 @@ def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filena
         _save_config(namespace, filename, encode_data(data), hostname)
 
 
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+def test_save_config_obj(zk_mock, hostname):
+    """Test save config (object)"""
+    namespace = "software_test"
+    filename = "config.yml"
+    if hostname:
+        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    else:
+        path = f"/scratch/defaults/{namespace}/{filename}"
+    data = {"testing": "ni-haody"}
+
+    result = save_config_obj(namespace, filename, data, hostname)
+    assert result == path
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+def test_save_config_obj_invalid_file_type(zk_mock, hostname):
+    """Test save config (object) with an invalid file type"""
+    namespace = "software_test"
+    filename = "config.BADBAD"
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(ValueError):
+        save_config_obj(namespace, filename, data, hostname)
+
+
+@pytest.mark.parametrize("hostname", [None, "w10test"])
+@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
+def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
+    """Test save config (object) with an invalid file content (dictionary contains object - fails for yaml and json)"""
+    namespace = "software_test"
+    data = {"key": object()}
+
+    with pytest.raises(ValueError):
+        save_config_obj(namespace, filename, data, hostname)
+
 
 # [x] test_get_config
 #   - [x] single file (no merge)
@@ -173,10 +209,14 @@ def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filena
 #   - [x] invalid default already exists (different because checks json,yml,yaml) - NO OVERRIDE
 
 # save_config_obj
-#   - test dict validation works
+#   - [x] test valid - good
+#   - [x] invalid file type
+#   - [x] invalid file content
 
 # save_config_file
-#   - test bytes validation works
+#   - test valid - good
+#   - invalid file type
+#   - invalid file content
 
 # update_config_obj
 #   - merge correct

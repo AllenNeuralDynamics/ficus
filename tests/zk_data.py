@@ -1,5 +1,7 @@
-import json
 import copy
+import json
+import yaml
+
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
 
@@ -150,12 +152,16 @@ class FakeZK:
     def set(self, path: str, data: bytes):
         if not isinstance(data, bytes):
             raise TypeError()
-        
-        data = json.loads(data.decode())
-
         parts = path.strip("/").split("/")
         filename = parts[-1]
         node = self.root
+
+        if filename.endswith(".json"):
+            data = json.loads(data.decode("utf-8"))
+        elif filename.endswith((".yml", ".yaml")):
+            data = yaml.safe_load(data.decode("utf-8"))
+        else:
+            raise ValueError(f"Unsupported file type: {filename}")
 
         try:
             for part in parts[:-1]:
