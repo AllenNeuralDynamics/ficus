@@ -1,6 +1,8 @@
 from fastapi import APIRouter, UploadFile
 from fastapi import HTTPException
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from pathlib import Path
+
 
 from ficus.services.configs import (
     get_config,
@@ -12,7 +14,7 @@ from ficus.services.configs import (
     update_config_object,
     delete_config,
 )
-from ficus.schemas.configs import ConfigResponse, ConfigDataResponse
+from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErrorResponse
 
 
 router = APIRouter(prefix="/configs", tags=["Configs"])
@@ -38,7 +40,11 @@ def get_all_files_in_path(namespace: str, hostname: str | None = None) -> Config
     )
 
 
-@router.get("/{namespace}/{filename}")
+@router.get(
+    "/{namespace}/{filename}",
+    description=Path("docs/get_configuration.md").read_text(),
+    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
+)
 def get_configuration(
     namespace: str,
     filename: str,
@@ -57,7 +63,14 @@ def get_configuration(
         raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
-@router.post("/upload/{namespace}")
+@router.post(
+    "/upload/{namespace}",
+    description=Path("docs/post_configuration_file.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
@@ -73,7 +86,14 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.post("/{namespace}/{filename}")
+@router.post(
+    "/{namespace}/{filename}",
+    description=Path("docs/post_configuration.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
         path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
@@ -87,7 +107,14 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.put("/upload/{namespace}")
+@router.put(
+    "/upload/{namespace}",
+    description=Path("docs/put_configuration_file.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 async def replace_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
     try:
         raw = await file.read()
@@ -103,7 +130,14 @@ async def replace_configuration_file(namespace: str, file: UploadFile, hostname:
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.put("/{namespace}/{filename}")
+@router.put(
+    "/{namespace}/{filename}",
+    description=Path("docs/put_configuration.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
     try:
         path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname, override=True)
@@ -117,7 +151,14 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.patch("/upload/{namespace}/{filename}")
+@router.patch(
+    "/upload/{namespace}/{filename}",
+    description=Path("docs/patch_configuration_file.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 async def update_configuration_file(
     namespace: str, filename: str, file: UploadFile, hostname: str | None = None
 ) -> ConfigResponse:
@@ -137,7 +178,14 @@ async def update_configuration_file(
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.patch("/{namespace}/{filename}")
+@router.patch(
+    "/{namespace}/{filename}",
+    description=Path("docs/patch_configuration.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    },
+)
 async def update_configuration(
     namespace: str, filename: str, data: dict, hostname: str | None = None
 ) -> ConfigResponse:
@@ -153,12 +201,18 @@ async def update_configuration(
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
-@router.delete("/{namespace}/{filename}")
+@router.delete(
+    "/{namespace}/{filename}",
+    description=Path("docs/delete_configuration.md").read_text(),
+    responses={
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
+    },
+)
 def delete_configuration(namespace: str, filename: str, hostname: str | None = None) -> ConfigResponse:
     try:
         path = delete_config(namespace=namespace, filename=filename, hostname=hostname)
         return ConfigResponse(
-            message="Successfully delete configuration file",
+            message="Successfully deleted configuration file",
             details={"path": path},
         )
     except NotEmptyError as e:

@@ -12,3 +12,7 @@ class ConfigDataResponse(ConfigResponse):
 
 
 ConfigData: TypeAlias = dict[str, Any]
+
+
+class ConfigErrorResponse(BaseModel):
+    details: str
