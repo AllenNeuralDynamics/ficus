@@ -21,7 +21,10 @@ router = APIRouter(prefix="/configs", tags=["Configs"])
 BASEDIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
-@router.get("/list_paths/{namespace}/{filename}")
+@router.get(
+    "/list_paths/{namespace}/{filename}",
+    description=Path(BASEDIR / "docs/get_all_paths_with_file.md").read_text(),
+)
 def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse:
     data = get_all_paths(namespace, filename)
     return ConfigDataResponse(
@@ -31,7 +34,10 @@ def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse
     )
 
 
-@router.get("/list_files/{namespace}")
+@router.get(
+    "/list_files/{namespace}",
+    description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
+)
 def get_all_files_in_path(namespace: str, hostname: str | None = None) -> ConfigDataResponse:
     data = get_all_files(namespace, hostname)
     return ConfigDataResponse(

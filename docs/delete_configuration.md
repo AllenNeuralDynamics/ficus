@@ -13,8 +13,9 @@ defaults/
     config.yml
 computers/
   w10dt000001/
-    default.yml
-    config.yml
+    software_a/
+      default.yml
+      config.yml
 ```
 
 Request: 

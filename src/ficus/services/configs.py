@@ -175,8 +175,6 @@ def get_all_paths(namespace: str, filename: str) -> list[str]:
         default_subpath = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
         if client.exists(default_subpath):
             all_paths.append(default_subpath)
-        else: 
-            raise NoNodeError(f"File doesn't exist in defaults: {default_subpath}")
 
         # Check if computer/hostname/namespace/filename exists for all hostnames
         _, hostnames = get_node(client, COMPUTERS_PATH_PREFIX)
@@ -184,8 +182,6 @@ def get_all_paths(namespace: str, filename: str) -> list[str]:
             hostname_subpath = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
             if client.exists(hostname_subpath):
                 all_paths.append(hostname_subpath)
-            else: 
-                raise NoNodeError(f"File doesn't exist in computers/hostname: {hostname_subpath}")
     return all_paths
 
 
@@ -201,8 +197,9 @@ def get_all_files(namespace: str, hostname: str | None = None) -> list[str]:
     with get_zk_client() as client:
 
         def collect_files(subpath: str):
-            for file in get_node(client, subpath)[1]:
-                all_files.append(f"{subpath}/{file}")
+            if client.exists(subpath):
+                for file in get_node(client, subpath)[1]:
+                    all_files.append(f"{subpath}/{file}")
 
         collect_files(f"{DEFAULTS_PATH_PREFIX}/{namespace}")
 
