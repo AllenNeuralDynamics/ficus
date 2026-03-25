@@ -21,8 +21,9 @@ def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result == path
+    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
+    assert result_data == data
+    assert result_path == path
 
     config = get_config(namespace, filename, hostname, False)
     assert config[0] == data
@@ -45,8 +46,9 @@ def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result == path
+    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
+    assert result_data == data
+    assert result_path == path
 
     config = get_config(namespace, filename, hostname, False)
     assert config[0] == data
@@ -64,8 +66,9 @@ def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result == path
+    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
+    assert result_data == data
+    assert result_path == path
 
     config = get_config(namespace, filename, hostname, False)
     assert config[0] == data
@@ -85,8 +88,9 @@ def test__save_config_override(zk_mock, encode_data, hostname):
 
     current_config = get_config(namespace, filename, hostname, False)
 
-    result = _save_config(namespace, filename, encode_data(data), hostname, True)
-    assert result == path
+    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname, True)
+    assert result_data == data
+    assert result_path == path
 
     new_config = get_config(namespace, filename, hostname, False)
     assert new_config[0] == data
@@ -138,8 +142,9 @@ def test_save_config_obj(zk_mock, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result = save_config_obj(namespace, filename, data, hostname)
-    assert result == path
+    result_data, result_path = save_config_obj(namespace, filename, data, hostname)
+    assert result_data == data
+    assert result_path == path
 
 
 @pytest.mark.parametrize("hostname", [None, "w10test"])
@@ -175,8 +180,9 @@ def test_save_config_file(zk_mock, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = b"testing: ni-haody"
 
-    result = save_config_file(namespace, filename, data, hostname)
-    assert result == path
+    result_data, result_path = save_config_file(namespace, filename, data, hostname)
+    assert result_data == {"testing": "ni-haody"}
+    assert result_path == path
 
 
 @pytest.mark.parametrize("hostname", [None, "w10test"])

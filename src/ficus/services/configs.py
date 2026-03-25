@@ -234,7 +234,7 @@ def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
 
 def _save_config(
     namespace: str, filename: str, data: bytes, hostname: str | None = None, override: bool = False
-) -> str:
+) -> tuple[dict, str]:
     """Helper function to save config file (as bytes, what zookeeper expects).
 
     :param namespace: namespace to save file to.
@@ -242,7 +242,7 @@ def _save_config(
     :param data: config data as bytes
     :param hostname: hostname to save file to.
     :param override: if true and file exists, overwrite the file.
-    :returns: path where file was saved
+    :returns: data as dict and path where file was saved.
     """
     # This function assumes that data has already been validated
     if hostname:
@@ -264,7 +264,7 @@ def _save_config(
 
         add_node(client, f"{CONFIG_PATH}/{filename}", data)
 
-    return f"{CONFIG_PATH}/{filename}"
+    return _validate_and_convert_to_dict(filename, data), f"{CONFIG_PATH}/{filename}"
 
 
 def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:

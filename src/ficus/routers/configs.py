@@ -78,14 +78,15 @@ def get_configuration(
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
 )
-async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
+async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigDataResponse:
     try:
         raw = await file.read()
         filename = file.filename if file.filename else ""
-        path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname)
-        return ConfigResponse(
+        saved_data, path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname)
+        return ConfigDataResponse(
             message="Successfully added configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
@@ -101,12 +102,13 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
 )
-def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
+def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
     try:
-        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
-        return ConfigResponse(
+        saved_data, path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
+        return ConfigDataResponse(
             message="Successfully added configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
@@ -122,14 +124,19 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
 )
-async def replace_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigResponse:
+async def replace_configuration_file(
+    namespace: str, file: UploadFile, hostname: str | None = None
+) -> ConfigDataResponse:
     try:
         raw = await file.read()
         filename = file.filename if file.filename else ""
-        path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True)
-        return ConfigResponse(
+        saved_data, path = save_config_file(
+            namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True
+        )
+        return ConfigDataResponse(
             message="Successfully replaced configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
@@ -145,12 +152,15 @@ async def replace_configuration_file(namespace: str, file: UploadFile, hostname:
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
 )
-def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigResponse:
+def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
     try:
-        path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname, override=True)
-        return ConfigResponse(
+        saved_data, path = save_config_obj(
+            namespace=namespace, filename=filename, data=data, hostname=hostname, override=True
+        )
+        return ConfigDataResponse(
             message="Successfully replaced configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
@@ -168,16 +178,17 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
 )
 async def update_configuration_file(
     namespace: str, filename: str, file: UploadFile, hostname: str | None = None
-) -> ConfigResponse:
+) -> ConfigDataResponse:
     try:
         raw = await file.read()
         partial_filename = file.filename if file.filename else ""
-        path = update_config_file(
+        saved_data, path = update_config_file(
             namespace=namespace, filename=filename, partial_filename=partial_filename, data=raw, hostname=hostname
         )
-        return ConfigResponse(
+        return ConfigDataResponse(
             message="Successfully updated configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
@@ -195,12 +206,13 @@ async def update_configuration_file(
 )
 async def update_configuration(
     namespace: str, filename: str, data: dict, hostname: str | None = None
-) -> ConfigResponse:
+) -> ConfigDataResponse:
     try:
-        path = update_config_object(namespace=namespace, filename=filename, data=data, hostname=hostname)
-        return ConfigResponse(
+        saved_data, path = update_config_object(namespace=namespace, filename=filename, data=data, hostname=hostname)
+        return ConfigDataResponse(
             message="Successfully updated configuration file",
             details={"path": path},
+            data=saved_data,
         )
     except FileExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
