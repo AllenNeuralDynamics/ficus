@@ -71,7 +71,12 @@ def get_config(
 
 
 def save_config_obj(
-    namespace: str, filename: str, data: dict, hostname: str | None = None, override: bool = False
+    namespace: str,
+    filename: str,
+    data: dict,
+    hostname: str | None = None,
+    override: bool = False,
+    create_if_missing: bool = True,
 ) -> str:
     """Save data (dictionary) as a config file in zookeeper.
     Saves to defaults if hostname is missing, else it will save to hostname location.
@@ -85,12 +90,22 @@ def save_config_obj(
     """
     data_as_bytes = _validate_and_convert_to_bytes(filename, data)
     return _save_config(
-        namespace=namespace, filename=filename, data=data_as_bytes, hostname=hostname, override=override
+        namespace=namespace,
+        filename=filename,
+        data=data_as_bytes,
+        hostname=hostname,
+        override=override,
+        create_if_missing=create_if_missing,
     )
 
 
 def save_config_file(
-    namespace: str, filename: str, data: bytes, hostname: str | None = None, override: bool = False
+    namespace: str,
+    filename: str,
+    data: bytes,
+    hostname: str | None = None,
+    override: bool = False,
+    create_if_missing: bool = True,
 ) -> str:
     """Save data (file as bytes) as a config file in zookeeper.
     Saves to defaults if hostname is missing, else it will save to hostname location.
@@ -103,7 +118,14 @@ def save_config_file(
     :returns: path where file was saved.
     """
     _validate_and_convert_to_dict(filename, data)  # Throw away value, only want to validate
-    return _save_config(namespace=namespace, filename=filename, data=data, hostname=hostname, override=override)
+    return _save_config(
+        namespace=namespace,
+        filename=filename,
+        data=data,
+        hostname=hostname,
+        override=override,
+        create_if_missing=create_if_missing,
+    )
 
 
 def update_config_object(namespace: str, filename: str, data: dict, hostname: str | None = None) -> str:
@@ -119,7 +141,9 @@ def update_config_object(namespace: str, filename: str, data: dict, hostname: st
     _validate_and_convert_to_bytes(filename=f"{filename}", data=data)  # Throw away value, only want to validate
     raw_config = _merge_configs(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
-    return _save_config(namespace=namespace, filename=filename, data=config, hostname=hostname, override=True)
+    return _save_config(
+        namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
+    )
 
 
 def update_config_file(
@@ -138,7 +162,9 @@ def update_config_file(
     new_config = _validate_and_convert_to_dict(partial_filename, data)
     raw_config = _merge_configs(current_config, new_config)
     config = _validate_and_convert_to_bytes(filename, raw_config)
-    return _save_config(namespace=namespace, filename=filename, data=config, hostname=hostname, override=True)
+    return _save_config(
+        namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
+    )
 
 
 def delete_config(namespace: str, filename: str, hostname: str | None = None) -> str | list[str]:
@@ -233,7 +259,12 @@ def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
 
 
 def _save_config(
-    namespace: str, filename: str, data: bytes, hostname: str | None = None, override: bool = False
+    namespace: str,
+    filename: str,
+    data: bytes,
+    hostname: str | None = None,
+    override: bool = False,
+    create_if_missing: bool = True,
 ) -> tuple[dict, str]:
     """Helper function to save config file (as bytes, what zookeeper expects).
 
@@ -252,16 +283,21 @@ def _save_config(
 
     with get_zk_client() as client:
         if not override:
-            # Check default file doesn't already exist (if saving default)
+            # Not overriding, check default file doesn't already exist (if saving default)
             if filename in DEFAULT_FILES:
                 for df in DEFAULT_FILES:
                     if client.exists(f"{CONFIG_PATH}/{df}"):
                         raise FileExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
 
-            # Check normal file doesn't already exist
+            # Not overriding, check normal file doesn't already exist
             if client.exists(f"{CONFIG_PATH}/{filename}"):
                 raise FileExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
 
+        # Overriding, if create_if_missing is false, check file exists before overriding
+        if not client.exists(f"{CONFIG_PATH}/{filename}") and not create_if_missing:
+            raise FileExistsError(f"File does not exist: {CONFIG_PATH}/{filename}")
+
+        # Overriding & creating if missing
         add_node(client, f"{CONFIG_PATH}/{filename}", data)
 
     return _validate_and_convert_to_dict(filename, data), f"{CONFIG_PATH}/{filename}"

@@ -125,13 +125,12 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
     },
 )
 async def replace_configuration_file(
-    namespace: str, file: UploadFile, hostname: str | None = None
+    namespace: str, filename: str, file: UploadFile, hostname: str | None = None
 ) -> ConfigDataResponse:
     try:
         raw = await file.read()
-        filename = file.filename if file.filename else ""
         saved_data, path = save_config_file(
-            namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True
+            namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True, create_if_missing=False
         )
         return ConfigDataResponse(
             message="Successfully replaced configuration file",
@@ -155,7 +154,7 @@ async def replace_configuration_file(
 def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
     try:
         saved_data, path = save_config_obj(
-            namespace=namespace, filename=filename, data=data, hostname=hostname, override=True
+            namespace=namespace, filename=filename, data=data, hostname=hostname, override=True, create_if_missing=False
         )
         return ConfigDataResponse(
             message="Successfully replaced configuration file",
@@ -194,6 +193,9 @@ async def update_configuration_file(
         raise HTTPException(status_code=409, detail=f"{e}")
     except ValueError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
+    except NoNodeError:
+        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
+        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
 @router.patch(
@@ -218,6 +220,9 @@ async def update_configuration(
         raise HTTPException(status_code=409, detail=f"{e}")
     except ValueError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
+    except NoNodeError:
+        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
+        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
 
 
 @router.delete(
