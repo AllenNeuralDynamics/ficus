@@ -133,7 +133,7 @@ ZK_EXAMPLE = Node(
 
 
 class FakeZK:
-    def __init__(self, root: dict = ZK_EXAMPLE):
+    def __init__(self, root: Node = ZK_EXAMPLE):
         # Deep-copy so ZK_EXAMPLE isn't persisted between tests
         root = copy.deepcopy(ZK_EXAMPLE)
         self.root = root
@@ -181,9 +181,9 @@ class FakeZK:
         node = self.root
 
         if filename.endswith(".json"):
-            data = json.loads(data.decode("utf-8"))
+            processed_data = json.loads(data.decode("utf-8"))
         elif filename.endswith((".yml", ".yaml")):
-            data = yaml.safe_load(data.decode("utf-8"))
+            processed_data = yaml.safe_load(data.decode("utf-8"))
         else:
             raise ValueError(f"Unsupported file type: {filename}")
 
@@ -192,7 +192,7 @@ class FakeZK:
                 if part not in node.children:
                     node.children[part] = Node(name=part)
                 node = node.children[part]
-            node.children[filename] = Node(name=filename, value=data)
+            node.children[filename] = Node(name=filename, value=processed_data)
         except KeyError:
             raise NoNodeError
 

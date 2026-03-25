@@ -141,15 +141,13 @@ def test_get_all_paths(zk_mock):
 def test_get_all_paths_invalid_namespace(zk_mock):
     namespace = "software_a_fake"
     filename = "config.yml"
-    with pytest.raises(NoNodeError):
-        get_all_paths(namespace, filename)
+    assert [] == get_all_paths(namespace, filename)
 
 
 def test_get_all_paths_invalid_filename(zk_mock):
     namespace = "software_a"
     filename = "configfakefake.yml"
-    with pytest.raises(NoNodeError):
-        get_all_paths(namespace, filename)
+    assert [] == get_all_paths(namespace, filename)
 
 
 def test_get_all_files_no_hostname(zk_mock):
@@ -182,12 +180,14 @@ def test_get_all_files_specific_hostname(zk_mock):
 
 def test_get_all_files_invalid_namespace(zk_mock):
     namespace = "software_a_fake"
-    with pytest.raises(NoNodeError):
-        get_all_files(namespace)
+    assert [] == get_all_files(namespace)
 
 
 def test_get_all_files_invalid_hostname(zk_mock):
     namespace = "software_a"
     hostname = "w11dt000001typo"
-    with pytest.raises(NoNodeError):
-        get_all_files(namespace, hostname)
+    files = [
+        "/scratch/defaults/software_a/default.yml",
+        "/scratch/defaults/software_a/config.yml",
+    ] 
+    assert files == get_all_files(namespace, hostname)
