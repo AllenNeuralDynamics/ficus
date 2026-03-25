@@ -33,10 +33,6 @@ def test_delete_config_missing_file(zk_mock, hostname):
     """Test delete config file that doesn't exist"""
     namespace = "software_a"
     filename = "DOESNOTEXIST.yml"
-    if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
-    else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
 
     with pytest.raises(NoNodeError):
         delete_config(namespace, filename, hostname)

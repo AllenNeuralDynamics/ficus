@@ -1,8 +1,6 @@
 import json
 import yaml
 
-from kazoo.exceptions import NoNodeError
-
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData

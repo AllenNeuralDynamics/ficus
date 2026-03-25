@@ -74,7 +74,8 @@ ZK_EXAMPLE = Node(
                                         "config.yml": Node(
                                             name="config.yml",
                                             value={
-                                                "scope": "w11dt000001",  # overrides scope in default/software_a/config.yml
+                                                # overrides "scope" in default/software_a/config.yml 
+                                                "scope": "w11dt000001",  
                                                 "computer-layer-value": "boop boop",  # append
                                             },
                                         ),
@@ -92,7 +93,8 @@ ZK_EXAMPLE = Node(
                                         "config.yml": Node(
                                             name="config.yml",
                                             value={
-                                                "scope": "w11dt000001",  # overrides scope in default/software_a/config.yml
+                                                # overrides "scope" in default/software_a/config.yml
+                                                "scope": "w11dt000001",  
                                                 "computer-layer-value": "one one one",  # append
                                             },
                                         ),
