@@ -4,7 +4,7 @@ Overwrite an existing configuration file with a new file.
 
 - Only overwrites the content of the new file (does not change existing filename).
 - If hostname provided, search for existing config in ``/computers/{hostname}``.
-- Creates file if it doesn't exist.
+- Errors when there is no existing file.
 
 ## Example 
 

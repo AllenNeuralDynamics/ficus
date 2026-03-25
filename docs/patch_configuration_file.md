@@ -23,7 +23,7 @@ config.yml
 Request: 
 
 ```
-PATCH /api/configs/software_a
+PATCH /api/configs/software_a/config.yml
 
 multipart/form-data (file)
 {
