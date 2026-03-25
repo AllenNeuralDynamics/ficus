@@ -11,7 +11,6 @@ from loguru import logger
 @contextmanager
 def get_zk_client():
     hosts = os.getenv("ZK_HOST", "eng-logtools:2181")
-    hosts = "eng-logtools:2181"
 
     logger.debug(f"opening connection to zookeeper @ {hosts}")
     zk = KazooClient(hosts=hosts)
