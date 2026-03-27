@@ -1,6 +1,10 @@
 import json
 import yaml
 
+from kazoo.client import KazooClient
+from kazoo.exceptions import NoNodeError
+
+from ficus.core.exceptions import ConfigNotFoundError
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
@@ -29,43 +33,46 @@ def get_config(
     valid_paths = []
 
     with get_zk_client() as client:
+        # Defaults (default file)
+        #   - ignore errors (default file)
+        for defaults in DEFAULT_FILES:
+            defaults_default_data = _get_config(client, f"{DEFAULT_PATH}/{defaults}", ignore_error=True)
+            if defaults_default_data:
+                valid_paths.append(f"{DEFAULT_PATH}/{defaults}")
+                break
 
-        def get_default_file(path: str):
-            # In order of what it treats as primary default
-            children = client.get_children(path)
-            for default in DEFAULT_FILES:
-                if default in children:
-                    default_data, _ = get_node(client, path + "/" + default)
-                    valid_paths.append(f"{path}/{default}")
-                    return default_data
-            return {}
+        # Defaults (filename)
+        #   - if hostname is given and no merge, ignore error, we want to continue to hostname to search
+        defaults_regular_data = _get_config(
+            client, f"{DEFAULT_PATH}/{filename}", ignore_error=(merge and hostname is not None)
+        )
+        if defaults_regular_data:
+            valid_paths.append(f"{DEFAULT_PATH}/{filename}")
 
-        def get_regular_file(path: str):
-            config, _children = get_node(client, path)
-            if config:
-                valid_paths.append(path)
-                return config
-            return {}
+        # Computers (default file)
+        #   - ignore errors (default file)
+        for defaults in DEFAULT_FILES:
+            computers_default_data = (
+                _get_config(client, f"{COMPUTER_PATH}/{defaults}", ignore_error=True) if hostname else {}
+            )
+            if computers_default_data:
+                valid_paths.append(f"{COMPUTER_PATH}/{defaults}")
+                break
 
-        if merge:
-            defaults_default_file = get_default_file(DEFAULT_PATH)
-            defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
-            hostname_default_file = get_default_file(COMPUTER_PATH) if hostname else {}
-            hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
-        elif hostname:
-            hostname_regular_file = get_regular_file(f"{COMPUTER_PATH}/{filename}") if hostname else {}
-        else:
-            defaults_regular_file = get_regular_file(f"{DEFAULT_PATH}/{filename}")
+        # Computers (filename)
+        computers_regular_data = _get_config(client, f"{COMPUTER_PATH}/{filename}") if hostname else {}
+        if computers_regular_data:
+            valid_paths.append(f"{COMPUTER_PATH}/{filename}")
 
     if merge:
-        config = _merge_configs(defaults_default_file, defaults_regular_file)
-        config = _merge_configs(config, hostname_default_file)
-        config = _merge_configs(config, hostname_regular_file)
+        config = _merge_configs(defaults_default_data, defaults_regular_data)
+        config = _merge_configs(config, computers_default_data)
+        config = _merge_configs(config, computers_regular_data)
     else:
         if hostname:
-            return hostname_regular_file, [f"{COMPUTER_PATH}/{filename}"]
+            return computers_regular_data, [f"{COMPUTER_PATH}/{filename}"]
         else:
-            return defaults_regular_file, [f"{DEFAULT_PATH}/{filename}"]
+            return defaults_regular_data, [f"{DEFAULT_PATH}/{filename}"]
 
     return config, valid_paths
 
@@ -77,7 +84,7 @@ def save_config_obj(
     hostname: str | None = None,
     override: bool = False,
     create_if_missing: bool = True,
-) -> str:
+) -> tuple[dict, str]:
     """Save data (dictionary) as a config file in zookeeper.
     Saves to defaults if hostname is missing, else it will save to hostname location.
 
@@ -106,7 +113,7 @@ def save_config_file(
     hostname: str | None = None,
     override: bool = False,
     create_if_missing: bool = True,
-) -> str:
+) -> tuple[dict, str]:
     """Save data (file as bytes) as a config file in zookeeper.
     Saves to defaults if hostname is missing, else it will save to hostname location.
 
@@ -128,7 +135,7 @@ def save_config_file(
     )
 
 
-def update_config_object(namespace: str, filename: str, data: dict, hostname: str | None = None) -> str:
+def update_config_object(namespace: str, filename: str, data: dict, hostname: str | None = None) -> tuple[dict, str]:
     """Update config file in zookeeper with new data (dictionary)
 
     :param namespace: namespace to save file to.
@@ -148,7 +155,7 @@ def update_config_object(namespace: str, filename: str, data: dict, hostname: st
 
 def update_config_file(
     namespace: str, filename: str, partial_filename: str, data: bytes, hostname: str | None = None
-) -> str:
+) -> tuple[dict, str]:
     """Update config file in zookeeper with new data (bytes). Due to validation, if the file is a yaml file, it removes
     the comments from the file and reorders the field alphabetically.
 
@@ -256,6 +263,32 @@ def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
         else:
             dict_prime[key] = value
     return dict_prime
+
+
+def _get_config(client: KazooClient, path: str, ignore_error: bool = False) -> dict:
+    """Helper function to get config file from zookeeper and handle errors.
+    Function will check each subpath incrementally and return the first subpath that failed if file is not found.
+
+    :param client: zookeeper client to use for getting config.
+    :param path: path to get config file from.
+    :param ignore_error: if true, instead of throwing error when file not found, return empty dict.
+    :returns: config data as dict
+    """
+    try:
+        data, _ = get_node(client, path)
+        return data
+    except NoNodeError:
+        if ignore_error:
+            return {}
+
+        subpaths = path.split("/")
+
+        for i in range(1, len(subpaths)):
+            subpath = "/".join(subpaths[:i])
+            if not client.exists(subpath):
+                raise ConfigNotFoundError(f"Subpath '{subpath}' not found in path: {path}")
+
+        raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
 def _save_config(

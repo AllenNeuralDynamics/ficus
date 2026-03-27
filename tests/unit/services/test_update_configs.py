@@ -1,7 +1,6 @@
 import pytest
 
-from kazoo.exceptions import NoNodeError
-
+from ficus.core.exceptions import ConfigNotFoundError
 from ficus.services.configs import get_config, update_config_file, update_config_object
 
 """
@@ -61,7 +60,7 @@ def test_update_config_obj_missing_original_file(zk_mock, hostname):
 
     data = {"name": "new name", "testing": "ni-haody"}
 
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         update_config_object(namespace, filename, data, hostname)
 
 
@@ -74,7 +73,7 @@ def test_update_config_obj_invalid_file_type(zk_mock, hostname):
     filename = "config_doesnt_exist.BADBAD"
     data = {"name": "new name", "testing": "ni-haody"}
 
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         update_config_object(namespace, filename, data, hostname)
 
 
@@ -141,7 +140,7 @@ def test_update_config_file_invalid_missing_original_file(zk_mock, hostname):
 
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         update_config_file(namespace, filename, input_filename, data, hostname)
 
 

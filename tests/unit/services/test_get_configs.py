@@ -1,8 +1,7 @@
 import pytest
 
-from kazoo.exceptions import NoNodeError
-
-from ficus.services.configs import get_all_files, get_all_paths, get_config
+from ficus.core.exceptions import ConfigNotFoundError
+from ficus.services.configs import get_all_files, get_all_paths, get_config, _get_config
 
 
 def test_get_config_no_merge_defaults(zk_mock):
@@ -75,7 +74,7 @@ def test_get_config_only_computers(zk_mock):
     - <filename> doesn't exist in /defaults path
     - <filename> exists in /computers/<hostname> path
     """
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         get_config("software_b", "config.yml", "w11dt000001")
 
 
@@ -103,25 +102,25 @@ def test_get_merge_all(zk_mock):
 
 def test_invalid_namespace_defaults(zk_mock):
     """Test namespace that doesn't exist in defaults"""
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         get_config("software_FAKE", "config.yml")
 
 
 def test_invalid_filename_defaults(zk_mock):
     """Test namespace that doesn't exist in defaults"""
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         get_config("software_a", "config_FAKE.yml")
 
 
 def test_invalid_namespace_hostname(zk_mock):
     """Test namespace/filename that exists in default but not computers/hostname"""
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         get_config("software_a_default_only", "config.yml", "w11dt000001")
 
 
 def test_invalid_hostname(zk_mock):
     """Test namespace/filename that exists but hostname doesn't"""
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         get_config("software_a", "config.yml", "w11dt000001typo")
 
 
@@ -189,5 +188,36 @@ def test_get_all_files_invalid_hostname(zk_mock):
     files = [
         "/scratch/defaults/software_a/default.yml",
         "/scratch/defaults/software_a/config.yml",
-    ] 
+    ]
     assert files == get_all_files(namespace, hostname)
+
+
+def test__get_config(zk_mock):
+    result = _get_config(zk_mock, "/scratch/defaults/software_a/config.yml")
+    assert result == {
+        "name": "config",
+        "scope": "default",
+        "default-layer-value": "beep beep",
+    }
+
+
+def test__get_config_invalid_subpath(zk_mock):
+    """Test _get_config with invalid subpath, error message should indicate which subpath is invalid"""
+    with pytest.raises(ConfigNotFoundError) as err:
+        _get_config(zk_mock, "scratch/defaults/BAD_SUBPATH/config.yml")
+    assert "Subpath 'scratch/defaults/BAD_SUBPATH' not found in path: scratch/defaults/BAD_SUBPATH/config.yml" in str(
+        err
+    )
+
+
+def test__get_config_invalid_filename(zk_mock):
+    """Test _get_config with invalid filename, error message should indicate config file not found at path"""
+    with pytest.raises(ConfigNotFoundError) as err:
+        _get_config(zk_mock, "scratch/defaults/software_a/config_FAKE.yml")
+    assert "Config file not found at path: scratch/defaults/software_a/config_FAKE.yml" in str(err)
+
+
+def test__get_config_ignore_error(zk_mock):
+    """Test _get_config return empty dict when ignore_error is True and error exists"""
+    result = _get_config(zk_mock, "scratch/defaults/software_a/config_FAKE.yml", True)
+    assert result == {}

@@ -4,6 +4,7 @@ from kazoo.exceptions import NoNodeError, NotEmptyError
 from pathlib import Path
 
 
+from ficus.core.exceptions import ConfigNotFoundError
 from ficus.services.configs import (
     get_config,
     get_all_paths,
@@ -65,9 +66,8 @@ def get_configuration(
             data=config,
             details={"files": paths},
         )
-    except NoNodeError:
-        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
-        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post(
