@@ -206,7 +206,7 @@ def test__get_config_invalid_subpath(zk_mock):
     with pytest.raises(ConfigNotFoundError) as err:
         _get_config(zk_mock, "scratch/defaults/BAD_SUBPATH/config.yml")
     assert "Subpath 'scratch/defaults/BAD_SUBPATH' not found in path: scratch/defaults/BAD_SUBPATH/config.yml" in str(
-        err
+        err.value
     )
 
 
@@ -214,7 +214,8 @@ def test__get_config_invalid_filename(zk_mock):
     """Test _get_config with invalid filename, error message should indicate config file not found at path"""
     with pytest.raises(ConfigNotFoundError) as err:
         _get_config(zk_mock, "scratch/defaults/software_a/config_FAKE.yml")
-    assert "Config file not found at path: scratch/defaults/software_a/config_FAKE.yml" in str(err)
+    print(str(err.value))
+    assert "Config file not found at path: scratch/defaults/software_a/config_FAKE.yml" in str(err.value)
 
 
 def test__get_config_ignore_error(zk_mock):

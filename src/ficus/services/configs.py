@@ -44,7 +44,7 @@ def get_config(
         # Defaults (filename)
         #   - if hostname is given and no merge, ignore error, we want to continue to hostname to search
         defaults_regular_data = _get_config(
-            client, f"{DEFAULT_PATH}/{filename}", ignore_error=(merge and hostname is not None)
+            client, f"{DEFAULT_PATH}/{filename}", ignore_error=(not merge and hostname is not None)
         )
         if defaults_regular_data:
             valid_paths.append(f"{DEFAULT_PATH}/{filename}")
@@ -281,14 +281,19 @@ def _get_config(client: KazooClient, path: str, ignore_error: bool = False) -> d
         if ignore_error:
             return {}
 
-        subpaths = path.split("/")
-
-        for i in range(1, len(subpaths)):
-            subpath = "/".join(subpaths[:i])
-            if not client.exists(subpath):
-                raise ConfigNotFoundError(f"Subpath '{subpath}' not found in path: {path}")
-
+        invalid_subpath = _find_first_invalid_subpath(client, path)
+        if invalid_subpath:
+            raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
+
+
+def _find_first_invalid_subpath(client: KazooClient, path: str, is_file: bool = True) -> str | None:
+    subpaths = path.split("/")
+    for i in range(1, len(subpaths) + (-1 if is_file else 0)):
+        subpath = "/".join(subpaths[: i + 1])
+        if not client.exists(subpath):
+            return subpath
+    return None
 
 
 def _save_config(
