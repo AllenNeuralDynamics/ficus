@@ -1,5 +1,6 @@
 import pytest
 
+from ficus.core.exceptions import ConfigExistsError
 from ficus.services.configs import get_config, save_config_file, save_config_obj, _save_config
 
 """
@@ -105,8 +106,15 @@ def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
     filename = "config.yml"
     data = {"testing": "ni-haody"}
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ConfigExistsError) as err:
         _save_config(namespace, filename, encode_data(data), hostname)  # Override default to false
+
+    assert (
+        str(err.value)
+        == f"File already exists: /scratch/{'computers/' + hostname + '/' if hostname else 'defaults/'}{namespace}/{
+            filename
+        }"
+    )
 
 
 @pytest.mark.parametrize("hostname", [None, "w11dt000001"])
@@ -127,8 +135,13 @@ def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filena
     namespace = "software_a"
     data = {"testing": "ni-haody"}
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ConfigExistsError) as err:
         _save_config(namespace, filename, encode_data(data), hostname)
+
+    if hostname:
+        assert str(err.value) == f"Default File already exists: /scratch/computers/{hostname}/{namespace}/default.json"
+    else:
+        assert str(err.value) == f"Default File already exists: /scratch/defaults/{namespace}/default.yml"
 
 
 @pytest.mark.parametrize("hostname", [None, "w10test"])

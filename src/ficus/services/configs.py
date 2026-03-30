@@ -4,7 +4,7 @@ import yaml
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 
-from ficus.core.exceptions import ConfigNotFoundError
+from ficus.core.exceptions import ConfigExistsError, ConfigNotFoundError
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
@@ -325,15 +325,20 @@ def _save_config(
             if filename in DEFAULT_FILES:
                 for df in DEFAULT_FILES:
                     if client.exists(f"{CONFIG_PATH}/{df}"):
-                        raise FileExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+                        raise ConfigExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
 
             # Not overriding, check normal file doesn't already exist
             if client.exists(f"{CONFIG_PATH}/{filename}"):
-                raise FileExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
+                raise ConfigExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
 
         # Overriding, if create_if_missing is false, check file exists before overriding
         if not client.exists(f"{CONFIG_PATH}/{filename}") and not create_if_missing:
-            raise FileExistsError(f"File does not exist: {CONFIG_PATH}/{filename}")
+            path = f"{CONFIG_PATH}/{filename}"
+            invalid_subpath = _find_first_invalid_subpath(client, path)
+            if invalid_subpath:
+                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
+            raise ConfigNotFoundError(f"Config file not found at path: {path}")
+
 
         # Overriding & creating if missing
         add_node(client, f"{CONFIG_PATH}/{filename}", data)

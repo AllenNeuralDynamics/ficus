@@ -1,7 +1,6 @@
 import pytest
 
 from ficus.services.configs import (
-    get_zk_client,
     _merge_configs,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
@@ -134,27 +133,23 @@ def test_validate_and_convert_to_dict_invalid_data():
 
 def test_find_first_invalid_subpath_valid(zk_mock):
     """Test _find_first_invalid_subpath with valid path"""
-    with get_zk_client() as client:
-        path = "/scratch/defaults/software_a/config.yml"
-        assert _find_first_invalid_subpath(client, path) is None
+    path = "/scratch/defaults/software_a/config.yml"
+    assert _find_first_invalid_subpath(zk_mock, path) is None
 
 
 def test_find_first_invalid_subpath_invalid_file(zk_mock):
     """Test _find_first_invalid_subpath with invalid file, ignores file check"""
-    with get_zk_client() as client:
-        path = "/scratch/defaults/software_a/CONFIG_BAD.yml"
-        assert _find_first_invalid_subpath(client, path, is_file=True) is None
+    path = "/scratch/defaults/software_a/CONFIG_BAD.yml"
+    assert _find_first_invalid_subpath(zk_mock, path, is_file=True) is None
 
 
 def test_find_first_invalid_subpath_invalid_subpath(zk_mock):
     """Test _find_first_invalid_subpath with invalid subpath (near end)"""
-    with get_zk_client() as client:
-        path = "/scratch/defaults/software_a_BAD/CONFIG_BAD.yml"
-        assert _find_first_invalid_subpath(client, path) == "/scratch/defaults/software_a_BAD"
+    path = "/scratch/defaults/software_a_BAD/CONFIG_BAD.yml"
+    assert _find_first_invalid_subpath(zk_mock, path) == "/scratch/defaults/software_a_BAD"
 
 
 def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):
     """Test _find_first_invalid_subpath with invalid subpath (near beginning)"""
-    with get_zk_client() as client:
-        path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
-        assert _find_first_invalid_subpath(client, path) == "/scratchbad"
+    path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
+    assert _find_first_invalid_subpath(zk_mock, path) == "/scratchbad"
