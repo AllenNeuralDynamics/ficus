@@ -1,6 +1,6 @@
 import pytest
 
-from ficus.core.exceptions import ConfigNotFoundError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
+from ficus.core.exceptions import ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import (
     _merge_configs,
     _validate_and_convert_to_bytes,

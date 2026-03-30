@@ -1,7 +1,7 @@
 import pytest
 
-from kazoo.exceptions import NoNodeError
 
+from ficus.core.exceptions import ConfigNotFoundError
 from ficus.services.configs import delete_config
 
 
@@ -34,5 +34,5 @@ def test_delete_config_missing_file(zk_mock, hostname):
     namespace = "software_a"
     filename = "DOESNOTEXIST.yml"
 
-    with pytest.raises(NoNodeError):
+    with pytest.raises(ConfigNotFoundError):
         delete_config(namespace, filename, hostname)
