@@ -1,6 +1,5 @@
 from fastapi import APIRouter, UploadFile
 from fastapi import HTTPException
-from kazoo.exceptions import NoNodeError, NotEmptyError
 from pathlib import Path
 
 
@@ -134,7 +133,7 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
     description=Path(BASEDIR / "docs/put_configuration_file.md").read_text(),
     responses={
         400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
 )
@@ -153,19 +152,17 @@ async def replace_configuration_file(
         )
     except ConfigDecodeError as e:
         raise HTTPException(status_code=400, detail=f"{e}")
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
     except ConfigNotFoundError as e:
         raise HTTPException(status_code=404, detail=f"{e}")
+    except UnsupportedFileTypeError as e:
+        raise HTTPException(status_code=415, detail=f"{e}")
 
 
 @router.put(
     "/{namespace}/{filename}",
     description=Path(BASEDIR / "docs/put_configuration.md").read_text(),
     responses={
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
         500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
@@ -194,7 +191,6 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
     responses={
         400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
         404: {"model": ConfigErrorResponse, "description": "File not found"},
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
         500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
@@ -215,21 +211,19 @@ async def update_configuration_file(
         )
     except ConfigDecodeError as e:
         raise HTTPException(status_code=400, detail=f"{e}")
-    # TODO: do we need this?
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")
     except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
     except ConfigSerializeError as e:
         raise HTTPException(status_code=500, detail=f"{e}")
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
 
 
 @router.patch(
     "/{namespace}/{filename}",
     description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
     responses={
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
         500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
@@ -245,20 +239,21 @@ async def update_configuration(
             details={"path": path},
             data=saved_data,
         )
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except ConfigSerializeError as e:
-        raise HTTPException(status_code=500, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
     except ConfigNotFoundError as e:
         raise HTTPException(status_code=404, detail=f"{e}")
+    except ConfigExistsError as e:
+        raise HTTPException(status_code=409, detail=f"{e}")
+    except UnsupportedFileTypeError as e:
+        raise HTTPException(status_code=415, detail=f"{e}")
+    except ConfigSerializeError as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
 
 
 @router.delete(
     "/{namespace}/{filename}",
     description=Path(BASEDIR / "docs/delete_configuration.md").read_text(),
     responses={
+        400: {"model": ConfigErrorResponse, "description": "Path is a directory and cannot be deleted"},
         404: {"model": ConfigErrorResponse, "description": "File not found"},
     },
 )
