@@ -4,7 +4,14 @@ from kazoo.exceptions import NoNodeError, NotEmptyError
 from pathlib import Path
 
 
-from ficus.core.exceptions import ConfigNotFoundError
+from ficus.core.exceptions import (
+    ConfigExistsError,
+    ConfigDecodeError,
+    ConfigNotFoundError,
+    ConfigSerializeError,
+    PathIsDirectoryError,
+    UnsupportedFileTypeError,
+)
 from ficus.services.configs import (
     get_config,
     get_all_paths,
@@ -74,6 +81,7 @@ def get_configuration(
     "/upload/{namespace}",
     description=Path(BASEDIR / "docs/post_configuration_file.md").read_text(),
     responses={
+        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
@@ -88,9 +96,11 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
+    except ConfigDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"{e}")
+    except ConfigExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
 
 
@@ -100,6 +110,7 @@ async def post_configuration_file(namespace: str, file: UploadFile, hostname: st
     responses={
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
 )
 def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
@@ -110,16 +121,19 @@ def post_configuration(namespace: str, filename: str, data: dict, hostname: str 
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
+    except ConfigExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
+    except ConfigSerializeError as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
 
 
 @router.put(
     "/upload/{namespace}",
     description=Path(BASEDIR / "docs/put_configuration_file.md").read_text(),
     responses={
+        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
     },
@@ -137,10 +151,14 @@ async def replace_configuration_file(
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
+    except ConfigDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"{e}")
+    except ConfigExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")
 
 
 @router.put(
@@ -149,6 +167,7 @@ async def replace_configuration_file(
     responses={
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
 )
 def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
@@ -161,18 +180,23 @@ def replace_configuration(namespace: str, filename: str, data: dict, hostname: s
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
+    except ConfigSerializeError as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
 
 
 @router.patch(
     "/upload/{namespace}/{filename}",
     description=Path(BASEDIR / "docs/patch_configuration_file.md").read_text(),
     responses={
+        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
 )
 async def update_configuration_file(
@@ -189,13 +213,17 @@ async def update_configuration_file(
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
+    except ConfigDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"{e}")
+    # TODO: do we need this?
+    except ConfigExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
-    except NoNodeError:
-        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
-        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
+    except ConfigSerializeError as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")
 
 
 @router.patch(
@@ -204,6 +232,7 @@ async def update_configuration_file(
     responses={
         409: {"model": ConfigErrorResponse, "description": "File already exists"},
         415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
     },
 )
 async def update_configuration(
@@ -216,13 +245,14 @@ async def update_configuration(
             details={"path": path},
             data=saved_data,
         )
-    except FileExistsError as e:
+    except ConfigExistsError as e:
         raise HTTPException(status_code=409, detail=f"{e}")
-    except ValueError as e:
+    except ConfigSerializeError as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
+    except UnsupportedFileTypeError as e:
         raise HTTPException(status_code=415, detail=f"{e}")
-    except NoNodeError:
-        config_path = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
-        raise HTTPException(status_code=404, detail=f"Config {config_path} not found")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")
 
 
 @router.delete(
@@ -239,8 +269,7 @@ def delete_configuration(namespace: str, filename: str, hostname: str | None = N
             message="Successfully deleted configuration file",
             details={"path": path},
         )
-    except NotEmptyError as e:
+    except PathIsDirectoryError as e:
         raise HTTPException(status_code=400, detail=f"{e}")
-    except NoNodeError:
-        config = f"/computers/{hostname}{namespace}/{filename}" if hostname else f"/default/{namespace}/{filename}"
-        raise HTTPException(status_code=404, detail=f"Config {config} not found")
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"{e}")

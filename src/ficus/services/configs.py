@@ -2,13 +2,14 @@ import json
 import yaml
 
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ficus.core.exceptions import (
     ConfigExistsError,
     ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
+    PathIsDirectoryError,
     UnsupportedFileTypeError,
 )
 from ficus.crud.zookeeper import get_node, add_node, delete_node
@@ -188,15 +189,21 @@ def delete_config(namespace: str, filename: str, hostname: str | None = None) ->
     :param hostname: hostname to save file to (indicates config override).
     :returns: path where file was deleted.
     """
-    DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
+    if hostname: 
+        path = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
+    else: 
+        path = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
     with get_zk_client() as client:
-        if hostname:
-            COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
-            delete_node(client, COMPUTER_PATH)
-            return COMPUTER_PATH
-        else:
-            delete_node(client, DEFAULT_PATH)
-            return DEFAULT_PATH
+        try:
+            delete_node(client, path)
+            return path
+        except NotEmptyError:
+            raise PathIsDirectoryError(f"Path is a directory and cannot be deleted: {path}")
+        except NoNodeError:
+            invalid_subpath = _find_first_invalid_subpath(client, path)
+            if invalid_subpath:
+                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
+            raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
 def get_all_paths(namespace: str, filename: str) -> list[str]:
