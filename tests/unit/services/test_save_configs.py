@@ -1,6 +1,6 @@
 import pytest
 
-from ficus.core.exceptions import ConfigExistsError
+from ficus.core.exceptions import ConfigExistsError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import get_config, save_config_file, save_config_obj, _save_config
 
 """
@@ -167,7 +167,7 @@ def test_save_config_obj_invalid_file_type(zk_mock, hostname):
     filename = "config.BADBAD"
     data = {"testing": "ni-haody"}
 
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedFileTypeError):
         save_config_obj(namespace, filename, data, hostname)
 
 
@@ -178,7 +178,7 @@ def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
     namespace = "software_test"
     data = {"key": object()}  # python object, invalid for converting to json or yaml
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigSerializeError):
         save_config_obj(namespace, filename, data, hostname)
 
 
@@ -205,7 +205,7 @@ def test_save_config_file_invalid_file_type(zk_mock, hostname):
     filename = "config.BADBAD"
     data = b"testing: ni-haody"
 
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedFileTypeError):
         save_config_obj(namespace, filename, data, hostname)
 
 
@@ -216,5 +216,5 @@ def test_save_config_file_invalid_file_content(zk_mock, filename, hostname):
     namespace = "software_test"
     data = b"\x01"  # random byte, fails converting to json or yaml
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigDecodeError):
         save_config_file(namespace, filename, data, hostname)

@@ -4,7 +4,13 @@ import yaml
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 
-from ficus.core.exceptions import ConfigExistsError, ConfigNotFoundError
+from ficus.core.exceptions import (
+    ConfigExistsError,
+    ConfigDecodeError,
+    ConfigNotFoundError,
+    ConfigSerializeError,
+    UnsupportedFileTypeError,
+)
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
@@ -339,7 +345,6 @@ def _save_config(
                 raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
             raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
-
         # Overriding & creating if missing
         add_node(client, f"{CONFIG_PATH}/{filename}", data)
 
@@ -359,12 +364,10 @@ def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
         elif filename.endswith((".yml", ".yaml")):
             data_as_bytes = yaml.safe_dump(data).encode("utf-8")
         else:
-            raise ValueError(f"Unsupported file type: {filename}")
+            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
         return data_as_bytes
-    except ValueError:
-        raise
     except (TypeError, yaml.YAMLError):
-        raise ValueError(f"Failed to serialize data for {filename}")
+        raise ConfigSerializeError(f"Failed to serialize data for {filename}")
 
 
 def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
@@ -379,10 +382,10 @@ def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
             data_as_dict = json.loads(data)  # Throw away - decoding for validation only
         elif filename.endswith((".yml", ".yaml")):
             data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
+            if data_as_dict is None:
+                data_as_dict = {}  # yaml.safe_load returns None for empty files, convert to empty dict
         else:
-            raise ValueError(f"Unsupported file type: {filename}")
+            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
         return data_as_dict
-    except ValueError:
-        raise
     except (json.JSONDecodeError, yaml.YAMLError):
-        raise ValueError(f"Failed to decode data for {filename}")
+        raise ConfigDecodeError(f"Failed to decode data for {filename}")

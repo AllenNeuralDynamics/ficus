@@ -1,6 +1,6 @@
 import pytest
 
-from ficus.core.exceptions import ConfigNotFoundError
+from ficus.core.exceptions import ConfigNotFoundError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import get_config, update_config_file, update_config_object
 
 """
@@ -84,7 +84,7 @@ def test_update_config_obj_invalid_file_content(zk_mock, hostname):
     filename = "config.yml"
     data = {"key": object()}
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigSerializeError):
         update_config_object(namespace, filename, data, hostname)
 
 
@@ -151,7 +151,7 @@ def test_update_config_file_invalid_file_type(zk_mock, hostname):
     input_filename = "config.BADDDD"
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedFileTypeError):
         update_config_file(namespace, filename, input_filename, data, hostname)
 
 
@@ -162,7 +162,7 @@ def test_update_config_file_invalid_file_content(zk_mock, hostname):
     input_filename = "config.yml"
     data = b"\x01"
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigDecodeError):
         update_config_file(namespace, filename, input_filename, data, hostname)
 
 

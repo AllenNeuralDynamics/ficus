@@ -1,5 +1,6 @@
 import pytest
 
+from ficus.core.exceptions import ConfigNotFoundError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import (
     _merge_configs,
     _validate_and_convert_to_bytes,
@@ -85,7 +86,7 @@ def test_validate_and_convert_to_bytes_invalid_filetype():
     """Test _validate_and_convert_to_bytes with invalid filetype"""
     filename = "config.txt"
     data = {"key": "value"}
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedFileTypeError):
         _validate_and_convert_to_bytes(filename, data)
 
 
@@ -93,7 +94,7 @@ def test_validate_and_convert_to_bytes_invalid_data():
     """Test _validate_and_convert_to_bytes with invalid data"""
     filename = "config.yml"
     data = {"key": object()}
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigSerializeError):
         _validate_and_convert_to_bytes(filename, data)
 
 
@@ -119,7 +120,7 @@ def test_validate_and_convert_to_dict_invalid_filetype():
     """Test _validate_and_convert_to_dict with invalid filetype"""
     filename = "config.txt"
     data = b"asdlfkj"
-    with pytest.raises(ValueError):
+    with pytest.raises(UnsupportedFileTypeError):
         _validate_and_convert_to_dict(filename, data)
 
 
@@ -127,8 +128,24 @@ def test_validate_and_convert_to_dict_invalid_data():
     """Test _validate_and_convert_to_dict with invalid data"""
     filename = "config.yml"
     data = b"\x01"
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigDecodeError):
         _validate_and_convert_to_dict(filename, data)
+
+
+def test_validate_and_convert_to_dict_empty_json():
+    """Test _validate_and_convert_to_dict with empty json"""
+    filename = "config.json"
+    data = b"{}"
+    data = _validate_and_convert_to_dict(filename, data)
+    assert data == {}
+
+
+def test_validate_and_convert_to_dict_empty_yaml():
+    """Test _validate_and_convert_to_dict with empty json"""
+    filename = "config.yml"
+    data = b""
+    data = _validate_and_convert_to_dict(filename, data)
+    assert data == {}
 
 
 def test_find_first_invalid_subpath_valid(zk_mock):
