@@ -12,7 +12,7 @@ RUN uv sync --frozen --no-cache
 
 # Place executables in the environment 
 ENV PATH="/app/.venv/bin:$PATH"
-
+ENV API_NAME="ficus-dev"
 ENV ZK_HOST="eng-logtools:2181"
 
 # Run the application.

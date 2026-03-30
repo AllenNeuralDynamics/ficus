@@ -1,3 +1,5 @@
+import os
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from kazoo.handlers.threading import KazooTimeoutError
@@ -15,7 +17,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Ficus API...")
 
 
-app = FastAPI(root_path="/ficus", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan)
+app_name = os.getenv("API_NAME", "ficus")
+app = FastAPI(root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan)
 
 
 app.include_router(router)
