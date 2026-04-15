@@ -1,7 +1,7 @@
 import pytest
 
 from ficus.core.exceptions import ConfigExistsError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
-from ficus.services.configs import get_config, save_config_file, save_config_obj, _save_config
+from ficus.services.configs import get_config_no_merge, save_config_file, save_config_obj, _save_config
 
 """
 NOTE: Some tests are parameterized to test saving configurations to the following: 
@@ -26,7 +26,7 @@ def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
     assert result_data == data
     assert result_path == path
 
-    config = get_config(namespace, filename, hostname, False)
+    config = get_config_no_merge(namespace, filename, hostname)
     assert config[0] == data
     assert path in config[1]
 
@@ -51,7 +51,7 @@ def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
     assert result_data == data
     assert result_path == path
 
-    config = get_config(namespace, filename, hostname, False)
+    config = get_config_no_merge(namespace, filename, hostname)
     assert config[0] == data
     assert path in config[1]
 
@@ -71,7 +71,7 @@ def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
     assert result_data == data
     assert result_path == path
 
-    config = get_config(namespace, filename, hostname, False)
+    config = get_config_no_merge(namespace, filename, hostname)
     assert config[0] == data
     assert path in config[1]
 
@@ -87,13 +87,13 @@ def test__save_config_override(zk_mock, encode_data, hostname):
         path = f"/scratch/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    current_config = get_config(namespace, filename, hostname, False)
+    current_config = get_config_no_merge(namespace, filename, hostname)
 
     result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname, True)
     assert result_data == data
     assert result_path == path
 
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
     assert new_config[0] == data
     assert path in new_config[1]
     assert current_config != new_config

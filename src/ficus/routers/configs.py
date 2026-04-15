@@ -13,6 +13,7 @@ from ficus.core.exceptions import (
 )
 from ficus.services.configs import (
     get_config,
+    get_config_no_merge,
     get_all_paths,
     get_all_files,
     save_config_obj,
@@ -55,22 +56,42 @@ def get_all_files_in_path(namespace: str, hostname: str | None = None) -> Config
 
 
 @router.get(
-    "/{namespace}/{filename}",
+    "/{namespace}",
     description=Path(BASEDIR / "docs/get_configuration.md").read_text(),
     responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
 def get_configuration(
     namespace: str,
-    filename: str,
+    filename: str | None = None,
     hostname: str | None = None,
-    merge: bool = True,
 ) -> ConfigDataResponse:
     try:
-        config, paths = get_config(namespace=namespace, filename=filename, hostname=hostname, merge=merge)
+        config, paths = get_config(namespace=namespace, filename=filename, hostname=hostname)
         return ConfigDataResponse(
             message="Successfully retrieved configuration file",
             data=config,
             details={"files": paths},
+        )
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get(
+    "/no-merge/{namespace}",
+    description=Path(BASEDIR / "docs/get_configuration_no_merge.md").read_text(),
+    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
+)
+def get_configuration_no_merge(
+    namespace: str,
+    filename: str | None = None,
+    hostname: str | None = None,
+) -> ConfigDataResponse:
+    try:
+        config, path = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
+        return ConfigDataResponse(
+            message="Successfully retrieved single configuration file",
+            data=config,
+            details={"file": path},
         )
     except ConfigNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

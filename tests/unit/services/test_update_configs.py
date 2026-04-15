@@ -1,7 +1,7 @@
 import pytest
 
 from ficus.core.exceptions import ConfigNotFoundError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
-from ficus.services.configs import get_config, update_config_file, update_config_object
+from ficus.services.configs import get_config_no_merge, update_config_file, update_config_object
 
 """
 NOTE: Some tests are parameterized to test updating configurations to the following: 
@@ -21,7 +21,7 @@ def test_update_config_obj_defaults(zk_mock):
     data = {"name": "new name", "testing": "ni-haody"}
 
     new_config_path = update_config_object(namespace, filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {
@@ -41,7 +41,7 @@ def test_update_config_obj_computers(zk_mock):
     data = {"name": "new name", "testing": "ni-haody"}
 
     new_config_path = update_config_object(namespace, filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {
@@ -99,7 +99,7 @@ def test_update_config_file_defaults(zk_mock):
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
     new_config_path = update_config_file(namespace, filename, input_filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {
@@ -120,7 +120,7 @@ def test_update_config_file_computers(zk_mock):
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
     new_config_path = update_config_file(namespace, filename, input_filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {
@@ -179,7 +179,7 @@ def test_update_config_file_update_with_yml(zk_mock):
     data = b"name: new name\ntesting: ni-haody"
 
     new_config_path = update_config_file(namespace, filename, input_filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {
@@ -201,7 +201,7 @@ def test_update_config_file_update_with_json(zk_mock):
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
     new_config_path = update_config_file(namespace, filename, input_filename, data, hostname)
-    new_config = get_config(namespace, filename, hostname, False)
+    new_config = get_config_no_merge(namespace, filename, hostname)
 
     assert path in new_config_path
     assert new_config[0] == {

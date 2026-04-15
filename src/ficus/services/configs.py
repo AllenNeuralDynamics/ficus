@@ -22,16 +22,13 @@ COMPUTERS_PATH_PREFIX = "/scratch/computers"
 DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 
 
-def get_config(
-    namespace: str, filename: str, hostname: str | None = None, merge: bool = True
-) -> tuple[ConfigData, list]:
-    """Get configs from zookeeper. Handles merging defaults and partial config override for specific computers.
+def get_config(namespace: str, filename: str | None = None, hostname: str | None = None) -> tuple[ConfigData, list]:
+    """Get configs from zookeeper. Merges defaults and partial config override for specific computers.
 
     :param namespace: namespace to search for file (in default and computers/<hostname>).
     :param filename: name of the file.
     :param hostname: hostname to search for a partial config override.
-    :param merge: if true merge default config with partial config override.
-    :return: config data and dictionary denoting paths of the partial files used to create the config data
+    :return: config data and list denoting paths of the partial files used to create the config data
     :notes: requires file to exist in defaults before grabbing computers override with hostname.
     """
     DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
@@ -40,48 +37,78 @@ def get_config(
     valid_paths = []
 
     with get_zk_client() as client:
-        # Defaults (default file)
-        #   - ignore errors (default file)
-        for defaults in DEFAULT_FILES:
-            defaults_default_data = _get_config(client, f"{DEFAULT_PATH}/{defaults}", ignore_error=True)
-            if defaults_default_data:
-                valid_paths.append(f"{DEFAULT_PATH}/{defaults}")
-                break
 
-        # Defaults (filename)
-        #   - if hostname is given and no merge, ignore error, we want to continue to hostname to search
-        defaults_regular_data = _get_config(
-            client, f"{DEFAULT_PATH}/{filename}", ignore_error=(not merge and hostname is not None)
-        )
-        if defaults_regular_data:
-            valid_paths.append(f"{DEFAULT_PATH}/{filename}")
+        def get_data_and_append_path(path: str, is_default: bool = False, ignore_error: bool = False):
+            try:
+                if is_default:
+                    data, data_path = _get_default_config(client, path)
+                    valid_paths.append(data_path)
+                else:
+                    data = _get_config(client, path)
+                    valid_paths.append(path)
+                return data
+            except ConfigNotFoundError as e:
+                if ignore_error:
+                    return {}
+                else:
+                    raise e
 
-        # Computers (default file)
-        #   - ignore errors (default file)
-        for defaults in DEFAULT_FILES:
-            computers_default_data = (
-                _get_config(client, f"{COMPUTER_PATH}/{defaults}", ignore_error=True) if hostname else {}
+        config: dict = {}
+
+        if not filename and not hostname:
+            # default/defaults (required)
+            config = _merge_configs(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
+        if not filename and hostname:
+            # default/defaults (required)
+            config = _merge_configs(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
+            # computer/hostname/default (required)
+            config = _merge_configs(config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True))
+        elif filename and not hostname:
+            # default/defaults (optional)
+            config = _merge_configs(
+                config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
             )
-            if computers_default_data:
-                valid_paths.append(f"{COMPUTER_PATH}/{defaults}")
-                break
-
-        # Computers (filename)
-        computers_regular_data = _get_config(client, f"{COMPUTER_PATH}/{filename}") if hostname else {}
-        if computers_regular_data:
-            valid_paths.append(f"{COMPUTER_PATH}/{filename}")
-
-    if merge:
-        config = _merge_configs(defaults_default_data, defaults_regular_data)
-        config = _merge_configs(config, computers_default_data)
-        config = _merge_configs(config, computers_regular_data)
-    else:
-        if hostname:
-            return computers_regular_data, [f"{COMPUTER_PATH}/{filename}"]
-        else:
-            return defaults_regular_data, [f"{DEFAULT_PATH}/{filename}"]
+            # default/filename (required)
+            config = _merge_configs(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
+        elif filename and hostname:
+            # default/defaults (optional)
+            config = _merge_configs(
+                config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
+            )
+            # default/filename (required)
+            config = _merge_configs(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
+            # computer/hostname/default (optional)
+            config = _merge_configs(
+                config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True, ignore_error=True)
+            )
+            # computer/hostname/filename (required)
+            config = _merge_configs(config, get_data_and_append_path(path=f"{COMPUTER_PATH}/{filename}"))
 
     return config, valid_paths
+
+
+def get_config_no_merge(
+    namespace: str, filename: str | None = None, hostname: str | None = None
+) -> tuple[ConfigData, str]:
+    """Get config from zookeeper without any merging
+
+    :param namespace: namespace to search for file (in default and computers/<hostname>).
+    :param filename: name of the file.
+    :param hostname: hostname to search for a partial config override.
+    :return: config data and path of the config file
+    """
+    if hostname:
+        PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
+    else:
+        PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
+
+    with get_zk_client() as client:
+        if filename:
+            config_path = f"{PATH}/{filename}"
+            config_data = _get_config(client, config_path)
+        else:
+            config_data, config_path = _get_default_config(client, PATH)
+        return config_data, config_path
 
 
 def save_config_obj(
@@ -151,7 +178,7 @@ def update_config_object(namespace: str, filename: str, data: dict, hostname: st
     :param data: config data as python dictionary
     :returns: path where file was updated.
     """
-    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname, merge=False)
+    current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
     _validate_and_convert_to_bytes(filename=f"{filename}", data=data)  # Throw away value, only want to validate
     raw_config = _merge_configs(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
@@ -172,7 +199,7 @@ def update_config_file(
     :param data: config data as bytes
     :returns: path where file was updated.
     """
-    current_config, _ = get_config(namespace=namespace, filename=filename, hostname=hostname, merge=False)
+    current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
     new_config = _validate_and_convert_to_dict(partial_filename, data)
     raw_config = _merge_configs(current_config, new_config)
     config = _validate_and_convert_to_bytes(filename, raw_config)
@@ -189,9 +216,9 @@ def delete_config(namespace: str, filename: str, hostname: str | None = None) ->
     :param hostname: hostname to save file to (indicates config override).
     :returns: path where file was deleted.
     """
-    if hostname: 
+    if hostname:
         path = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
-    else: 
+    else:
         path = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
     with get_zk_client() as client:
         try:
@@ -278,22 +305,36 @@ def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
     return dict_prime
 
 
-def _get_config(client: KazooClient, path: str, ignore_error: bool = False) -> dict:
+def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
+    """Helper function to get default config file from zookeeper.
+    Checks all default file options (default.yml, default.yaml, default.json) and returns the first one it finds.
+
+    :param path: path search for defaults file (without default.yml/json extension)
+    :returns: config data as dict and path of the config file (with default file with correct extension)
+    """
+    for defaults in DEFAULT_FILES:
+        try:
+            default_data = _get_config(client, f"{path}/{defaults}")
+            if default_data is None:
+                default_data = {}
+            return default_data, f"{path}/{defaults}"
+        except ConfigNotFoundError:
+            pass  # Ignore file not found, default could have different extension
+    raise ConfigNotFoundError(f"Default file not found at path: {path}/default.[yml/yaml/json]")
+
+
+def _get_config(client: KazooClient, path: str) -> dict:
     """Helper function to get config file from zookeeper and handle errors.
     Function will check each subpath incrementally and return the first subpath that failed if file is not found.
 
     :param client: zookeeper client to use for getting config.
     :param path: path to get config file from.
-    :param ignore_error: if true, instead of throwing error when file not found, return empty dict.
     :returns: config data as dict
     """
     try:
         data, _ = get_node(client, path)
         return data
     except NoNodeError:
-        if ignore_error:
-            return {}
-
         invalid_subpath = _find_first_invalid_subpath(client, path)
         if invalid_subpath:
             raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")

@@ -57,7 +57,7 @@ computers config.yml
 Request: 
 
 ```
-GET /api/configs/software_a/w10dt000001
+GET /api/configs/software_a/w10dt000001/config.yml
 ```
 
 Response:

@@ -1,52 +1,46 @@
 import pytest
 
 from ficus.core.exceptions import ConfigNotFoundError
-from ficus.services.configs import get_all_files, get_all_paths, get_config, _get_config
+from ficus.services.configs import (
+    get_all_files,
+    get_all_paths,
+    get_config,
+    get_config_no_merge,
+    _get_config,
+    _get_default_config,
+)
 
 
-def test_get_config_no_merge_defaults(zk_mock):
+def test_no_filename_no_hostname(zk_mock):
     """Grab configs with following behavior:
-    - no merging of files (grab filename directly)
-    - grab from /defaults directory
+    - no filename given
+    - no hostname given
     """
-    result = get_config("software_a", "config.yml", merge=False)
+    result = get_config("software_a")
     assert len(result) == 2
     assert result[0] == {
-        "name": "config",
-        "scope": "default",
-        "default-layer-value": "beep beep",
+        "default-default-value": "the one ring",
     }
-    assert result[1] == ["/scratch/defaults/software_a/config.yml"]
+    assert result[1] == ["/scratch/defaults/software_a/default.yml"]
 
 
-def test_get_config_no_merge_computers(zk_mock):
+def test_no_filename(zk_mock):
     """Grab configs with following behavior:
-    - no merging of files (grab filename directly)
-    - grab from /computers directory
-    - /defaults/<namespace> doesn't exist
+    - no filename given
     """
-    result = get_config("software_a", "config.yml", "w11dt000001", merge=False)
+    result = get_config(namespace="software_a", hostname="w11dt000001")
     assert len(result) == 2
     assert result[0] == {
-        "scope": "w11dt000001",
-        "computer-layer-value": "boop boop",
+        "default-default-value": "the one ring",
+        "computer-default-value": "to rule them all",
     }
-    assert result[1] == ["/scratch/computers/w11dt000001/software_a/config.yml"]
-
-
-def test_get_config_no_merge_computers_no_default(zk_mock):
-    """Grab configs with following behavior:
-    - no merging of files (grab filename directly)
-    - grab from /computers directory
-    - /defaults/<namespace> doesn't exist, doesn't matter because we are ignoring merge
-    """
-    result = get_config("software_b", "config.yml", "w11dt000001", merge=False)
-    assert len(result) == 2
-    assert result[0] == {
-        "scope": "w11dt000001",
-        "computer-layer-value": "one one one",
-    }
-    assert result[1] == ["/scratch/computers/w11dt000001/software_b/config.yml"]
+    expected_paths = [
+        "/scratch/defaults/software_a/default.yml",
+        "/scratch/computers/w11dt000001/software_a/default.json",
+    ]
+    expected_paths.sort()
+    result[1].sort()
+    assert result[1] == expected_paths
 
 
 def test_get_config_defaults_default_file(zk_mock):
@@ -122,6 +116,24 @@ def test_invalid_hostname(zk_mock):
     """Test namespace/filename that exists but hostname doesn't"""
     with pytest.raises(ConfigNotFoundError):
         get_config("software_a", "config.yml", "w11dt000001typo")
+
+
+def test_get_config_no_merge(zk_mock):
+    """Test getting config with no merge, should only return the specific file requested"""
+    result = get_config_no_merge("software_a", "config.yml", "w11dt000001")
+    assert len(result) == 2
+    print(result[0])
+    assert result[0] == {
+        "scope": "w11dt000001",
+        "computer-layer-value": "boop boop",
+    }
+    assert result[1] == "/scratch/computers/w11dt000001/software_a/config.yml"
+
+
+def test_get_config_no_merge_invalid(zk_mock):
+    """Test getting config with no merge, should only return the specific file requested"""
+    with pytest.raises(ConfigNotFoundError):
+        get_config_no_merge("software_a", "config_fake.yml", "w11dt000001")
 
 
 def test_get_all_paths(zk_mock):
@@ -218,7 +230,16 @@ def test__get_config_invalid_filename(zk_mock):
     assert "Config file not found at path: scratch/defaults/software_a/config_FAKE.yml" in str(err.value)
 
 
-def test__get_config_ignore_error(zk_mock):
-    """Test _get_config return empty dict when ignore_error is True and error exists"""
-    result = _get_config(zk_mock, "scratch/defaults/software_a/config_FAKE.yml", True)
-    assert result == {}
+def test__get_default_config(zk_mock):
+    result = _get_default_config(zk_mock, "/scratch/defaults/software_a")
+    assert result[0] == {"default-default-value": "the one ring"}
+    assert result[1] == "/scratch/defaults/software_a/default.yml"
+
+
+def test__get_default_config_invalid_path(zk_mock):
+    with pytest.raises(ConfigNotFoundError) as err:
+        _get_default_config(zk_mock, "/scratch/defaults/software_a/badbadpath")
+    print(str(err.value))
+    assert "Default file not found at path: /scratch/defaults/software_a/badbadpath/default.[yml/yaml/json]" in str(
+        err.value
+    )
