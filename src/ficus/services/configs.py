@@ -57,32 +57,32 @@ def get_config(namespace: str, filename: str | None = None, hostname: str | None
 
         if not filename and not hostname:
             # default/defaults (required)
-            config = _merge_configs(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
+            config = _deep_update(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
         if not filename and hostname:
             # default/defaults (required)
-            config = _merge_configs(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
+            config = _deep_update(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
             # computer/hostname/default (required)
-            config = _merge_configs(config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True))
+            config = _deep_update(config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True))
         elif filename and not hostname:
             # default/defaults (optional)
-            config = _merge_configs(
+            config = _deep_update(
                 config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
             )
             # default/filename (required)
-            config = _merge_configs(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
+            config = _deep_update(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
         elif filename and hostname:
             # default/defaults (optional)
-            config = _merge_configs(
+            config = _deep_update(
                 config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
             )
             # default/filename (required)
-            config = _merge_configs(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
+            config = _deep_update(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
             # computer/hostname/default (optional)
-            config = _merge_configs(
+            config = _deep_update(
                 config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True, ignore_error=True)
             )
             # computer/hostname/filename (required)
-            config = _merge_configs(config, get_data_and_append_path(path=f"{COMPUTER_PATH}/{filename}"))
+            config = _deep_update(config, get_data_and_append_path(path=f"{COMPUTER_PATH}/{filename}"))
 
     return config, valid_paths
 
@@ -180,7 +180,7 @@ def update_config_object(namespace: str, filename: str, data: dict, hostname: st
     """
     current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
     _validate_and_convert_to_bytes(filename=f"{filename}", data=data)  # Throw away value, only want to validate
-    raw_config = _merge_configs(current_config, data)
+    raw_config = _deep_update(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
     return _save_config(
         namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
@@ -201,7 +201,7 @@ def update_config_file(
     """
     current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
     new_config = _validate_and_convert_to_dict(partial_filename, data)
-    raw_config = _merge_configs(current_config, new_config)
+    raw_config = _deep_update(current_config, new_config)
     config = _validate_and_convert_to_bytes(filename, raw_config)
     return _save_config(
         namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
@@ -288,21 +288,23 @@ def get_all_files(namespace: str, hostname: str | None = None) -> list[str]:
 ################################################################################
 
 
-def _merge_configs(dict_prime: dict, dict_mod: dict) -> dict:
-    """Merge two configuration dictionaries (handles nested dictionaries).
+def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
+    """Merge two dictionaries together, with values from the updating_mapping taking precedence over the mapping.
+    Will deeply merge nested dictionaries together.
+    If types mismatch between mapping and updating_mapping, the value from updating_mapping will override.
 
-    :param dict_prime: main dictionary which will be overridden and appended to
-    :param dict_mod: dictionary with overrides
+    :param mapping: main dictionary to merge into
+    :param updating_mappings: dictionary with overrides
     :returns: merged configuration
     """
-    for key, value in dict_mod.items():
-        if isinstance(value, dict):
-            if key not in dict_prime:
-                dict_prime[key] = type(value)()  # For subclasses of dict
-            _merge_configs(dict_prime[key], dict_mod[key])
-        else:
-            dict_prime[key] = value
-    return dict_prime
+    updated_mapping = mapping.copy()
+    for updating_mapping in updating_mappings:
+        for k, v in updating_mapping.items():
+            if k in updated_mapping and isinstance(updated_mapping[k], dict) and isinstance(v, dict):
+                updated_mapping[k] = _deep_update(updated_mapping[k], v)
+            else:
+                updated_mapping[k] = v
+    return updated_mapping
 
 
 def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:

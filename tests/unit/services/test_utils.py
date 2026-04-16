@@ -2,7 +2,7 @@ import pytest
 
 from ficus.core.exceptions import ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import (
-    _merge_configs,
+    _deep_update,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
     _find_first_invalid_subpath,
@@ -14,7 +14,7 @@ def test_merge_configs_valid():
     prime_dict = {"a": 1, "b": 2}
     mod_dict = {"b": 3, "c": 4}
     expected_result = {"a": 1, "b": 3, "c": 4}
-    assert _merge_configs(prime_dict, mod_dict) == expected_result
+    assert _deep_update(prime_dict, mod_dict) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -27,7 +27,7 @@ def test_merge_configs_valid():
 )
 def test_merge_configs_empty(prime_dict, mod_dict, expected):
     """Test _merge_configs with empty dictionaries"""
-    assert _merge_configs(prime_dict, mod_dict) == expected
+    assert _deep_update(prime_dict, mod_dict) == expected
 
 
 def test_merge_configs_override():
@@ -35,7 +35,7 @@ def test_merge_configs_override():
     prime_dict = {"prime-val": "hello", "scope": "prime"}
     mod_dict = {"scope": "mod"}
     expected = {"prime-val": "hello", "scope": "mod"}
-    assert _merge_configs(prime_dict, mod_dict) == expected
+    assert _deep_update(prime_dict, mod_dict) == expected
 
 
 def test_merge_configs_append():
@@ -43,7 +43,7 @@ def test_merge_configs_append():
     prime_dict = {"prime-val": "hello"}
     mod_dict = {"mod-val": "world"}
     expected = {"prime-val": "hello", "mod-val": "world"}
-    assert _merge_configs(prime_dict, mod_dict) == expected
+    assert _deep_update(prime_dict, mod_dict) == expected
 
 
 def test_merge_configs_nested_override():
@@ -51,7 +51,7 @@ def test_merge_configs_nested_override():
     prime_dict = {"scope": {"hello": "world", "scope": "prime"}}
     mod_dict = {"scope": {"scope": "mod"}}
     expected = {"scope": {"hello": "world", "scope": "mod"}}
-    assert _merge_configs(prime_dict, mod_dict) == expected
+    assert _deep_update(prime_dict, mod_dict) == expected
 
 
 def test_merge_configs_nested_append():
@@ -59,7 +59,15 @@ def test_merge_configs_nested_append():
     prime_dict = {"scope": {"hello": "world"}}
     mod_dict = {"scope": {"beep": "boop"}}
     expected = {"scope": {"hello": "world", "beep": "boop"}}
-    assert _merge_configs(prime_dict, mod_dict) == expected
+    assert _deep_update(prime_dict, mod_dict) == expected
+
+
+def test_merge_configs_nested_mismatch():
+    """Test _merge_configs with nested dictionaries dicts contain mismatch in types"""
+    prime_dict = {"scope": {"hello": "world"}}
+    mod_dict = {"scope": "not a dict"}
+    expected = {"scope": "not a dict"}
+    assert _deep_update(prime_dict, mod_dict) == expected
 
 
 def test_validate_and_convert_to_bytes_valid_json():
