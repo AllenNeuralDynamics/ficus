@@ -39,14 +39,13 @@ computer/
         └── galen.yml
 ```
 
-This organizational structure contains two layers. The layers contain configuration files, and based on the layer, determines how the config file should be applied. 
-
+This organizational structure contains two layers that generate a config based on a structured override pattern. The layers contain configuration files, and based on the layer, determines the resulting config.
 1. Default layer - applied to all rigs
     - Starts with ``defaults/{namespace}/default.yml`` 
-    - Merge ``defaults/{namespace}/{filename}`` with above
+    - ``defaults/{namespace}/{filename}`` merges with above via deep update.
 2. Computer layer (applied to specific rigs)
-    - Merge ``computers/{hostname}/{namespace}/default.yml`` with config in default layer  
-    - Merge ``computers/{hostname}/{namespace}/{filename}`` with above
+    - ``computers/{hostname}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
+    - ``computers/{hostname}/{namespace}/{filename}`` merges with above with deep update. 
 
 When looking for default files in either Default or Computer layer, it will check the following file extensions in this specific order, first one found will be the primary default file. Ideally, there should only be a single "default file" in each directory. This is enforced with the write endpoint.
 
