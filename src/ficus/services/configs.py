@@ -12,13 +12,14 @@ from ficus.core.exceptions import (
     PathIsDirectoryError,
     UnsupportedFileTypeError,
 )
+from ficus.core.config import settings
 from ficus.crud.zookeeper import get_node, add_node, delete_node
 from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
 
 
-DEFAULTS_PATH_PREFIX = "/scratch/defaults"
-COMPUTERS_PATH_PREFIX = "/scratch/computers"
+DEFAULTS_PATH_PREFIX = f"/{settings.zk_root_node}/defaults"
+COMPUTERS_PATH_PREFIX = f"/{settings.zk_root_node}/computers"
 DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 
 

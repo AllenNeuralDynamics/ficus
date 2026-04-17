@@ -7,6 +7,7 @@ from ficus.services.configs import (
     _validate_and_convert_to_dict,
     _find_first_invalid_subpath,
 )
+from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
 
 
 def test_merge_configs_valid():
@@ -158,20 +159,20 @@ def test_validate_and_convert_to_dict_empty_yaml():
 
 def test_find_first_invalid_subpath_valid(zk_mock):
     """Test _find_first_invalid_subpath with valid path"""
-    path = "/scratch/defaults/software_a/config.yml"
+    path = f"{ZK_ROOT_PATH}/defaults/software_a/config.yml"
     assert _find_first_invalid_subpath(zk_mock, path) is None
 
 
 def test_find_first_invalid_subpath_invalid_file(zk_mock):
     """Test _find_first_invalid_subpath with invalid file, ignores file check"""
-    path = "/scratch/defaults/software_a/CONFIG_BAD.yml"
+    path = f"{ZK_ROOT_PATH}/defaults/software_a/CONFIG_BAD.yml"
     assert _find_first_invalid_subpath(zk_mock, path, is_file=True) is None
 
 
 def test_find_first_invalid_subpath_invalid_subpath(zk_mock):
     """Test _find_first_invalid_subpath with invalid subpath (near end)"""
-    path = "/scratch/defaults/software_a_BAD/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) == "/scratch/defaults/software_a_BAD"
+    path = f"{ZK_ROOT_PATH}/defaults/software_a_BAD/CONFIG_BAD.yml"
+    assert _find_first_invalid_subpath(zk_mock, path) == f"{ZK_ROOT_PATH}/defaults/software_a_BAD"
 
 
 def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):

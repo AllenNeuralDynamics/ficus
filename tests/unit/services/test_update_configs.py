@@ -2,6 +2,7 @@ import pytest
 
 from ficus.core.exceptions import ConfigNotFoundError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import get_config_no_merge, update_config_file, update_config_object
+from tests.constants import ZK_ROOT_PATH
 
 """
 NOTE: Some tests are parameterized to test updating configurations to the following: 
@@ -16,7 +17,7 @@ def test_update_config_obj_defaults(zk_mock):
     namespace = "software_a"
     filename = "config.yml"
     hostname = None
-    path = f"/scratch/defaults/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
 
     data = {"name": "new name", "testing": "ni-haody"}
 
@@ -37,7 +38,7 @@ def test_update_config_obj_computers(zk_mock):
     namespace = "software_a"
     filename = "config.yml"
     hostname = "w11dt000001"
-    path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     data = {"name": "new name", "testing": "ni-haody"}
 
     new_config_path = update_config_object(namespace, filename, data, hostname)
@@ -94,7 +95,7 @@ def test_update_config_file_defaults(zk_mock):
     filename = "config.yml"
     input_filename = "different.yml"
     hostname = None
-    path = f"/scratch/defaults/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
 
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
@@ -116,7 +117,7 @@ def test_update_config_file_computers(zk_mock):
     filename = "config.yml"
     input_filename = "different.yml"
     hostname = "w11dt000001"
-    path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     data = b'{"name": "new name", "testing": "ni-haody"}'
 
     new_config_path = update_config_file(namespace, filename, input_filename, data, hostname)
@@ -172,7 +173,7 @@ def test_update_config_file_update_with_yml(zk_mock):
     filename = "default.json"  # name of file in zookeeper
     input_filename = "config.yml"  # name of file given by user
     hostname = "w11dt000001"
-    path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
 
     # although data is yaml format (would fail for json)
     # still able to update default.json as it converts to python dict
@@ -195,7 +196,7 @@ def test_update_config_file_update_with_json(zk_mock):
     filename = "config.yml"  # name of file in zookeeper
     input_filename = "config.json"  # name of file given by user
     hostname = "w11dt000001"
-    path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
 
     # Data is json format (which means it is valid yaml)
     data = b'{"name": "new name", "testing": "ni-haody"}'

@@ -9,6 +9,7 @@ from ficus.services.configs import (
     _get_config,
     _get_default_config,
 )
+from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
 
 
 def test_no_filename_no_hostname(zk_mock):
@@ -21,7 +22,7 @@ def test_no_filename_no_hostname(zk_mock):
     assert result[0] == {
         "default-default-value": "the one ring",
     }
-    assert result[1] == ["/scratch/defaults/software_a/default.yml"]
+    assert result[1] == [f"{ZK_ROOT_PATH}/defaults/software_a/default.yml"]
 
 
 def test_no_filename(zk_mock):
@@ -35,8 +36,8 @@ def test_no_filename(zk_mock):
         "computer-default-value": "to rule them all",
     }
     expected_paths = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
     ]
     expected_paths.sort()
     result[1].sort()
@@ -57,8 +58,8 @@ def test_get_config_defaults_default_file(zk_mock):
         "default-layer-value": "beep beep",
     }
     expected = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
     ]
     assert sorted(result[1]) == sorted(expected)
 
@@ -86,10 +87,10 @@ def test_get_merge_all(zk_mock):
         "scope": "w11dt000001",  # overridden by computers/.../config.yml
     }
     expected = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/defaults/software_a/config.yml",
-        "/scratch/computers/w11dt000001/software_a/default.json",
-        "/scratch/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
     ]
     assert sorted(result[1]) == sorted(expected)
 
@@ -127,7 +128,7 @@ def test_get_config_no_merge(zk_mock):
         "scope": "w11dt000001",
         "computer-layer-value": "boop boop",
     }
-    assert result[1] == "/scratch/computers/w11dt000001/software_a/config.yml"
+    assert result[1] == f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml"
 
 
 def test_get_config_no_merge_invalid(zk_mock):
@@ -140,8 +141,8 @@ def test_get_all_paths(zk_mock):
     namespace = "software_a"
     filename = "config.yml"
     paths = [
-        "/scratch/defaults/software_a/config.yml",
-        "/scratch/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
     ]
 
     results = get_all_paths(namespace, filename)
@@ -164,13 +165,13 @@ def test_get_all_paths_invalid_filename(zk_mock):
 def test_get_all_files_no_hostname(zk_mock):
     namespace = "software_a"
     files = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/defaults/software_a/config.yml",
-        "/scratch/computers/w11dt000001/software_a/default.json",
-        "/scratch/computers/w11dt000001/software_a/config.yml",
-        "/scratch/computers/w11dt000002/software_a/default.yaml",
-        "/scratch/computers/w11dt000002/software_a/config2.yml",
-        "/scratch/computers/w11dt000002/software_a/config3.json",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000002/software_a/default.yaml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000002/software_a/config2.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000002/software_a/config3.json",
     ]
     results = get_all_files(namespace)
     assert sorted(files) == sorted(results)
@@ -180,10 +181,10 @@ def test_get_all_files_specific_hostname(zk_mock):
     namespace = "software_a"
     hostname = "w11dt000001"
     files = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/defaults/software_a/config.yml",
-        "/scratch/computers/w11dt000001/software_a/default.json",
-        "/scratch/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
     ]
     results = get_all_files(namespace, hostname)
     assert sorted(files) == sorted(results)
@@ -198,14 +199,14 @@ def test_get_all_files_invalid_hostname(zk_mock):
     namespace = "software_a"
     hostname = "w11dt000001typo"
     files = [
-        "/scratch/defaults/software_a/default.yml",
-        "/scratch/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
     ]
     assert files == get_all_files(namespace, hostname)
 
 
 def test__get_config(zk_mock):
-    result = _get_config(zk_mock, "/scratch/defaults/software_a/config.yml")
+    result = _get_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/config.yml")
     assert result == {
         "name": "config",
         "scope": "default",
@@ -216,8 +217,8 @@ def test__get_config(zk_mock):
 def test__get_config_invalid_subpath(zk_mock):
     """Test _get_config with invalid subpath, error message should indicate which subpath is invalid"""
     with pytest.raises(ConfigNotFoundError) as err:
-        _get_config(zk_mock, "scratch/defaults/BAD_SUBPATH/config.yml")
-    assert "Subpath 'scratch/defaults/BAD_SUBPATH' not found in path: scratch/defaults/BAD_SUBPATH/config.yml" in str(
+        _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml")
+    assert f"Subpath '{ZK_ROOT_NODE}/defaults/BAD_SUBPATH' not found in path: {ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml" in str(
         err.value
     )
 
@@ -225,21 +226,21 @@ def test__get_config_invalid_subpath(zk_mock):
 def test__get_config_invalid_filename(zk_mock):
     """Test _get_config with invalid filename, error message should indicate config file not found at path"""
     with pytest.raises(ConfigNotFoundError) as err:
-        _get_config(zk_mock, "scratch/defaults/software_a/config_FAKE.yml")
+        _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml")
     print(str(err.value))
-    assert "Config file not found at path: scratch/defaults/software_a/config_FAKE.yml" in str(err.value)
+    assert f"Config file not found at path: {ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml" in str(err.value)
 
 
 def test__get_default_config(zk_mock):
-    result = _get_default_config(zk_mock, "/scratch/defaults/software_a")
+    result = _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a")
     assert result[0] == {"default-default-value": "the one ring"}
-    assert result[1] == "/scratch/defaults/software_a/default.yml"
+    assert result[1] == f"{ZK_ROOT_PATH}/defaults/software_a/default.yml"
 
 
 def test__get_default_config_invalid_path(zk_mock):
     with pytest.raises(ConfigNotFoundError) as err:
-        _get_default_config(zk_mock, "/scratch/defaults/software_a/badbadpath")
+        _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/badbadpath")
     print(str(err.value))
-    assert "Default file not found at path: /scratch/defaults/software_a/badbadpath/default.[yml/yaml/json]" in str(
+    assert f"Default file not found at path: {ZK_ROOT_PATH}/defaults/software_a/badbadpath/default.[yml/yaml/json]" in str(
         err.value
     )

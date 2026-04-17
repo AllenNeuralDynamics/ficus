@@ -2,6 +2,7 @@ import pytest
 
 from ficus.core.exceptions import ConfigExistsError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
 from ficus.services.configs import get_config_no_merge, save_config_file, save_config_obj, _save_config
+from tests.constants import ZK_ROOT_PATH
 
 """
 NOTE: Some tests are parameterized to test saving configurations to the following: 
@@ -17,9 +18,9 @@ def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
     namespace = "software_a"  # exists in mock data
     filename = "config2.yml"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
@@ -42,9 +43,9 @@ def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
         # if a default hasn't been given yet? Ask this because behavior of "get_config" is to error when no default
         # is given, regardless if hostname override exists. However, doing no merge will allow you to grab file.
         # Current assumption is user allowed to create <hostname>/<namespace> regardless of default/<namespace> existing
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
@@ -62,9 +63,9 @@ def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
     """Test saving a default config file (all file types - yml, yaml, json)"""
     namespace = "software_test"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
@@ -82,9 +83,9 @@ def test__save_config_override(zk_mock, encode_data, hostname):
     namespace = "software_a"  # exists in mock data
     filename = "config.yml"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     current_config = get_config_no_merge(namespace, filename, hostname)
@@ -111,7 +112,7 @@ def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
 
     assert (
         str(err.value)
-        == f"File already exists: /scratch/{'computers/' + hostname + '/' if hostname else 'defaults/'}{namespace}/{
+        == f"File already exists: {ZK_ROOT_PATH}/{'computers/' + hostname + '/' if hostname else 'defaults/'}{namespace}/{
             filename
         }"
     )
@@ -139,9 +140,9 @@ def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filena
         _save_config(namespace, filename, encode_data(data), hostname)
 
     if hostname:
-        assert str(err.value) == f"Default File already exists: /scratch/computers/{hostname}/{namespace}/default.json"
+        assert str(err.value) == f"Default File already exists: {ZK_ROOT_PATH}/computers/{hostname}/{namespace}/default.json"
     else:
-        assert str(err.value) == f"Default File already exists: /scratch/defaults/{namespace}/default.yml"
+        assert str(err.value) == f"Default File already exists: {ZK_ROOT_PATH}/defaults/{namespace}/default.yml"
 
 
 @pytest.mark.parametrize("hostname", [None, "w10test"])
@@ -150,9 +151,9 @@ def test_save_config_obj(zk_mock, hostname):
     namespace = "software_test"
     filename = "config.yml"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     result_data, result_path = save_config_obj(namespace, filename, data, hostname)
@@ -188,9 +189,9 @@ def test_save_config_file(zk_mock, hostname):
     namespace = "software_test"
     filename = "config.yml"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     data = b"testing: ni-haody"
 
     result_data, result_path = save_config_file(namespace, filename, data, hostname)
