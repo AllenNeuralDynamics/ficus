@@ -12,6 +12,8 @@ RUN uv sync --frozen --no-cache
 
 # Place executables in the environment 
 ENV PATH="/app/.venv/bin:$PATH"
+ENV API_NAME="ficus-dev"
+ENV ZK_HOST="eng-logtools:2181"
 
 # Run the application.
-CMD ["fastapi", "run", "/app/src/calibration_api/main.py", "--port", "8000", "--host", "0.0.0.0"]
+CMD ["fastapi", "run", "/app/src/ficus/main.py", "--port", "8000", "--host", "0.0.0.0"]
