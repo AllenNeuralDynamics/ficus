@@ -93,7 +93,11 @@ def get_config(
                     config = _deep_update(
                         config, get_data_and_append_path(path, is_default=True, ignore_error=True)
                     )
-                    config = _deep_update(config, get_data_and_append_path(f"{path}/{filename}"))
+                    # Checks if file was already retrieved (if user asks for default)
+                    if f"{path}/{filename}" not in valid_paths:
+                        config = _deep_update(
+                            config, get_data_and_append_path(f"{path}/{filename}")
+                        )
                 else:
                     config = _deep_update(config, get_data_and_append_path(path, is_default=True))
         else:
@@ -383,7 +387,8 @@ def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
 def _get_config(client: KazooClient, path: str) -> dict:
     """
     Helper function to get config file from zookeeper and handle errors.
-    Function will check each subpath incrementally and return the first subpath that failed if file is not found.
+    Function will check each subpath incrementally and return the first subpath that failed if file
+    is not found.
     """
     try:
         data, _ = get_node(client, path)
