@@ -10,6 +10,8 @@ from ficus.core.exceptions import (
     ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
+    InvalidScopeIdentifierError,
+    MultipleScopeIdentifiersError,
     PathIsDirectoryError,
     UnsupportedFileTypeError,
 )
@@ -25,7 +27,7 @@ PATH_PREFIX = f"/{settings.zk_root_node}"
 
 def get_config(
     namespace: str,
-    identifier_names: dict[str, str],
+    identifier_names: dict[str, str] = {},
     filename: str | None = None,
     merge: bool = True,
 ) -> tuple[ConfigData, list[str]]:
@@ -144,9 +146,8 @@ def save_config(
             A tuple containing the configuration data and the path the config was saved to.
     """
     if identifier_names and len(identifier_names) > 1:
-        raise ValueError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. Only one is \
-            allowed."
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
         )
 
     scopes = _get_scope_from_identifier_names(identifier_names)
@@ -192,9 +193,8 @@ def update_config(namespace: str, filename: str, data: dict, identifier_names: d
             A tuple containing the updated configuration data and the path the config was saved to.
     """
     if len(identifier_names) > 1:
-        raise ValueError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. Only one is \
-            allowed."
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
         )
 
     scopes = _get_scope_from_identifier_names(identifier_names)
@@ -244,9 +244,8 @@ def delete_config(namespace: str, filename: str, identifier_names: dict[str, str
             The path of the deleted config file.
     """
     if len(identifier_names) > 1:
-        raise ValueError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. Only one is \
-            allowed."
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
         )
 
     scopes = _get_scope_from_identifier_names(identifier_names)
@@ -530,9 +529,9 @@ def _get_scope_from_identifier_names(identifier_names: dict[str, str]) -> dict[s
     for id_name in identifier_names:
         # Validates id_name maps to a scope
         if id_name not in id_name_to_scope_name_mapping:
-            raise ValueError(
-                f"Invalid scope identifier name: {id_name}. \
-                Valid options are: {id_name_to_scope_name_mapping.keys()}"
+            raise InvalidScopeIdentifierError(
+                f"Invalid scope identifier name: {id_name}. "
+                f"Valid options are: {list(id_name_to_scope_name_mapping.keys())}"
             )
         scope = id_name_to_scope_name_mapping[id_name]
         scopes[scope.name] = identifier_names[id_name]  # identifier value

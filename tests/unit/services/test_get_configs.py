@@ -1,15 +1,228 @@
 import pytest
 
-from ficus.core.exceptions import ConfigNotFoundError
+from ficus.core.exceptions import (
+    ConfigNotFoundError,
+    InvalidScopeIdentifierError,
+)
 from ficus.services.configs import (
     get_all_files,
-    get_all_paths,
     get_config,
-    get_config_no_merge,
     _get_config,
     _get_default_config,
+    _get_scope_from_identifier_names,
 )
 from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
+
+
+################################################################################
+#
+#   get_config()
+#
+################################################################################
+
+
+@pytest.mark.parametrize("merge", [False, True])
+def test_get_config_return_defaults(zk_mock, merge):
+    result = get_config("software_a", merge=merge)
+    assert len(result) == 2
+    assert result[0] == {
+        "default-default-value": "the one ring",
+    }
+    assert result[1] == [f"{ZK_ROOT_PATH}/defaults/software_a/default.yml"]
+
+
+def test_get_config_with_identifier_name_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {"hostname": "w11dt000001"}
+    filename = None
+    merge = True
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "default-default-value": "the one ring",
+        "computer-default-value": "to rule them all",
+    }
+    assert result[1] == [
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+    ]
+
+
+def test_get_config_with_identifier_names_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    filename = None
+    merge = True
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "default-default-value": "the one ring",
+        "computer-default-value": "to rule them all",
+        "subject-default-value": "one config to bring them all",
+    }
+    assert result[1] == [
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json",
+    ]
+
+
+def test_get_config_with_filename_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {}
+    filename = "config.yml"
+    merge = True
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "default-default-value": "the one ring",
+        "name": "config",
+        "scope": "default",
+        "default-layer-value": "beep beep",
+    }
+    assert result[1] == [
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+    ]
+
+
+def test_get_config_with_filename_and_identifier_names_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    filename = "config.yml"
+    merge = True
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "default-default-value": "the one ring",
+        "computer-default-value": "to rule them all",
+        "subject-default-value": "one config to bring them all",
+        "default-layer-value": "beep beep",
+        "computer-layer-value": "boop boop",
+        "subject-layer-value": "bap bap",
+        "name": "config",
+        "scope": "614173",
+        "The Cure": "show me how you do that trick",
+    }
+    assert result[1] == [
+        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
+        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json",
+        f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml",
+    ]
+
+
+def test_get_config_no_merge_with_filename_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {}
+    filename = "config.yml"
+    merge = False
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "name": "config",
+        "scope": "default",
+        "default-layer-value": "beep beep",
+    }
+    assert result[1] == [f"{ZK_ROOT_PATH}/defaults/software_a/config.yml"]
+
+
+def test_get_config_no_merge_with_identifier_names_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    filename = None
+    merge = False
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "subject-default-value": "one config to bring them all",
+    }
+    assert result[1] == [f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json"]
+
+
+def test_get_config_no_merge_with_filename_and_identifier_names_return_config(zk_mock):
+    namespace = "software_a"
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    filename = "config.yml"
+    merge = False
+
+    result = get_config(
+        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+    )
+
+    assert len(result) == 2
+    assert result[0] == {
+        "scope": "614173",
+        "subject-layer-value": "bap bap",
+        "The Cure": "show me how you do that trick",
+    }
+    assert result[1] == [f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml"]
+
+
+def test_get_config_invalid_identifiers_return_error(zk_mock):
+    with pytest.raises(InvalidScopeIdentifierError) as err:
+        get_config("software_a", identifier_names={"fake_id": "FAKE"})
+    assert (
+        "Invalid scope identifier name: fake_id. Valid options are: ['hostname', 'subject_id']"
+        == str(err.value)
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        # Bad namespace
+        {"namespace": "badbadbad", "identifier_names": {}, "filename": "config.yml"},
+        # Bad filename
+        {"namespace": "software_a", "identifier_names": {}, "filename": "config.bad"},
+        # Bad identifier value
+        {
+            "namespace": "software_a",
+            "identifier_names": {"subject_id": "bad_subject_id"},
+            "filename": "config.yml",
+        },
+    ],
+)
+def test_get_config_invalid_namespace_filename_returns_error(zk_mock, params):
+    with pytest.raises(ConfigNotFoundError):
+        get_config(
+            namespace=params["namespace"],
+            identifier_names=params["identifier_names"],
+            filename=params["filename"],
+        )
+
+
+################################################################################
+#
+#
+#
+################################################################################
 
 
 def test_no_filename_no_hostname(zk_mock):
@@ -119,49 +332,6 @@ def test_invalid_hostname(zk_mock):
         get_config("software_a", "config.yml", "w11dt000001typo")
 
 
-def test_get_config_no_merge(zk_mock):
-    """Test getting config with no merge, should only return the specific file requested"""
-    result = get_config_no_merge("software_a", "config.yml", "w11dt000001")
-    assert len(result) == 2
-    print(result[0])
-    assert result[0] == {
-        "scope": "w11dt000001",
-        "computer-layer-value": "boop boop",
-    }
-    assert result[1] == f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml"
-
-
-def test_get_config_no_merge_invalid(zk_mock):
-    """Test getting config with no merge, should only return the specific file requested"""
-    with pytest.raises(ConfigNotFoundError):
-        get_config_no_merge("software_a", "config_fake.yml", "w11dt000001")
-
-
-def test_get_all_paths(zk_mock):
-    namespace = "software_a"
-    filename = "config.yml"
-    paths = [
-        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
-    ]
-
-    results = get_all_paths(namespace, filename)
-
-    assert sorted(paths) == sorted(results)
-
-
-def test_get_all_paths_invalid_namespace(zk_mock):
-    namespace = "software_a_fake"
-    filename = "config.yml"
-    assert [] == get_all_paths(namespace, filename)
-
-
-def test_get_all_paths_invalid_filename(zk_mock):
-    namespace = "software_a"
-    filename = "configfakefake.yml"
-    assert [] == get_all_paths(namespace, filename)
-
-
 def test_get_all_files_no_hostname(zk_mock):
     namespace = "software_a"
     files = [
@@ -218,8 +388,9 @@ def test__get_config_invalid_subpath(zk_mock):
     """Test _get_config with invalid subpath, error message should indicate which subpath is invalid"""
     with pytest.raises(ConfigNotFoundError) as err:
         _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml")
-    assert f"Subpath '{ZK_ROOT_NODE}/defaults/BAD_SUBPATH' not found in path: {ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml" in str(
-        err.value
+    assert (
+        f"Subpath '{ZK_ROOT_NODE}/defaults/BAD_SUBPATH' not found in path: {ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml"
+        in str(err.value)
     )
 
 
@@ -228,7 +399,10 @@ def test__get_config_invalid_filename(zk_mock):
     with pytest.raises(ConfigNotFoundError) as err:
         _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml")
     print(str(err.value))
-    assert f"Config file not found at path: {ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml" in str(err.value)
+    assert (
+        f"Config file not found at path: {ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml"
+        in str(err.value)
+    )
 
 
 def test__get_default_config(zk_mock):
@@ -241,6 +415,7 @@ def test__get_default_config_invalid_path(zk_mock):
     with pytest.raises(ConfigNotFoundError) as err:
         _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/badbadpath")
     print(str(err.value))
-    assert f"Default file not found at path: {ZK_ROOT_PATH}/defaults/software_a/badbadpath/default.[yml/yaml/json]" in str(
-        err.value
+    assert (
+        f"Default file not found at path: {ZK_ROOT_PATH}/defaults/software_a/badbadpath/default.[yml/yaml/json]"
+        in str(err.value)
     )

@@ -127,6 +127,36 @@ ZK_EXAMPLE = Node(
                         ),
                     },
                 ),
+                "subjects": Node(
+                    name="subjects",
+                    children={
+                        "614173": Node(
+                            name="614173",
+                            children={
+                                "software_a": Node(
+                                    name="software_a",
+                                    children={
+                                        "default.json": Node(
+                                            name="default.json",
+                                            value={
+                                                "subject-default-value": "one config to bring them "
+                                                "all",
+                                            },
+                                        ),
+                                        "config.yml": Node(
+                                            name="config.yml",
+                                            value={
+                                                "scope": "614173",
+                                                "subject-layer-value": "bap bap",
+                                                "The Cure": "show me how you do that trick",
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        )
+                    },
+                ),
             },
         )
     },
