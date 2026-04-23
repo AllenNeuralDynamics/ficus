@@ -272,13 +272,16 @@ def delete_config(namespace: str, filename: str, identifier_names: dict[str, str
 
 
 def get_all_files(
-    namespace: str, identifier_names: dict[str, str], filename: str | None = None
+    namespace: str, identifier_names: dict[str, str] = {}, filename: str | None = None
 ) -> list[str]:
     """
     Get all config files in zookeeper based on namespace, scope, and identifier.
 
     If filename is given, function will filter files by the filename (case-insensitive).
     If no identifiers are given, function will only check the defaults scope.
+    If multiple scopes, the order of files is returned as the same order as how they would be merged
+    (e.g. defaults (default file, config file) > scope 1 (default file, config file) > ... )
+
 
     Parameters:
     -----------
@@ -308,6 +311,13 @@ def get_all_files(
                 for file in get_node(client, subpath)[1]:
                     if filename is None or re.search(filename, file, re.IGNORECASE):
                         all_files.append(f"{subpath}/{file}")
+            else:
+                invalid_subpath = _find_first_invalid_subpath(client, subpath)
+                if invalid_subpath:
+                    raise ConfigNotFoundError(
+                        f"Subpath '{invalid_subpath}' not found in path: {subpath}"
+                    )
+                raise ConfigNotFoundError(f"Path not found: {subpath}")
 
         for path in paths:
             collect_files(path)

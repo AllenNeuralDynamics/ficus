@@ -344,6 +344,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
 @router.get(
     "/list_files/{namespace}/configs",
     description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
+    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
 def get_all_files_in_path(
     namespace: str,
@@ -351,16 +352,20 @@ def get_all_files_in_path(
     hostname: str | None = None,
     subject_id: str | None = None,
 ) -> ConfigDataResponse:
-    identifier_names = {}
-    if hostname:
-        identifier_names["hostname"] = hostname
-    if subject_id:
-        identifier_names["subject_id"] = subject_id
+    try:
+        identifier_names = {}
+        if hostname:
+            identifier_names["hostname"] = hostname
+        if subject_id:
+            identifier_names["subject_id"] = subject_id
 
-    data = get_all_files(namespace, identifier_names=identifier_names, filename=filename)
-    message = f"Retrieved list of files in path defaults/{namespace} and {hostname}/{namespace}"
-    return ConfigDataResponse(
-        message=message,
-        data=data,
-        details={},
-    )
+        data = get_all_files(namespace, identifier_names=identifier_names, filename=filename)
+        message = f"Retrieved list of files in path defaults/{namespace} and scopes"
+
+        return ConfigDataResponse(
+            message=message,
+            data=data,
+            details={},
+        )
+    except ConfigNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
