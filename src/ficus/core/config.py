@@ -1,5 +1,6 @@
 import json
 
+# from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ScopeSchema(BaseModel):
     name: str
     description: str
+    identifier_name: str
 
 
 class Settings(BaseSettings):
@@ -29,6 +31,7 @@ class Settings(BaseSettings):
                 data = json.load(f)
                 self.scopes = [ScopeSchema(**s) for s in data.get("scopes", [])]
                 self.zk_root_node = data.get("zk_root_node", self.zk_root_node)
+                self.zk_host = data.get("zk_host", self.zk_host)
 
 
 settings = Settings()

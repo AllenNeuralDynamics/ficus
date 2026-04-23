@@ -1,11 +1,14 @@
-from fastapi import APIRouter, UploadFile
+import inspect
+import fastapi
+
+from fastapi import APIRouter, Body
 from fastapi import HTTPException
 from pathlib import Path
 
 
+from ficus.core.config import settings
 from ficus.core.exceptions import (
     ConfigExistsError,
-    ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
     PathIsDirectoryError,
@@ -13,50 +16,80 @@ from ficus.core.exceptions import (
 )
 from ficus.services.configs import (
     get_config,
-    get_config_no_merge,
-    get_all_paths,
-    get_all_files,
-    save_config_obj,
-    save_config_file,
-    update_config_file,
-    update_config_object,
+    save_config,
+    update_config,
     delete_config,
+    get_all_files,
 )
 from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErrorResponse
 
 
-router = APIRouter(prefix="/configs", tags=["Configs"])
+################################################################################
+#
+#   Utility
+#
+################################################################################
+
+
+router = APIRouter()
 BASEDIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
-@router.get(
-    "/list_paths/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/get_all_paths_with_file.md").read_text(),
-)
-def get_all_paths_with_file(namespace: str, filename: str) -> ConfigDataResponse:
-    data = get_all_paths(namespace, filename)
-    return ConfigDataResponse(
-        message=f"Successfully retrieved list of paths containing {namespace}/{filename}",
-        data=data,
-        details={},
-    )
+def _get_endpoint_info_from_scopes(endpoint_creator: callable) -> list[tuple[str, callable, str]]:
+    """
+    Generates endpoint info (path, handler, scope_name) for each scope defined in settings.
+    Info is used to dynamically create endpoints for each scope (e.g. computers, subjects, etc.).
+    This function also dynamically injects appropriate identifier names to the function signature to
+    ensure the swagger UI docs generate correctly.
+
+    Parameters:
+    -----------
+    endpoint_creator : callable
+        A function that creates the endpoint handler.
+
+    Returns:
+    --------
+    endpoint_data : list[tuple[str, callable, str]]
+        List of tuples containing (endpoint path, handler, scope_name)
+    """
+    handlers = []
+
+    for scope in settings.scopes:
+        scope_name = scope.name
+        identifier_name = scope.identifier_name
+
+        path = f"/{scope_name}/{{{identifier_name}}}/namespaces/{{namespace}}/configs/{{filename}}"
+
+        handler = endpoint_creator()
+
+        sig = inspect.signature(handler)
+        # Grab all parameters except for **kwargs (omit seeing **kwargs in function signature)
+        new_params = [p for p in sig.parameters.values() if p.kind != inspect.Parameter.VAR_KEYWORD]
+        # Create dynamic parameter for identifier_name
+        dynamic_param = inspect.Parameter(
+            identifier_name,
+            inspect.Parameter.KEYWORD_ONLY,
+            annotation=str,
+            default=fastapi.Path(..., description=f"The ID for {scope_name}"),
+        )
+        # Insert the dynamic parameter
+        new_params.append(dynamic_param)
+        # Update the function signature
+        handler.__signature__ = sig.replace(parameters=new_params)
+
+        handlers.append((path, handler, scope_name))
+    return handlers
+
+
+################################################################################
+#
+#   Get Config
+#
+################################################################################
 
 
 @router.get(
-    "/list_files/{namespace}",
-    description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
-)
-def get_all_files_in_path(namespace: str, hostname: str | None = None) -> ConfigDataResponse:
-    data = get_all_files(namespace, hostname)
-    return ConfigDataResponse(
-        message=f"Successfully retrieved list of files in path defaults/{namespace} and {hostname}/{namespace}",
-        data=data,
-        details={},
-    )
-
-
-@router.get(
-    "/{namespace}",
+    "/namespaces/{namespace}/config",
     description=Path(BASEDIR / "docs/get_configuration.md").read_text(),
     responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
@@ -64,9 +97,19 @@ def get_configuration(
     namespace: str,
     filename: str | None = None,
     hostname: str | None = None,
+    subject_id: str | None = None,
+    merge: bool = True,
 ) -> ConfigDataResponse:
     try:
-        config, paths = get_config(namespace=namespace, filename=filename, hostname=hostname)
+        identifier_names = {}
+        if hostname:
+            identifier_names["hostname"] = hostname
+        if subject_id:
+            identifier_names["subject_id"] = subject_id
+
+        config, paths = get_config(
+            namespace=namespace, filename=filename, identifier_names=identifier_names, merge=merge
+        )
         return ConfigDataResponse(
             message="Successfully retrieved configuration file",
             data=config,
@@ -76,216 +119,248 @@ def get_configuration(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+################################################################################
+#
+#   Create Config
+#
+################################################################################
+
+
+def get_create_config_handler() -> callable:
+    """
+    Factory function to create handler for creating new configs.
+    Contains core functionality used by all endpoints related to config creation.
+
+    Returns:
+    --------
+        create_config_handler: callable
+            The actual handler function that will be used in the endpoint
+    """
+
+    async def create_config_handler(
+        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
+        filename: str = fastapi.Path(
+            ..., description="The name of the configuration file, including extension."
+        ),
+        data: dict = Body(None, description="The configuration data."),
+        **kwargs,
+    ) -> ConfigDataResponse:
+        try:
+            saved_data, path = save_config(
+                namespace=namespace, filename=filename, data=data, identifier_names=kwargs
+            )
+            return ConfigDataResponse(
+                message="Successfully added configuration file",
+                details={"path": path},
+                data=saved_data,
+            )
+        except ConfigExistsError as e:
+            raise HTTPException(status_code=409, detail=f"{e}")
+        except UnsupportedFileTypeError as e:
+            raise HTTPException(status_code=415, detail=f"{e}")
+        except ConfigSerializeError as e:
+            raise HTTPException(status_code=500, detail=f"{e}")
+
+    return create_config_handler
+
+
+@router.post("/namespaces/{namespace}")
+async def create_defaults_config(
+    namespace: str,
+    filename: str | None = None,
+    data: dict | None = None,
+):
+    handler = get_create_config_handler()
+    return await handler(namespace=namespace, filename=filename, data=data)
+
+
+# Grab endpoint info for each scope and create endpoints
+for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_create_config_handler):
+    router.add_api_route(
+        path=path,
+        endpoint=endpoint,
+        methods=["POST"],
+        tags=[f"{scope_name}"],
+        description=Path(BASEDIR / "docs/post_configuration.md").read_text(),
+        responses={
+            409: {"model": ConfigErrorResponse, "description": "File already exists"},
+            415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+            500: {
+                "model": ConfigErrorResponse,
+                "description": "Failed to serialize configuration data",
+            },
+        },
+    )
+
+
+################################################################################
+#
+#   Update Config
+#
+################################################################################
+
+
+def get_update_config_handler() -> callable:
+    """
+    Factory function to create handler for updating configs.
+    Contains core functionality used by all endpoints related to config updates.
+
+    Returns:
+    --------
+        update_config_handler: callable
+            The actual handler function that will be used in the endpoint.
+    """
+
+    async def update_config_handler(
+        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
+        filename: str = fastapi.Path(
+            ..., description="The name of the configuration file, including extension."
+        ),
+        data: dict = Body(None, description="The configuration data."),
+        **kwargs,
+    ) -> ConfigDataResponse:
+        try:
+            saved_data, path = update_config(
+                namespace=namespace, filename=filename, data=data, identifier_names=kwargs
+            )
+            return ConfigDataResponse(
+                message="Successfully updated configuration file",
+                details={"path": path},
+                data=saved_data,
+            )
+        except ConfigNotFoundError as e:
+            raise HTTPException(status_code=404, detail=f"{e}")
+        except ConfigExistsError as e:
+            raise HTTPException(status_code=409, detail=f"{e}")
+        except UnsupportedFileTypeError as e:
+            raise HTTPException(status_code=415, detail=f"{e}")
+        except ConfigSerializeError as e:
+            raise HTTPException(status_code=500, detail=f"{e}")
+
+    return update_config_handler
+
+
+@router.patch("/namespaces/{namespace}")
+async def update_defaults_config(
+    namespace: str,
+    filename: str | None = None,
+    data: dict | None = None,
+):
+    handler = get_update_config_handler()
+    return await handler(namespace=namespace, filename=filename, data=data)
+
+
+for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_update_config_handler):
+    router.add_api_route(
+        path=path,
+        endpoint=endpoint,
+        methods=["PATCH"],
+        tags=[f"{scope_name}"],
+        description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
+        responses={
+            404: {"model": ConfigErrorResponse, "description": "File not found"},
+            409: {"model": ConfigErrorResponse, "description": "File already exists"},
+            415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+            500: {
+                "model": ConfigErrorResponse,
+                "description": "Failed to serialize configuration data",
+            },
+        },
+    )
+
+
+################################################################################
+#
+#   Delete Config
+#
+################################################################################
+
+
+def get_delete_config_handler() -> callable:
+    """
+    Factory function to create handler for deleting configs.
+    Contains core functionality used by all endpoints related to config deletion.
+
+    Returns:
+    --------
+        delete_config_handler: callable
+            The actual handler function that will be used in the endpoint.
+    """
+
+    async def delete_config_handler(
+        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
+        filename: str = fastapi.Path(
+            ..., description="The name of the configuration file, including extension."
+        ),
+        **kwargs,
+    ) -> ConfigResponse:
+        try:
+            path = delete_config(namespace=namespace, filename=filename, identifier_names=kwargs)
+            return ConfigResponse(
+                message="Successfully deleted configuration file",
+                details={"path": path},
+            )
+        except PathIsDirectoryError as e:
+            raise HTTPException(status_code=400, detail=f"{e}")
+        except ConfigNotFoundError as e:
+            raise HTTPException(status_code=404, detail=f"{e}")
+
+    return delete_config_handler
+
+
+@router.delete("/namespaces/{namespace}")
+async def delete_defaults_config(
+    namespace: str,
+    filename: str | None = None,
+):
+    handler = get_delete_config_handler()
+    return await handler(namespace=namespace, filename=filename)
+
+
+for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_config_handler):
+    router.add_api_route(
+        path=path,
+        endpoint=endpoint,
+        methods=["DELETE"],
+        tags=[f"{scope_name}"],
+        description=Path(BASEDIR / "docs/delete_configuration.md").read_text(),
+        responses={
+            400: {
+                "model": ConfigErrorResponse,
+                "description": "Path is a directory and cannot be deleted",
+            },
+            404: {"model": ConfigErrorResponse, "description": "File not found"},
+        },
+    )
+
+
+################################################################################
+#
+#   List configs
+#
+################################################################################
+
+
 @router.get(
-    "/no-merge/{namespace}",
-    description=Path(BASEDIR / "docs/get_configuration_no_merge.md").read_text(),
-    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
+    "/list_files/{namespace}/configs",
+    description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
 )
-def get_configuration_no_merge(
+def get_all_files_in_path(
     namespace: str,
     filename: str | None = None,
     hostname: str | None = None,
+    subject_id: str | None = None,
 ) -> ConfigDataResponse:
-    try:
-        config, path = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
-        return ConfigDataResponse(
-            message="Successfully retrieved single configuration file",
-            data=config,
-            details={"file": path},
-        )
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    identifier_names = {}
+    if hostname:
+        identifier_names["hostname"] = hostname
+    if subject_id:
+        identifier_names["subject_id"] = subject_id
 
-
-@router.post(
-    "/upload/{namespace}",
-    description=Path(BASEDIR / "docs/post_configuration_file.md").read_text(),
-    responses={
-        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-    },
-)
-async def post_configuration_file(namespace: str, file: UploadFile, hostname: str | None = None) -> ConfigDataResponse:
-    try:
-        raw = await file.read()
-        filename = file.filename if file.filename else ""
-        saved_data, path = save_config_file(namespace=namespace, filename=filename, data=raw, hostname=hostname)
-        return ConfigDataResponse(
-            message="Successfully added configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"{e}")
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-
-
-@router.post(
-    "/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/post_configuration.md").read_text(),
-    responses={
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
-    },
-)
-def post_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
-    try:
-        saved_data, path = save_config_obj(namespace=namespace, filename=filename, data=data, hostname=hostname)
-        return ConfigDataResponse(
-            message="Successfully added configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-    except ConfigSerializeError as e:
-        raise HTTPException(status_code=500, detail=f"{e}")
-
-
-@router.put(
-    "/upload/{namespace}",
-    description=Path(BASEDIR / "docs/put_configuration_file.md").read_text(),
-    responses={
-        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-    },
-)
-async def replace_configuration_file(
-    namespace: str, filename: str, file: UploadFile, hostname: str | None = None
-) -> ConfigDataResponse:
-    try:
-        raw = await file.read()
-        saved_data, path = save_config_file(
-            namespace=namespace, filename=filename, data=raw, hostname=hostname, override=True, create_if_missing=False
-        )
-        return ConfigDataResponse(
-            message="Successfully replaced configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"{e}")
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-
-
-@router.put(
-    "/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/put_configuration.md").read_text(),
-    responses={
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
-    },
-)
-def replace_configuration(namespace: str, filename: str, data: dict, hostname: str | None = None) -> ConfigDataResponse:
-    try:
-        saved_data, path = save_config_obj(
-            namespace=namespace, filename=filename, data=data, hostname=hostname, override=True, create_if_missing=False
-        )
-        return ConfigDataResponse(
-            message="Successfully replaced configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-    except ConfigSerializeError as e:
-        raise HTTPException(status_code=500, detail=f"{e}")
-
-
-@router.patch(
-    "/upload/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/patch_configuration_file.md").read_text(),
-    responses={
-        400: {"model": ConfigErrorResponse, "description": "Failed to decode file - invalid format"},
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
-    },
-)
-async def update_configuration_file(
-    namespace: str, filename: str, file: UploadFile, hostname: str | None = None
-) -> ConfigDataResponse:
-    try:
-        raw = await file.read()
-        partial_filename = file.filename if file.filename else ""
-        saved_data, path = update_config_file(
-            namespace=namespace, filename=filename, partial_filename=partial_filename, data=raw, hostname=hostname
-        )
-        return ConfigDataResponse(
-            message="Successfully updated configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"{e}")
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-    except ConfigSerializeError as e:
-        raise HTTPException(status_code=500, detail=f"{e}")
-
-
-@router.patch(
-    "/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
-    responses={
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {"model": ConfigErrorResponse, "description": "Failed to serialize configuration data"},
-    },
-)
-async def update_configuration(
-    namespace: str, filename: str, data: dict, hostname: str | None = None
-) -> ConfigDataResponse:
-    try:
-        saved_data, path = update_config_object(namespace=namespace, filename=filename, data=data, hostname=hostname)
-        return ConfigDataResponse(
-            message="Successfully updated configuration file",
-            details={"path": path},
-            data=saved_data,
-        )
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
-    except ConfigExistsError as e:
-        raise HTTPException(status_code=409, detail=f"{e}")
-    except UnsupportedFileTypeError as e:
-        raise HTTPException(status_code=415, detail=f"{e}")
-    except ConfigSerializeError as e:
-        raise HTTPException(status_code=500, detail=f"{e}")
-
-
-@router.delete(
-    "/{namespace}/{filename}",
-    description=Path(BASEDIR / "docs/delete_configuration.md").read_text(),
-    responses={
-        400: {"model": ConfigErrorResponse, "description": "Path is a directory and cannot be deleted"},
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-    },
-)
-def delete_configuration(namespace: str, filename: str, hostname: str | None = None) -> ConfigResponse:
-    try:
-        path = delete_config(namespace=namespace, filename=filename, hostname=hostname)
-        return ConfigResponse(
-            message="Successfully deleted configuration file",
-            details={"path": path},
-        )
-    except PathIsDirectoryError as e:
-        raise HTTPException(status_code=400, detail=f"{e}")
-    except ConfigNotFoundError as e:
-        raise HTTPException(status_code=404, detail=f"{e}")
+    data = get_all_files(namespace, identifier_names=identifier_names, filename=filename)
+    message = f"Retrieved list of files in path defaults/{namespace} and {hostname}/{namespace}"
+    return ConfigDataResponse(
+        message=message,
+        data=data,
+        details={},
+    )

@@ -1,4 +1,3 @@
-import json
 import os
 
 from contextlib import asynccontextmanager
@@ -22,14 +21,16 @@ setup_scopes()
 
 
 app_name = os.getenv("API_NAME", "ficus")
-app = FastAPI(root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan)
+app = FastAPI(
+    root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan
+)
 
 
 app.include_router(router)
 app.add_exception_handler(KazooTimeoutError, kazoo_timeout_handler)
 
 
-@app.get("/")
+@app.get("/", tags=["Health"])
 def health_check() -> Dict[str, Any]:
     """Health check."""
     return {"message": "Hello"}
