@@ -406,3 +406,18 @@ def test__get_default_config_invalid_filename_return_config_not_found_error(zk_m
 #   _get_scope_from_identifier_names()
 #
 ################################################################################
+
+
+def test__get_scope_from_identifier_names_return_scopes(zk_mock):
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    result = _get_scope_from_identifier_names(identifier_names)
+    assert result == {
+        "computers": "w11dt000001",
+        "subjects": "614173",
+    }
+
+
+def test__get_scope_from_identifier_names_invalid_identifier_name_return_invalid_scope(zk_mock):
+    with pytest.raises(InvalidScopeIdentifierError) as err:
+        _get_scope_from_identifier_names({"badbad": "123"})
+    assert "Invalid scope identifier name" in str(err.value)
