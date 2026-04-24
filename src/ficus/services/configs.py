@@ -151,7 +151,7 @@ def save_config(
     """
     if identifier_names and len(identifier_names) > 1:
         raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
+            f"Multiple identifier names provided: {list(identifier_names.keys())}. Only one is allowed."
         )
 
     scopes = _get_scope_from_identifier_names(identifier_names)

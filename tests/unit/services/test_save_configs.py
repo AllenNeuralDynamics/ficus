@@ -1,221 +1,160 @@
 import pytest
 
-from ficus.core.exceptions import ConfigExistsError, ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
-from ficus.services.configs import get_config_no_merge, save_config_file, save_config_obj, _save_config
+from ficus.core.exceptions import (
+    ConfigNotFoundError,
+    ConfigExistsError,
+    ConfigSerializeError,
+    InvalidScopeIdentifierError,
+    MultipleScopeIdentifiersError,
+)
+from ficus.services.configs import save_config, _save_config
 from tests.constants import ZK_ROOT_PATH
 
-"""
-NOTE: Some tests are parameterized to test saving configurations to the following: 
-        1. /defaults/... path where default configurations live
-        2. /computers/... path where override configurations live
-    This is determined by whether a hostname is given or not. 
-"""
+
+################################################################################
+#
+#   save_config
+#
+################################################################################
 
 
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-def test__save_config_existing_namespace(zk_mock, encode_data, hostname):
-    """Test saving config file where namespace already exists"""
-    namespace = "software_a"  # exists in mock data
-    filename = "config2.yml"
-    if hostname:
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
-    else:
+@pytest.mark.parametrize(
+    "namespace, identifier_names, filename, override, create_if_missing",
+    [
+        pytest.param("new_namespace", {}, "config.yml", False, True, id="save-new-namespace"),
+        pytest.param("new_namespace", {}, "default.yml", False, True, id="save-new-default-file"),
+        pytest.param("software_a", {}, "config_new.yml", False, True, id="save-new-file"),
+        pytest.param(
+            "software", {"hostname": "w11new"}, "config.yml", False, True, id="save-new-scope"
+        ),
+        pytest.param("software_a", {}, "config.yml", True, True, id="override-create-if-missing"),
+        pytest.param(
+            "software_a", {}, "config.yml", True, False, id="override-no-create-if-missing"
+        ),
+    ],
+)
+def test_save_config_valid_return_data_and_path(
+    zk_mock, namespace, identifier_names, filename, override, create_if_missing
+):
+    if identifier_names == {}:
         path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
-    data = {"testing": "ni-haody"}
-
-    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result_data == data
-    assert result_path == path
-
-    config = get_config_no_merge(namespace, filename, hostname)
-    assert config[0] == data
-    assert path in config[1]
-
-
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-def test__save_config_non_existing_namespace(zk_mock, encode_data, hostname):
-    """Test saving config file where namespace doesn't exist yet"""
-    namespace = "software_test"  # doesn't exist in mock data
-    filename = "config.yml"
-    if hostname:
-        # TODO: This is saving a configuration file into a new <hostname> with a new <namespace>.
-        # This means a default doesn't exist yet for this <namespace>. Should we allow users to save a new <hostname>
-        # if a default hasn't been given yet? Ask this because behavior of "get_config" is to error when no default
-        # is given, regardless if hostname override exists. However, doing no merge will allow you to grab file.
-        # Current assumption is user allowed to create <hostname>/<namespace> regardless of default/<namespace> existing
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{identifier_names['hostname']}/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
-    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result_data == data
-    assert result_path == path
-
-    config = get_config_no_merge(namespace, filename, hostname)
-    assert config[0] == data
-    assert path in config[1]
-
-
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
-def test__save_config_default_file(zk_mock, encode_data, filename, hostname):
-    """Test saving a default config file (all file types - yml, yaml, json)"""
-    namespace = "software_test"
-    if hostname:
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
-    else:
-        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
-    data = {"testing": "ni-haody"}
-
-    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname)
-    assert result_data == data
-    assert result_path == path
-
-    config = get_config_no_merge(namespace, filename, hostname)
-    assert config[0] == data
-    assert path in config[1]
-
-
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-def test__save_config_override(zk_mock, encode_data, hostname):
-    """Test saving a config file that will override an existing file, when override=True"""
-    namespace = "software_a"  # exists in mock data
-    filename = "config.yml"
-    if hostname:
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
-    else:
-        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
-    data = {"testing": "ni-haody"}
-
-    current_config = get_config_no_merge(namespace, filename, hostname)
-
-    result_data, result_path = _save_config(namespace, filename, encode_data(data), hostname, True)
-    assert result_data == data
-    assert result_path == path
-
-    new_config = get_config_no_merge(namespace, filename, hostname)
-    assert new_config[0] == data
-    assert path in new_config[1]
-    assert current_config != new_config
-
-
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-def test__save_config_no_override_file_exists(zk_mock, hostname, encode_data):
-    """Test saving a config - throws errors when saving to an existing file, when override=False"""
-    namespace = "software_a"  # exists in mock data
-    filename = "config.yml"
-    data = {"testing": "ni-haody"}
-
-    with pytest.raises(ConfigExistsError) as err:
-        _save_config(namespace, filename, encode_data(data), hostname)  # Override default to false
-
-    assert (
-        str(err.value)
-        == f"File already exists: {ZK_ROOT_PATH}/{'computers/' + hostname + '/' if hostname else 'defaults/'}{namespace}/{
-            filename
-        }"
+    result_data, result_path = save_config(
+        namespace=namespace,
+        filename=filename,
+        data=data,
+        identifier_names=identifier_names,
+        override=override,
+        create_if_missing=create_if_missing,
     )
-
-
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-def test__save_config_invalid_file_content(zk_mock, hostname):
-    """Test _save_config throws an error if data isn't bytes"""
-    namespace = "software_a"
-    filename = "config.yml"
-    data = "not bytes"
-
-    with pytest.raises(TypeError):
-        _save_config(namespace, filename, data, hostname, True)
-
-
-@pytest.mark.parametrize("hostname", [None, "w11dt000001"])
-@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
-def test__save_config_default_file_exists(zk_mock, encode_data, hostname, filename):
-    """Test _save_config throws error when trying to add default file that currently exists (override = False)"""
-    namespace = "software_a"
-    data = {"testing": "ni-haody"}
-
-    with pytest.raises(ConfigExistsError) as err:
-        _save_config(namespace, filename, encode_data(data), hostname)
-
-    if hostname:
-        assert str(err.value) == f"Default File already exists: {ZK_ROOT_PATH}/computers/{hostname}/{namespace}/default.json"
-    else:
-        assert str(err.value) == f"Default File already exists: {ZK_ROOT_PATH}/defaults/{namespace}/default.yml"
-
-
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-def test_save_config_obj(zk_mock, hostname):
-    """Test save config (object)"""
-    namespace = "software_test"
-    filename = "config.yml"
-    if hostname:
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
-    else:
-        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
-    data = {"testing": "ni-haody"}
-
-    result_data, result_path = save_config_obj(namespace, filename, data, hostname)
     assert result_data == data
     assert result_path == path
 
 
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-def test_save_config_obj_invalid_file_type(zk_mock, hostname):
-    """Test save config (object) with an invalid file type"""
-    namespace = "software_test"
-    filename = "config.BADBAD"
-    data = {"testing": "ni-haody"}
+@pytest.mark.parametrize(
+    "namespace, identifier_names, filename",
+    [
+        pytest.param("new_namespace", {}, "config.yml", id="namespace-missing"),
+        pytest.param("software_a", {"hostname": "w10bad"}, "config.yml", id="scope-missing"),
+        pytest.param("software_a", {}, "config-bad.yml", id="filename-missing"),
+    ],
+)
+def test_save_config_override_existing_file_return_config_not_found(
+    zk_mock, namespace, identifier_names, filename
+):
+    """
+    ConfigNotFoundErrors only occur if user wants to override, and they don't want to create a file
+    if it is missing.
 
-    with pytest.raises(UnsupportedFileTypeError):
-        save_config_obj(namespace, filename, data, hostname)
+    If the user gives a path to a file that they think exists, but it actually doesn't exist, then
+    we want to error out since the user explicitly said to override.
+    """
+    override = True
+    create_if_missing = False
 
-
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
-def test_save_config_obj_invalid_file_content(zk_mock, filename, hostname):
-    """Test save config (object) with an invalid file content"""
-    namespace = "software_test"
-    data = {"key": object()}  # python object, invalid for converting to json or yaml
-
-    with pytest.raises(ConfigSerializeError):
-        save_config_obj(namespace, filename, data, hostname)
-
-
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-def test_save_config_file(zk_mock, hostname):
-    """Test save config (file)"""
-    namespace = "software_test"
-    filename = "config.yml"
-    if hostname:
-        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
-    else:
-        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
-    data = b"testing: ni-haody"
-
-    result_data, result_path = save_config_file(namespace, filename, data, hostname)
-    assert result_data == {"testing": "ni-haody"}
-    assert result_path == path
+    with pytest.raises(ConfigNotFoundError) as err:
+        save_config(
+            namespace=namespace,
+            filename=filename,
+            data={},
+            identifier_names=identifier_names,
+            override=override,
+            create_if_missing=create_if_missing,
+        )
+    assert "not found" in str(err.value)
 
 
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-def test_save_config_file_invalid_file_type(zk_mock, hostname):
-    """Test save config (file) with an invalid file type"""
-    namespace = "software_test"
-    filename = "config.BADBAD"
-    data = b"testing: ni-haody"
+@pytest.mark.parametrize(
+    "filename",
+    [
+        pytest.param("config.yml", id="namespace-missing"),
+        pytest.param("default.yml", id="namespace-missing"),
+    ],
+)
+def test_save_config_file_exists_return_exist_error(zk_mock, filename):
+    """
+    Config exist errors only occur when config already exists and override is false.
 
-    with pytest.raises(UnsupportedFileTypeError):
-        save_config_obj(namespace, filename, data, hostname)
+    Does not matter what create-if-missing is since in this scenario the assumption is the file does
+    exist and the user wants to add a file but not override anything.
+    """
+    namespace = "software_a"
+    identifier_names = {}
+    override = False
+
+    with pytest.raises(ConfigExistsError) as err:
+        save_config(
+            namespace=namespace,
+            filename=filename,
+            data={},
+            identifier_names=identifier_names,
+            override=override,
+        )
+    assert "already exists" in str(err.value)
 
 
-@pytest.mark.parametrize("hostname", [None, "w10test"])
-@pytest.mark.parametrize("filename", ["default.yml", "default.yaml", "default.json"])
-def test_save_config_file_invalid_file_content(zk_mock, filename, hostname):
-    """Test save config (file) with an invalid file content"""
-    namespace = "software_test"
-    data = b"\x01"  # random byte, fails converting to json or yaml
+def test_save_config_multiple_identifier_names_return_multiple_scopes_error(zk_mock):
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
 
-    with pytest.raises(ConfigDecodeError):
-        save_config_file(namespace, filename, data, hostname)
+    with pytest.raises(MultipleScopeIdentifiersError) as err:
+        save_config(
+            namespace="software_a",
+            filename="config.yml",
+            data={"testing": "ni-haody"},
+            identifier_names=identifier_names,
+        )
+    assert "Multiple identifier names" in str(err.value)
+
+
+def test_save_config_invalid_identifier_names_return_invalid_scope_error(zk_mock):
+    identifier_names = {"hostname-typo": "w11dt000001"}
+
+    with pytest.raises(InvalidScopeIdentifierError) as err:
+        save_config(
+            namespace="software_a",
+            filename="config.yml",
+            data={"testing": "ni-haody"},
+            identifier_names=identifier_names,
+        )
+    assert "Invalid scope" in str(err.value)
+
+
+def test_save_config_invalid_data_return_error(zk_mock):
+    with pytest.raises(ConfigSerializeError) as err:
+        save_config(
+            namespace="software_a",
+            filename="config_new.yml",
+            data={"testing": object()},  # sets are not JSON serializable
+            identifier_names={},
+        )
+    assert "Failed to serialize" in str(err.value)
+
+
+################################################################################
+#
+#
+#
+################################################################################
