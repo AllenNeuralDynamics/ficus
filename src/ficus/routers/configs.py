@@ -165,7 +165,18 @@ def get_create_config_handler() -> Callable:
     return create_config_handler
 
 
-@router.post("/namespaces/{namespace}/config/{filename}")
+@router.post(
+    "/namespaces/{namespace}/config/{filename}",
+    description=Path(BASEDIR / "docs/post_configuration.md").read_text(),
+    responses={
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {
+            "model": ConfigErrorResponse,
+            "description": "Failed to serialize configuration data",
+        },
+    },
+)
 async def create_defaults_config(
     namespace: str,
     filename: str,
@@ -241,7 +252,19 @@ def get_update_config_handler() -> Callable:
     return update_config_handler
 
 
-@router.patch("/namespaces/{namespace}/config/{filename}")
+@router.patch(
+    "/namespaces/{namespace}/config/{filename}",
+    description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
+    responses={
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
+        409: {"model": ConfigErrorResponse, "description": "File already exists"},
+        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+        500: {
+            "model": ConfigErrorResponse,
+            "description": "Failed to serialize configuration data",
+        },
+    },
+)
 async def update_defaults_config(
     namespace: str,
     filename: str,
@@ -309,7 +332,17 @@ def get_delete_config_handler() -> Callable:
     return delete_config_handler
 
 
-@router.delete("/namespaces/{namespace}/config/{filename}")
+@router.delete(
+    "/namespaces/{namespace}/config/{filename}",
+    description=Path(BASEDIR / "docs/delete_configuration.md").read_text(),
+    responses={
+        400: {
+            "model": ConfigErrorResponse,
+            "description": "Path is a directory and cannot be deleted",
+        },
+        404: {"model": ConfigErrorResponse, "description": "File not found"},
+    },
+)
 async def delete_defaults_config(
     namespace: str,
     filename: str,

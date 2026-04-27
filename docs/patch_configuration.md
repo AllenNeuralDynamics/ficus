@@ -12,19 +12,17 @@ Update an existing configuration file with new fields.
 File: 
 
 ```
-config.yml
+/defaults/software_a/config.yml
 
 {
     "name": "example-config"
-    "data": "hello"
 }
 ```
 
 Request: 
 
 ```
-PATCH /api/configs/software_a/config.yml
-
+PATCH /v1/namespaces/software_a/config/config.yml
 {
     "name": "example-config",
     "data": "test beep beep"
@@ -40,6 +38,10 @@ Response:
   "message": "Successfully updated configuration file",
   "details": {
     "path": "/defaults/software_a/config.yml"
+  }
+  "data": {
+    "name": "example-config",
+    "data": "test beep beep"
   }
 }
 ```
