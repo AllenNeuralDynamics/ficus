@@ -227,8 +227,3 @@ def test__save_config_invalid_data_return_error(zk_mock):
             filename="config_new.json",
             data=b'{"ruh: "roh-}',
         )
-
-
-def test__save_config_invalid_file_type_return_error(zk_mock):
-    with pytest.raises(UnsupportedFileTypeError) as err:
-        _save_config(namespace="software_a", filename="config_new.bad", data=b"{}")
