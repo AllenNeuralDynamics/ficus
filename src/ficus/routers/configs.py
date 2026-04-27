@@ -58,7 +58,7 @@ def _get_endpoint_info_from_scopes(endpoint_creator: callable) -> list[tuple[str
         scope_name = scope.name
         identifier_name = scope.identifier_name
 
-        path = f"/{scope_name}/{{{identifier_name}}}/namespaces/{{namespace}}/configs/{{filename}}"
+        path = f"/{scope_name}/{{{identifier_name}}}/namespaces/{{namespace}}/config/{{filename}}"
 
         handler = endpoint_creator()
 
@@ -164,10 +164,10 @@ def get_create_config_handler() -> callable:
     return create_config_handler
 
 
-@router.post("/namespaces/{namespace}")
+@router.post("/namespaces/{namespace}/config/{filename}")
 async def create_defaults_config(
     namespace: str,
-    filename: str | None = None,
+    filename: str,
     data: dict | None = None,
 ):
     handler = get_create_config_handler()
@@ -240,10 +240,10 @@ def get_update_config_handler() -> callable:
     return update_config_handler
 
 
-@router.patch("/namespaces/{namespace}")
+@router.patch("/namespaces/{namespace}/config/{filename}")
 async def update_defaults_config(
     namespace: str,
-    filename: str | None = None,
+    filename: str,
     data: dict | None = None,
 ):
     handler = get_update_config_handler()
@@ -308,10 +308,10 @@ def get_delete_config_handler() -> callable:
     return delete_config_handler
 
 
-@router.delete("/namespaces/{namespace}")
+@router.delete("/namespaces/{namespace}/config/{filename}")
 async def delete_defaults_config(
     namespace: str,
-    filename: str | None = None,
+    filename: str,
 ):
     handler = get_delete_config_handler()
     return await handler(namespace=namespace, filename=filename)

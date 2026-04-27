@@ -55,6 +55,22 @@ ZK_EXAMPLE = Node(
                                 ),
                             },
                         ),
+                        "test_delete_path_error": Node(
+                            name="test_delete_path_error",
+                            children={
+                                "additional_node": Node(
+                                    name="additional_node",
+                                    children={
+                                        "config.yml": Node(
+                                            name="config.yml",
+                                            value={
+                                                "name": "config-delete-path-error",
+                                            },
+                                        )
+                                    },
+                                ),
+                            },
+                        ),
                     },
                 ),
                 "computers": Node(
@@ -217,9 +233,9 @@ class FakeZK:
             elif filename.endswith((".yml", ".yaml")):
                 processed_data = yaml.safe_load(data.decode("utf-8"))
             else:
-                processed_data = None
+                raise (f"Unsupported file type: {filename}")
         except (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError) as e:
-            pass # zookeeper saves data even if cant decode
+            pass  # zookeeper saves data even if cant decode
             processed_data = None
 
         try:
