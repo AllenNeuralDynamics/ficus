@@ -10,6 +10,8 @@ Here are some key vocabulary this API uses:
 
 - namespace: abstract identifier to group configuration files with (ex. stagewidget, waterlog, open-ephys, etc) 
 - hostnames: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
+- subject_id: identifier for a specific subject (ex. 614173, etc)
+
 
 Below is the directory structure in which config files are stored in zookeeper
 
@@ -25,7 +27,7 @@ defaults/
 │   └── with_sniff_detector.yml
 └── waterlog/
     └── default.yml
-computer/
+computers/
 ├── w10dtburno/
 │   └── vr_frg/
 │       ├── default.yaml
@@ -37,15 +39,23 @@ computer/
 └── w10dtgawk/
     └── open_ephys/
         └── galen.yml
+subjects/
+├── 614173/
+│   └── vr_frg/
+│       ├── default.yaml
+│       └── config.yml
 ```
 
 This organizational structure contains two layers that generate a config based on a structured override pattern. The layers contain configuration files, and based on the layer, determines the resulting config.
 1. Default layer - applied to all rigs
     - Starts with ``defaults/{namespace}/default.yml`` 
     - ``defaults/{namespace}/{filename}`` merges with above via deep update.
-2. Computer layer (applied to specific rigs)
+2. Computers layer (applied to specific rigs)
     - ``computers/{hostname}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
     - ``computers/{hostname}/{namespace}/{filename}`` merges with above with deep update. 
+2. Scopes layer (applied to specific rigs)
+    - ``subjects/{subject_id}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
+    - ``subjects/{subject_id}/{namespace}/{filename}`` merges with above with deep update. 
 
 When looking for default files in either Default or Computer layer, it will check the following file extensions in this specific order, first one found will be the primary default file. Ideally, there should only be a single "default file" in each directory. This is enforced with the write endpoint.
 
@@ -53,7 +63,12 @@ When looking for default files in either Default or Computer layer, it will chec
 
 Below is the precedence of merging config files from lowest to highest. Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended. 
 
-    defaults/{namespace}/default.yml -> defaults/{namespace}/{filename} -> computers/{hostname}/{namespace}/default.yml -> computers/{hostname}/{namespace}/{filename} 
+- defaults/{namespace}/default.yml 
+- defaults/{namespace}/{filename} 
+- computers/{hostname}/{namespace}/default.yml 
+- computers/{hostname}/{namespace}/{filename} 
+- subjects/{subject_id}/{namespace}/default.yml 
+- subjects/{subject_id}/{namespace}/{filename} 
 
 ##  Developers Guide
 
