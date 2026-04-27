@@ -233,10 +233,10 @@ class FakeZK:
             elif filename.endswith((".yml", ".yaml")):
                 processed_data = yaml.safe_load(data.decode("utf-8"))
             else:
-                raise (f"Unsupported file type: {filename}")
-        except (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError) as e:
-            pass  # zookeeper saves data even if cant decode
+                raise Exception(f"Unsupported file type: {filename}")
+        except (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError):
             processed_data = None
+            pass  # zookeeper saves data even if cant decode
 
         try:
             for part in parts[:-1]:

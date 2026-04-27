@@ -99,7 +99,7 @@ def test_save_config_invalid_data_return_error(zk_mock):
 
 
 def test_save_config_invalid_file_type_return_error(zk_mock):
-    with pytest.raises(UnsupportedFileTypeError) as err:
+    with pytest.raises(UnsupportedFileTypeError):
         save_config(
             namespace="software_a",
             identifier_names={},
@@ -221,7 +221,7 @@ def test__save_config_file_exists_return_exist_error(zk_mock, filename):
 
 
 def test__save_config_invalid_data_return_error(zk_mock):
-    with pytest.raises(ConfigDecodeError) as err:
+    with pytest.raises(ConfigDecodeError):
         _save_config(
             namespace="software_a",
             filename="config_new.json",

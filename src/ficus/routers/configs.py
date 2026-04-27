@@ -4,6 +4,7 @@ import fastapi
 from fastapi import APIRouter, Body
 from fastapi import HTTPException
 from pathlib import Path
+from typing import Callable
 
 
 from ficus.core.config import settings
@@ -35,7 +36,7 @@ router = APIRouter()
 BASEDIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
-def _get_endpoint_info_from_scopes(endpoint_creator: callable) -> list[tuple[str, callable, str]]:
+def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str, Callable, str]]:
     """
     Generates endpoint info (path, handler, scope_name) for each scope defined in settings.
     Info is used to dynamically create endpoints for each scope (e.g. computers, subjects, etc.).
@@ -44,12 +45,12 @@ def _get_endpoint_info_from_scopes(endpoint_creator: callable) -> list[tuple[str
 
     Parameters:
     -----------
-    endpoint_creator : callable
+    endpoint_creator : Callable
         A function that creates the endpoint handler.
 
     Returns:
     --------
-    endpoint_data : list[tuple[str, callable, str]]
+    endpoint_data : list[tuple[str, Callable, str]]
         List of tuples containing (endpoint path, handler, scope_name)
     """
     handlers = []
@@ -126,14 +127,14 @@ def get_configuration(
 ################################################################################
 
 
-def get_create_config_handler() -> callable:
+def get_create_config_handler() -> Callable:
     """
     Factory function to create handler for creating new configs.
     Contains core functionality used by all endpoints related to config creation.
 
     Returns:
     --------
-        create_config_handler: callable
+        create_config_handler: Callable
             The actual handler function that will be used in the endpoint
     """
 
@@ -200,14 +201,14 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_create_conf
 ################################################################################
 
 
-def get_update_config_handler() -> callable:
+def get_update_config_handler() -> Callable:
     """
     Factory function to create handler for updating configs.
     Contains core functionality used by all endpoints related to config updates.
 
     Returns:
     --------
-        update_config_handler: callable
+        update_config_handler: Callable
             The actual handler function that will be used in the endpoint.
     """
 
@@ -276,14 +277,14 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_update_conf
 ################################################################################
 
 
-def get_delete_config_handler() -> callable:
+def get_delete_config_handler() -> Callable:
     """
     Factory function to create handler for deleting configs.
     Contains core functionality used by all endpoints related to config deletion.
 
     Returns:
     --------
-        delete_config_handler: callable
+        delete_config_handler: Callable
             The actual handler function that will be used in the endpoint.
     """
 

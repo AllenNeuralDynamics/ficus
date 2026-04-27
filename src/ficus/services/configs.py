@@ -151,7 +151,8 @@ def save_config(
     """
     if identifier_names and len(identifier_names) > 1:
         raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. Only one is allowed."
+            f"Multiple identifier names provided: {list(identifier_names.keys())}. "
+            "Only one is allowed."
         )
 
     scopes = _get_scope_from_identifier_names(identifier_names)
@@ -294,7 +295,8 @@ def get_all_files(
         identifier_names: dict[str, str]
             A dictionary of identifier names for different scopes.
         filename: str | None
-            The name of the configuration file to filter by, including extension. If None, all files are returned.
+            The name of the configuration file to filter by, including extension. If None, all files
+              are returned.
 
     Returns:
     --------

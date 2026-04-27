@@ -8,7 +8,10 @@ from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
 
 def test_get_node(zk_mock):
     result = get_node(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/config.yml")
-    assert result == ({"name": "config", "scope": "default", "default-layer-value": "beep beep"}, [])
+    assert result == (
+        {"name": "config", "scope": "default", "default-layer-value": "beep beep"},
+        [],
+    )
 
 
 def test_get_node_computers(zk_mock):
@@ -48,7 +51,9 @@ def test_add_node_invalid(zk_mock):
 
 def test_delete_no_node(zk_mock):
     with pytest.raises(NoNodeError):
-        delete_node(zk_mock, f"/{ZK_ROOT_NODE}-bad/computers/w11dt000001/software_b_test/config.yml")
+        delete_node(
+            zk_mock, f"/{ZK_ROOT_NODE}-bad/computers/w11dt000001/software_b_test/config.yml"
+        )
 
 
 def test_delete_node(zk_mock, encode_data):
