@@ -1,6 +1,7 @@
+from contextlib import contextmanager
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from contextlib import contextmanager
 from kazoo.client import KazooClient
 from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
