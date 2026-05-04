@@ -33,7 +33,7 @@ from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErro
 
 
 router = APIRouter()
-BASEDIR = Path(__file__).resolve().parent.parent.parent.parent
+BASEDIR = Path(__file__).resolve().parents[3]
 
 
 def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str, Callable, str]]:

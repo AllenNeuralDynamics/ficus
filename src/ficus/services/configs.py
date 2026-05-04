@@ -25,9 +25,13 @@ DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 PATH_PREFIX = f"/{settings.zk_root_node}"
 
 
+IdentifierName = str
+ScopeName = str
+
+
 def get_config(
     namespace: str,
-    identifier_names: dict[str, str] = {},
+    identifier_names: dict[IdentifierName, str] = {},
     filename: str | None = None,
     merge: bool = True,
 ) -> tuple[ConfigData, list[str]]:
@@ -45,7 +49,7 @@ def get_config(
     -----------
         namespace: str
             The namespace for the configuration file.
-        identifier_names: dict[str, str]
+        identifier_names: dict[IdentifierName, str]
             A dictionary of identifier names for different scopes.
         filename: str | None
             The name of the configuration file, including extension. If None, the default config
@@ -114,7 +118,7 @@ def save_config(
     namespace: str,
     filename: str,
     data: dict,
-    identifier_names: dict[str, str],
+    identifier_names: dict[IdentifierName, str],
     override: bool = False,
     create_if_missing: bool = True,
 ) -> tuple[dict, str]:
@@ -136,7 +140,7 @@ def save_config(
             The name of the configuration file, including extension.
         data: dict
             The configuration data to save.
-        identifier_names: dict[str, str]
+        identifier_names: dict[IdentifierName, str]
             A dictionary of identifier names for different scopes.
         override: bool
             Whether to override the config file if it already exists. If false and file exists,
@@ -173,7 +177,9 @@ def save_config(
     )
 
 
-def update_config(namespace: str, filename: str, data: dict, identifier_names: dict[str, str]):
+def update_config(
+    namespace: str, filename: str, data: dict, identifier_names: dict[IdentifierName, str]
+):
     """
     Update config file in zookeeper based on namespace, scope, and identifier.
 
@@ -189,7 +195,7 @@ def update_config(namespace: str, filename: str, data: dict, identifier_names: d
             The name of the configuration file, including extension.
         data: dict
             The configuration data to update.
-        identifier_names: dict[str, str]
+        identifier_names: dict[IdentifierName, str]
             A dictionary of identifier names for different scopes.
 
     Returns:
@@ -226,7 +232,9 @@ def update_config(namespace: str, filename: str, data: dict, identifier_names: d
     )
 
 
-def delete_config(namespace: str, filename: str, identifier_names: dict[str, str]) -> str:
+def delete_config(
+    namespace: str, filename: str, identifier_names: dict[IdentifierName, str]
+) -> str:
     """
     Delete config file in zookeeper based on namespace, scope, and identifier.
 
@@ -240,7 +248,7 @@ def delete_config(namespace: str, filename: str, identifier_names: dict[str, str
             The namespace for the configuration file.
         filename: str
             The name of the configuration file, including extension.
-        identifier_names: dict[str, str]
+        identifier_names: dict[IdentifierName, str]
             A dictionary of identifier names for different scopes.
 
     Returns:
@@ -277,7 +285,7 @@ def delete_config(namespace: str, filename: str, identifier_names: dict[str, str
 
 
 def get_all_files(
-    namespace: str, identifier_names: dict[str, str] = {}, filename: str | None = None
+    namespace: str, identifier_names: dict[IdentifierName, str] = {}, filename: str | None = None
 ) -> list[str]:
     """
     Get all config files in zookeeper based on namespace, scope, and identifier.
@@ -292,7 +300,7 @@ def get_all_files(
     -----------
         namespace: str
             The namespace for the configuration files.
-        identifier_names: dict[str, str]
+        identifier_names: dict[IdentifierName, str]
             A dictionary of identifier names for different scopes.
         filename: str | None
             The name of the configuration file to filter by, including extension. If None, all files
@@ -523,7 +531,9 @@ def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
         raise ConfigDecodeError(f"Failed to decode data for {filename}")
 
 
-def _get_scope_from_identifier_names(identifier_names: dict[str, str]) -> dict[str, str]:
+def _get_scope_from_identifier_names(
+    identifier_names: dict[IdentifierName, str],
+) -> dict[ScopeName, str]:
     """
     Given a dictionary of identifier names, validates that they correspond to actual scopes and
     returns a dictionary mapping scope names to identifier values.
@@ -532,13 +542,13 @@ def _get_scope_from_identifier_names(identifier_names: dict[str, str]) -> dict[s
 
     Parameters:
     -----------
-    identifier_names: dict[str, str]
+    identifier_names: dict[IdentifierName, str]
         A dictionary of identifier names for different scopes, where keys are scope identifier
         names and values are the corresponding identifier values.
 
     Returns:
     --------
-        dict[str, str]
+        dict[ScopeName, str]
             A dictionary mapping scope names to identifier values.
     """
     id_name_to_scope_name_mapping = {scope.identifier_name: scope for scope in settings.scopes}
