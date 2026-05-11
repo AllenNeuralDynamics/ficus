@@ -20,6 +20,7 @@ def zk_mock():
     with patch("ficus.services.configs.get_zk_client") as mock_client:
         mock_client.return_value.__enter__.return_value = fake_zk
         yield fake_zk
+    
 
 
 @pytest.fixture(scope="function")

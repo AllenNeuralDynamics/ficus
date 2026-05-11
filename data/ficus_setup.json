@@ -1,0 +1,13 @@
+{
+  "zk_root_node": "scratch",
+  "scopes": [
+    {
+      "name": "computers",
+      "description": "All computers in the system"
+    },
+    {
+      "name": "subjects",
+      "description": "All subjects in the system"
+    }
+  ]
+}

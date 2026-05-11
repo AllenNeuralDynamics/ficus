@@ -1,3 +1,4 @@
+import json
 import os
 
 from contextlib import asynccontextmanager
@@ -6,8 +7,8 @@ from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
 from typing import Any, Dict
 
+from ficus.database.zookeeper import kazoo_timeout_handler, setup_scopes
 from ficus.routers import router
-from ficus.database.zookeeper import kazoo_timeout_handler
 
 
 @asynccontextmanager
@@ -15,6 +16,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Ficus API...")
     yield
     logger.info("Shutting down Ficus API...")
+
+
+setup_scopes()
 
 
 app_name = os.getenv("API_NAME", "ficus")

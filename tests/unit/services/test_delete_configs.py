@@ -3,6 +3,7 @@ import pytest
 
 from ficus.core.exceptions import ConfigNotFoundError
 from ficus.services.configs import delete_config
+from tests.constants import ZK_ROOT_PATH
 
 
 """
@@ -19,9 +20,9 @@ def test_delete_config(zk_mock, hostname):
     namespace = "software_a"
     filename = "config.yml"
     if hostname:
-        path = f"/scratch/computers/{hostname}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/computers/{hostname}/{namespace}/{filename}"
     else:
-        path = f"/scratch/defaults/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
 
     result = delete_config(namespace, filename, hostname)
     assert path == result

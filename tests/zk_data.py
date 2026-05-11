@@ -3,6 +3,7 @@ import json
 import yaml
 
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from tests.constants import ZK_ROOT_NODE
 
 
 class Node:
@@ -18,8 +19,8 @@ EXAMPLE TEST STRUCTURE
 ZK_EXAMPLE = Node(
     name="root",
     children={
-        "scratch": Node(
-            name="scratch",
+        ZK_ROOT_NODE: Node(
+            name=ZK_ROOT_NODE,
             children={
                 "defaults": Node(
                     name="defaults",
@@ -74,8 +75,8 @@ ZK_EXAMPLE = Node(
                                         "config.yml": Node(
                                             name="config.yml",
                                             value={
-                                                # overrides "scope" in default/software_a/config.yml 
-                                                "scope": "w11dt000001",  
+                                                # overrides "scope" in default/software_a/config.yml
+                                                "scope": "w11dt000001",
                                                 "computer-layer-value": "boop boop",  # append
                                             },
                                         ),
@@ -94,7 +95,7 @@ ZK_EXAMPLE = Node(
                                             name="config.yml",
                                             value={
                                                 # overrides "scope" in default/software_a/config.yml
-                                                "scope": "w11dt000001",  
+                                                "scope": "w11dt000001",
                                                 "computer-layer-value": "one one one",  # append
                                             },
                                         ),
