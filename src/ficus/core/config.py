@@ -28,6 +28,7 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
 class ScopeSchema(BaseModel):
     name: str
     description: str
+    identifier_name: str
 
 
 class Settings(BaseSettings):

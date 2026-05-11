@@ -1,12 +1,15 @@
 {
   "zk_root_node": "scratch",
+  "zk_host": "eng-logtools:2181",
   "scopes": [
     {
       "name": "computers",
+      "identifier_name": "hostname",
       "description": "All computers in the system"
     },
     {
       "name": "subjects",
+      "identifier_name": "subject_id",
       "description": "All subjects in the system"
     }
   ]

@@ -1,4 +1,5 @@
 import json
+import re
 import yaml
 
 from kazoo.client import KazooClient
@@ -9,6 +10,8 @@ from ficus.core.exceptions import (
     ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
+    InvalidScopeIdentifierError,
+    MultipleScopeIdentifiersError,
     PathIsDirectoryError,
     UnsupportedFileTypeError,
 )
@@ -18,28 +21,62 @@ from ficus.database.zookeeper import get_zk_client
 from ficus.schemas.configs import ConfigData
 
 
-DEFAULTS_PATH_PREFIX = f"/{settings.zk_root_node}/defaults"
-COMPUTERS_PATH_PREFIX = f"/{settings.zk_root_node}/computers"
 DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
+PATH_PREFIX = f"/{settings.zk_root_node}"
 
 
-def get_config(namespace: str, filename: str | None = None, hostname: str | None = None) -> tuple[ConfigData, list]:
-    """Get configs from zookeeper. Merges defaults and partial config override for specific computers.
+IdentifierName = str
+ScopeName = str
 
-    :param namespace: namespace to search for file (in default and computers/<hostname>).
-    :param filename: name of the file.
-    :param hostname: hostname to search for a partial config override.
-    :return: config data and list denoting paths of the partial files used to create the config data
-    :notes: requires file to exist in defaults before grabbing computers override with hostname.
+
+def get_config(
+    namespace: str,
+    identifier_names: dict[IdentifierName, str] = {},
+    filename: str | None = None,
+    merge: bool = True,
+) -> tuple[ConfigData, list[str]]:
     """
-    DEFAULT_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
-    COMPUTER_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
+    Get config file from zookeeper based on namespace, scope, and identifier.
+
+    If filename is not given, function will search for the default config file. The default config
+    files are default.yml, default.yaml, and default.json.
+
+    If merge is true, function will merge config files found in each scope. The merge is done in
+    order of scopes given by the dictionary of identifier names. Later configs will override
+    previous configs.
+
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration file.
+        identifier_names: dict[IdentifierName, str]
+            A dictionary of identifier names for different scopes.
+        filename: str | None
+            The name of the configuration file, including extension. If None, the default config
+            file will be used.
+        merge: bool
+            Whether to merge config files found in each scope. If false, only the config file in
+            the last scope from identifier names will be returned.
+
+    Returns:
+    --------
+        tuple[ConfigData, list[str]]
+            A tuple containing the configuration data and a list of paths the config was made from.
+    """
+    # Order of identifier_names determines order of scopes to merge
+    scopes = _get_scope_from_identifier_names(identifier_names)
+    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
+    for scope, identifier in scopes.items():
+        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
 
     valid_paths = []
+    config: dict = {}
 
     with get_zk_client() as client:
 
-        def get_data_and_append_path(path: str, is_default: bool = False, ignore_error: bool = False):
+        def get_data_and_append_path(
+            path: str, is_default: bool = False, ignore_error: bool = False
+        ) -> dict:
             try:
                 if is_default:
                     data, data_path = _get_default_config(client, path)
@@ -54,173 +91,186 @@ def get_config(namespace: str, filename: str | None = None, hostname: str | None
                 else:
                     raise e
 
-        config: dict = {}
-
-        if not filename and not hostname:
-            # default/defaults (required)
-            config = _deep_update(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
-        if not filename and hostname:
-            # default/defaults (required)
-            config = _deep_update(config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True))
-            # computer/hostname/default (required)
-            config = _deep_update(config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True))
-        elif filename and not hostname:
-            # default/defaults (optional)
-            config = _deep_update(
-                config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
+        if merge:
+            for path in paths:
+                if filename:
+                    config = _deep_update(
+                        config, get_data_and_append_path(path, is_default=True, ignore_error=True)
+                    )
+                    # Checks if file was already retrieved (if user asks for default)
+                    if f"{path}/{filename}" not in valid_paths:
+                        config = _deep_update(
+                            config, get_data_and_append_path(f"{path}/{filename}")
+                        )
+                else:
+                    config = _deep_update(config, get_data_and_append_path(path, is_default=True))
+        else:
+            config = (
+                get_data_and_append_path(f"{paths[-1]}/{filename}")
+                if filename
+                else get_data_and_append_path(paths[-1], is_default=True)
             )
-            # default/filename (required)
-            config = _deep_update(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
-        elif filename and hostname:
-            # default/defaults (optional)
-            config = _deep_update(
-                config, get_data_and_append_path(path=DEFAULT_PATH, is_default=True, ignore_error=True)
-            )
-            # default/filename (required)
-            config = _deep_update(config, get_data_and_append_path(path=f"{DEFAULT_PATH}/{filename}"))
-            # computer/hostname/default (optional)
-            config = _deep_update(
-                config, get_data_and_append_path(path=f"{COMPUTER_PATH}", is_default=True, ignore_error=True)
-            )
-            # computer/hostname/filename (required)
-            config = _deep_update(config, get_data_and_append_path(path=f"{COMPUTER_PATH}/{filename}"))
 
     return config, valid_paths
 
 
-def get_config_no_merge(
-    namespace: str, filename: str | None = None, hostname: str | None = None
-) -> tuple[ConfigData, str]:
-    """Get config from zookeeper without any merging
-
-    :param namespace: namespace to search for file (in default and computers/<hostname>).
-    :param filename: name of the file.
-    :param hostname: hostname to search for a partial config override.
-    :return: config data and path of the config file
-    """
-    if hostname:
-        PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
-    else:
-        PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
-
-    with get_zk_client() as client:
-        if filename:
-            config_path = f"{PATH}/{filename}"
-            config_data = _get_config(client, config_path)
-        else:
-            config_data, config_path = _get_default_config(client, PATH)
-        return config_data, config_path
-
-
-def save_config_obj(
+def save_config(
     namespace: str,
     filename: str,
     data: dict,
-    hostname: str | None = None,
+    identifier_names: dict[IdentifierName, str],
     override: bool = False,
     create_if_missing: bool = True,
 ) -> tuple[dict, str]:
-    """Save data (dictionary) as a config file in zookeeper.
-    Saves to defaults if hostname is missing, else it will save to hostname location.
-
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param data: config data as python dictionary
-    :param hostname: hostname to save file to.
-    :param override: if true and file exists, overwrite the file.
-    :returns: path where file was saved.
     """
+    Save config file to zookeeper based on namespace, scope, and identifier.
+
+    Identifier names are expected to correspond to a scope (auto-validates this). The function will
+    also expect to be given a single identifier name since a config file can only be saved to one
+    scope.
+
+    Data will also be expected to be a valid yaml or json based on filename extension, and will be
+    validated and converted to bytes before saving to zookeeper.
+
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration file.
+        filename: str
+            The name of the configuration file, including extension.
+        data: dict
+            The configuration data to save.
+        identifier_names: dict[IdentifierName, str]
+            A dictionary of identifier names for different scopes.
+        override: bool
+            Whether to override the config file if it already exists. If false and file exists,
+            error will be raised.
+        create_if_missing: bool
+            Whether to create the config file if it does not exist when overriding. If false and
+            file does not exist when overriding, error will be raised.
+    Returns:
+    --------
+        tuple[dict, str]
+            A tuple containing the configuration data and the path the config was saved to.
+    """
+    if identifier_names and len(identifier_names) > 1:
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {list(identifier_names.keys())}. "
+            "Only one is allowed."
+        )
+
+    scopes = _get_scope_from_identifier_names(identifier_names)
+
+    scope = None if not identifier_names else list(scopes.keys())[0]
+    identifier = None if not identifier_names or not scope else scopes[scope]
+
+    # Convert data to bytes and save to zookeeper using helper function
     data_as_bytes = _validate_and_convert_to_bytes(filename, data)
     return _save_config(
         namespace=namespace,
         filename=filename,
         data=data_as_bytes,
-        hostname=hostname,
+        scope=scope,
+        identifier=identifier,
         override=override,
         create_if_missing=create_if_missing,
     )
 
 
-def save_config_file(
-    namespace: str,
-    filename: str,
-    data: bytes,
-    hostname: str | None = None,
-    override: bool = False,
-    create_if_missing: bool = True,
-) -> tuple[dict, str]:
-    """Save data (file as bytes) as a config file in zookeeper.
-    Saves to defaults if hostname is missing, else it will save to hostname location.
-
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param data: config data as bytes
-    :param hostname: hostname to save file to.
-    :param override: if true and file exists, overwrite the file.
-    :returns: path where file was saved.
+def update_config(
+    namespace: str, filename: str, data: dict, identifier_names: dict[IdentifierName, str]
+):
     """
-    _validate_and_convert_to_dict(filename, data)  # Throw away value, only want to validate
-    return _save_config(
-        namespace=namespace,
-        filename=filename,
-        data=data,
-        hostname=hostname,
-        override=override,
-        create_if_missing=create_if_missing,
+    Update config file in zookeeper based on namespace, scope, and identifier.
+
+    This function will get the existing config and merge it with the data given. Afterwards it will
+    treat this merged config as a new config and save it to zookeeper, overriding the existing
+    config file (thus having same behavior/validations as the save and get functions)
+
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration file.
+        filename: str
+            The name of the configuration file, including extension.
+        data: dict
+            The configuration data to update.
+        identifier_names: dict[IdentifierName, str]
+            A dictionary of identifier names for different scopes.
+
+    Returns:
+    --------
+        tuple[dict, str]
+            A tuple containing the updated configuration data and the path the config was saved to.
+    """
+    if len(identifier_names) > 1:
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
+        )
+
+    scopes = _get_scope_from_identifier_names(identifier_names)
+
+    scope = None if not identifier_names else list(scopes.keys())[0]
+    identifier = None if not identifier_names or not scope else scopes[scope]
+
+    current_config, _ = get_config(
+        namespace=namespace, filename=filename, identifier_names=identifier_names, merge=False
     )
-
-
-def update_config_object(namespace: str, filename: str, data: dict, hostname: str | None = None) -> tuple[dict, str]:
-    """Update config file in zookeeper with new data (dictionary)
-
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param hostname: hostname to save file to (indicates config override).
-    :param data: config data as python dictionary
-    :returns: path where file was updated.
-    """
-    current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
-    _validate_and_convert_to_bytes(filename=f"{filename}", data=data)  # Throw away value, only want to validate
+    _validate_and_convert_to_bytes(
+        filename=f"{filename}", data=data
+    )  # Throw away value, only want to validate
     raw_config = _deep_update(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
     return _save_config(
-        namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
+        namespace=namespace,
+        filename=filename,
+        data=config,
+        scope=scope,
+        identifier=identifier,
+        override=True,
+        create_if_missing=False,
     )
 
 
-def update_config_file(
-    namespace: str, filename: str, partial_filename: str, data: bytes, hostname: str | None = None
-) -> tuple[dict, str]:
-    """Update config file in zookeeper with new data (bytes). Due to validation, if the file is a yaml file, it removes
-    the comments from the file and reorders the field alphabetically.
-
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param hostname: hostname to save file to (indicates config override).
-    :param data: config data as bytes
-    :returns: path where file was updated.
+def delete_config(
+    namespace: str, filename: str, identifier_names: dict[IdentifierName, str]
+) -> str:
     """
-    current_config, _ = get_config_no_merge(namespace=namespace, filename=filename, hostname=hostname)
-    new_config = _validate_and_convert_to_dict(partial_filename, data)
-    raw_config = _deep_update(current_config, new_config)
-    config = _validate_and_convert_to_bytes(filename, raw_config)
-    return _save_config(
-        namespace=namespace, filename=filename, data=config, hostname=hostname, override=True, create_if_missing=False
-    )
+    Delete config file in zookeeper based on namespace, scope, and identifier.
 
+    Identifier names are expected to correspond to a scope (auto-validates this). The function will
+    also expect to be given a single identifier name since a config file can only be saved to one
+    scope.
 
-def delete_config(namespace: str, filename: str, hostname: str | None = None) -> str | list[str]:
-    """Delete config file from zookeeper. Deletes from defaults/ OR computers/<hostname> if hostname is given.
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration file.
+        filename: str
+            The name of the configuration file, including extension.
+        identifier_names: dict[IdentifierName, str]
+            A dictionary of identifier names for different scopes.
 
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param hostname: hostname to save file to (indicates config override).
-    :returns: path where file was deleted.
+    Returns:
+    --------
+        str
+            The path of the deleted config file.
     """
-    if hostname:
-        path = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
+    if len(identifier_names) > 1:
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
+        )
+
+    scopes = _get_scope_from_identifier_names(identifier_names)
+
+    scope = None if not identifier_names else list(scopes.keys())[0]
+    identifier = None if not identifier_names or not scope else scopes[scope]
+
+    if scope and identifier:
+        path = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}/{filename}"
     else:
-        path = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
+        path = f"{PATH_PREFIX}/defaults/{namespace}/{filename}"
+
     with get_zk_client() as client:
         try:
             delete_node(client, path)
@@ -234,50 +284,57 @@ def delete_config(namespace: str, filename: str, hostname: str | None = None) ->
             raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def get_all_paths(namespace: str, filename: str) -> list[str]:
-    """Get all paths that contains a specific config file. This includes all partial overrides that make up that config.
-
-    :param namespace: namespace to search for the filename.
-    :param filename: name of the file.
-    :returns: list of paths containing file.
+def get_all_files(
+    namespace: str, identifier_names: dict[IdentifierName, str] = {}, filename: str | None = None
+) -> list[str]:
     """
-    all_paths = []
-    with get_zk_client() as client:
-        # Check if default/namespace/filename exists
-        default_subpath = f"{DEFAULTS_PATH_PREFIX}/{namespace}/{filename}"
-        if client.exists(default_subpath):
-            all_paths.append(default_subpath)
+    Get all config files in zookeeper based on namespace, scope, and identifier.
 
-        # Check if computer/hostname/namespace/filename exists for all hostnames
-        _, hostnames = get_node(client, COMPUTERS_PATH_PREFIX)
-        for hostname in hostnames:
-            hostname_subpath = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}/{filename}"
-            if client.exists(hostname_subpath):
-                all_paths.append(hostname_subpath)
-    return all_paths
+    If filename is given, function will filter files by the filename (case-insensitive).
+    If no identifiers are given, function will only check the defaults scope.
+    If multiple scopes, the order of files is returned as the same order as how they would be merged
+    (e.g. defaults (default file, config file) > scope 1 (default file, config file) > ... )
 
 
-def get_all_files(namespace: str, hostname: str | None = None) -> list[str]:
-    """Get all files under a specific namespace. If a specific hostname isn't provided, it returns all files under all
-    hostnames with the specified namespace.
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration files.
+        identifier_names: dict[IdentifierName, str]
+            A dictionary of identifier names for different scopes.
+        filename: str | None
+            The name of the configuration file to filter by, including extension. If None, all files
+              are returned.
 
-    :param namespace: namespace to search get all files.
-    :param hostname: if given, search only in this hostname for files under given namespace.
-    :returns: list of files within namespace/hostname path.
+    Returns:
+    --------
+        list[str]
+            A list of full paths of the config files.
     """
+    scopes = _get_scope_from_identifier_names(identifier_names)
+
+    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
+    for scope, identifier in scopes.items():
+        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
+
     all_files = []
     with get_zk_client() as client:
 
         def collect_files(subpath: str):
             if client.exists(subpath):
                 for file in get_node(client, subpath)[1]:
-                    all_files.append(f"{subpath}/{file}")
+                    if filename is None or re.search(filename, file, re.IGNORECASE):
+                        all_files.append(f"{subpath}/{file}")
+            else:
+                invalid_subpath = _find_first_invalid_subpath(client, subpath)
+                if invalid_subpath:
+                    raise ConfigNotFoundError(
+                        f"Subpath '{invalid_subpath}' not found in path: {subpath}"
+                    )
+                raise ConfigNotFoundError(f"Path not found: {subpath}")
 
-        collect_files(f"{DEFAULTS_PATH_PREFIX}/{namespace}")
-
-        hostnames = [hostname] if hostname else get_node(client, COMPUTERS_PATH_PREFIX)[1]
-        for h in hostnames:
-            collect_files(f"{COMPUTERS_PATH_PREFIX}/{h}/{namespace}")
+        for path in paths:
+            collect_files(path)
 
     return all_files
 
@@ -290,18 +347,29 @@ def get_all_files(namespace: str, hostname: str | None = None) -> list[str]:
 
 
 def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
-    """Merge two dictionaries together, with values from the updating_mapping taking precedence over the mapping.
-    Will deeply merge nested dictionaries together.
-    If types mismatch between mapping and updating_mapping, the value from updating_mapping will override.
+    """
+    Merge two dictionaries together, with values from the updating_mapping taking precedence over
+    mapping. Merges deeply (nested dictionaries will also merge) and handles overriding types.
 
-    :param mapping: main dictionary to merge into
-    :param updating_mappings: dictionary with overrides
-    :returns: merged configuration
+    Parameters:
+    -----------
+        mapping: dict
+            The main dictionary to merge into.
+        updating_mappings: dict
+            Dictionary with overrides to merge into the main dictionary.
+    Returns:
+    --------
+        dict
+            The merged dictionary.
     """
     updated_mapping = mapping.copy()
     for updating_mapping in updating_mappings:
         for k, v in updating_mapping.items():
-            if k in updated_mapping and isinstance(updated_mapping[k], dict) and isinstance(v, dict):
+            if (
+                k in updated_mapping
+                and isinstance(updated_mapping[k], dict)
+                and isinstance(v, dict)
+            ):
                 updated_mapping[k] = _deep_update(updated_mapping[k], v)
             else:
                 updated_mapping[k] = v
@@ -309,11 +377,11 @@ def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
 
 
 def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
-    """Helper function to get default config file from zookeeper.
-    Checks all default file options (default.yml, default.yaml, default.json) and returns the first one it finds.
-
-    :param path: path search for defaults file (without default.yml/json extension)
-    :returns: config data as dict and path of the config file (with default file with correct extension)
+    """
+    Helper function to get default config file from zookeeper and handle errors.
+    Checks all default file options (default.yml, default.yaml, default.json) and returns the first
+    one it finds, in that order. The write/save function will stop from saving a default file if one
+    already exists.
     """
     for defaults in DEFAULT_FILES:
         try:
@@ -327,12 +395,10 @@ def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
 
 
 def _get_config(client: KazooClient, path: str) -> dict:
-    """Helper function to get config file from zookeeper and handle errors.
-    Function will check each subpath incrementally and return the first subpath that failed if file is not found.
-
-    :param client: zookeeper client to use for getting config.
-    :param path: path to get config file from.
-    :returns: config data as dict
+    """
+    Helper function to get config file from zookeeper and handle errors.
+    Function will check each subpath incrementally and return the first subpath that failed if file
+    is not found.
     """
     try:
         data, _ = get_node(client, path)
@@ -345,6 +411,14 @@ def _get_config(client: KazooClient, path: str) -> dict:
 
 
 def _find_first_invalid_subpath(client: KazooClient, path: str, is_file: bool = True) -> str | None:
+    """
+    Given a path, finds the first "directory" or zk node that does not exists.
+
+    Returns:
+    -------
+        str | None
+            subpath if one does not exists, or None if path is valid
+    """
     subpaths = path.split("/")
     for i in range(1, len(subpaths) + (-1 if is_file else 0)):
         subpath = "/".join(subpaths[: i + 1])
@@ -357,25 +431,43 @@ def _save_config(
     namespace: str,
     filename: str,
     data: bytes,
-    hostname: str | None = None,
+    scope: str | None = None,
+    identifier: str | None = None,
     override: bool = False,
     create_if_missing: bool = True,
 ) -> tuple[dict, str]:
-    """Helper function to save config file (as bytes, what zookeeper expects).
+    """Helper function to save config file to zookeeper.
 
-    :param namespace: namespace to save file to.
-    :param filename: name of the file.
-    :param data: config data as bytes
-    :param hostname: hostname to save file to.
-    :param override: if true and file exists, overwrite the file.
-    :returns: data as dict and path where file was saved.
+    Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
+    new default file, unless overriding.
+
+    Parameters:
+    -----------
+        namespace: str
+            The namespace for the configuration file.
+        filename: str
+            The name of the configuration file.
+        data: bytes
+            The data to be saved in the configuration file.
+        scope: str | None, optional
+            The scope of the configuration file.
+        identifier: str | None, optional
+            The identifier for the configuration file.
+        override: bool, optional
+            Whether to override the existing configuration file.
+        create_if_missing: bool, optional
+            Whether to create the configuration file if it does not exist.
+
+    Returns:
+    --------
+        tuple[dict, str]
+            A tuple containing the configuration data and the path the config was saved to.
     """
-    # This function assumes that data has already been validated
-    if hostname:
-        CONFIG_PATH = f"{COMPUTERS_PATH_PREFIX}/{hostname}/{namespace}"
-    else:
-        CONFIG_PATH = f"{DEFAULTS_PATH_PREFIX}/{namespace}"
 
+    if scope and identifier:
+        CONFIG_PATH = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}"
+    else:
+        CONFIG_PATH = f"{PATH_PREFIX}/defaults/{namespace}"
     with get_zk_client() as client:
         if not override:
             # Not overriding, check default file doesn't already exist (if saving default)
@@ -403,11 +495,9 @@ def _save_config(
 
 
 def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
-    """Validates filename based on extension and converts data into bytes.
-
-    :param filename: name of file.
-    :param data: data as dictionary.
-    :returns: data as bytes.
+    """
+    Validates filename based on extension and converts data into bytes.
+    Only attempts to validate/convert json and yaml files.
     """
     try:
         if filename.endswith((".json")):
@@ -422,11 +512,9 @@ def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
 
 
 def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
-    """Validates filename based on extension and converts data into dictionary.
-
-    :param filename: name of file.
-    :param data: data as bytes.
-    :returns: data as dict.
+    """
+    Validates filename based on extension and converts data into dictionary.
+    Only attempts to validate/convert json and yaml files.
     """
     try:
         if filename.endswith((".json")):
@@ -434,9 +522,44 @@ def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
         elif filename.endswith((".yml", ".yaml")):
             data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
             if data_as_dict is None:
-                data_as_dict = {}  # yaml.safe_load returns None for empty files, convert to empty dict
+                # yaml.safe_load returns None for empty files, convert to empty dict
+                data_as_dict = {}
         else:
             raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
         return data_as_dict
     except (json.JSONDecodeError, yaml.YAMLError):
         raise ConfigDecodeError(f"Failed to decode data for {filename}")
+
+
+def _get_scope_from_identifier_names(
+    identifier_names: dict[IdentifierName, str],
+) -> dict[ScopeName, str]:
+    """
+    Given a dictionary of identifier names, validates that they correspond to actual scopes and
+    returns a dictionary mapping scope names to identifier values.
+
+    The scope to identifier name mapping is determined by the settings file (ficus_setup.json)
+
+    Parameters:
+    -----------
+    identifier_names: dict[IdentifierName, str]
+        A dictionary of identifier names for different scopes, where keys are scope identifier
+        names and values are the corresponding identifier values.
+
+    Returns:
+    --------
+        dict[ScopeName, str]
+            A dictionary mapping scope names to identifier values.
+    """
+    id_name_to_scope_name_mapping = {scope.identifier_name: scope for scope in settings.scopes}
+    scopes = {}
+    for id_name in identifier_names:
+        # Validates id_name maps to a scope
+        if id_name not in id_name_to_scope_name_mapping:
+            raise InvalidScopeIdentifierError(
+                f"Invalid scope identifier name: {id_name}. "
+                f"Valid options are: {list(id_name_to_scope_name_mapping.keys())}"
+            )
+        scope = id_name_to_scope_name_mapping[id_name]
+        scopes[scope.name] = identifier_names[id_name]  # identifier value
+    return scopes

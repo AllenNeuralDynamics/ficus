@@ -1,74 +1,126 @@
 import pytest
 
-from ficus.core.exceptions import ConfigSerializeError, ConfigDecodeError, UnsupportedFileTypeError
+from ficus.core.exceptions import (
+    ConfigSerializeError,
+    ConfigDecodeError,
+    InvalidScopeIdentifierError,
+    UnsupportedFileTypeError,
+)
 from ficus.services.configs import (
     _deep_update,
+    _find_first_invalid_subpath,
+    _get_scope_from_identifier_names,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
-    _find_first_invalid_subpath,
 )
-from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
+from tests.constants import ZK_ROOT_PATH
 
 
-def test_merge_configs_valid():
-    """Test _merge_configs with valid input"""
-    prime_dict = {"a": 1, "b": 2}
-    mod_dict = {"b": 3, "c": 4}
+################################################################################
+#
+#   _deep_update()
+#
+################################################################################
+
+
+def test_deep_update_valid_return_merge():
+    original = {"a": 1, "b": 2}
+    update = {"b": 3, "c": 4}
     expected_result = {"a": 1, "b": 3, "c": 4}
-    assert _deep_update(prime_dict, mod_dict) == expected_result
-
-
-@pytest.mark.parametrize(
-    "prime_dict,mod_dict,expected",
-    [
-        ({}, {"b": 3, "c": 4}, {"b": 3, "c": 4}),
-        ({"a": 1, "b": 2}, {}, {"a": 1, "b": 2}),
-        ({}, {}, {}),
-    ],
-)
-def test_merge_configs_empty(prime_dict, mod_dict, expected):
-    """Test _merge_configs with empty dictionaries"""
-    assert _deep_update(prime_dict, mod_dict) == expected
+    assert _deep_update(original, update) == expected_result
 
 
 def test_merge_configs_override():
-    """Test _merge_configs where mod_dict overrides prime_dict"""
-    prime_dict = {"prime-val": "hello", "scope": "prime"}
-    mod_dict = {"scope": "mod"}
-    expected = {"prime-val": "hello", "scope": "mod"}
-    assert _deep_update(prime_dict, mod_dict) == expected
+    original = {"prime-val": "hello", "scope": "prime"}
+    update = {"scope": "mod"}
+    expected_result = {"prime-val": "hello", "scope": "mod"}
+    assert _deep_update(original, update) == expected_result
 
 
 def test_merge_configs_append():
-    """Test _merge_configs where mod_dict appends to prime_dict"""
-    prime_dict = {"prime-val": "hello"}
-    mod_dict = {"mod-val": "world"}
-    expected = {"prime-val": "hello", "mod-val": "world"}
-    assert _deep_update(prime_dict, mod_dict) == expected
+    original = {"prime-val": "hello"}
+    update = {"mod-val": "world"}
+    expected_result = {"prime-val": "hello", "mod-val": "world"}
+    assert _deep_update(original, update) == expected_result
 
 
-def test_merge_configs_nested_override():
-    """Test _merge_configs with nested dictionaries where mod_dict overrides prime_dict"""
-    prime_dict = {"scope": {"hello": "world", "scope": "prime"}}
-    mod_dict = {"scope": {"scope": "mod"}}
-    expected = {"scope": {"hello": "world", "scope": "mod"}}
-    assert _deep_update(prime_dict, mod_dict) == expected
+@pytest.mark.parametrize(
+    "original,update,expected_result",
+    [
+        pytest.param({"a": 1}, {"a": "2"}, {"a": "2"}, id="int_to_str"),
+        pytest.param({"a": "1"}, {"a": 2}, {"a": 2}, id="str_to_int"),
+        pytest.param({"a": True}, {"a": None}, {"a": None}, id="bool_to_none"),
+        pytest.param({"a": None}, {"a": True}, {"a": True}, id="none_to_bool"),
+        pytest.param({"a": "1"}, {"a": 2.0}, {"a": 2.0}, id="str_to_float"),
+        pytest.param({"a": "1"}, {"a": b"hi"}, {"a": b"hi"}, id="str_to_bytes"),
+    ],
+)
+def test_deep_update_new_type_return_merge(original, update, expected_result):
+    """Test _deep_update where override value has a different type than original value."""
+    assert _deep_update(original, update) == expected_result
 
 
-def test_merge_configs_nested_append():
-    """Test _merge_configs with nested dictionaries where mod_dict appends to prime_dict"""
-    prime_dict = {"scope": {"hello": "world"}}
-    mod_dict = {"scope": {"beep": "boop"}}
-    expected = {"scope": {"hello": "world", "beep": "boop"}}
-    assert _deep_update(prime_dict, mod_dict) == expected
+@pytest.mark.parametrize(
+    "original,update,expected_result",
+    [
+        pytest.param({"a": "str"}, {"a": {}}, {"a": {}}, id="str_to_dict"),
+        pytest.param({"a": 1}, {"a": []}, {"a": []}, id="int_to_list"),
+        pytest.param({"a": []}, {"a": "str"}, {"a": "str"}, id="list_to_str"),
+        pytest.param({"a": []}, {"a": 1}, {"a": 1}, id="list_to_int"),
+        pytest.param({"a": {}}, {"a": []}, {"a": []}, id="dict_to_list"),
+        pytest.param({"a": []}, {"a": ()}, {"a": ()}, id="list_to_tuple"),
+    ],
+)
+def test_deep_update_collection_type_mismatch_return_merge(original, update, expected_result):
+    """Test _deep_update where override value is converting scalar to collection or vice versa."""
+    assert _deep_update(original, update) == expected_result
 
 
-def test_merge_configs_nested_mismatch():
-    """Test _merge_configs with nested dictionaries dicts contain mismatch in types"""
-    prime_dict = {"scope": {"hello": "world"}}
-    mod_dict = {"scope": "not a dict"}
-    expected = {"scope": "not a dict"}
-    assert _deep_update(prime_dict, mod_dict) == expected
+def test_deep_update_nested_dict_return_merge():
+    original = {"a": 1, "b": {"test": "value"}}
+    update = {"b": {"test": "new_value"}, "c": 4}
+    expected_result = {"a": 1, "b": {"test": "new_value"}, "c": 4}
+    assert _deep_update(original, update) == expected_result
+
+
+@pytest.mark.parametrize(
+    "original,update,expected_result",
+    [
+        pytest.param(
+            {"a": {"test": {}}}, {"a": {"test": 10}}, {"a": {"test": 10}}, id="dict_to_int"
+        ),
+        pytest.param(
+            {"a": {"test": []}}, {"a": {"test": "1"}}, {"a": {"test": "1"}}, id="list_to_str"
+        ),
+        pytest.param(
+            {"a": {"test": 10}}, {"a": {"test": {}}}, {"a": {"test": {}}}, id="int_to_dict"
+        ),
+        pytest.param(
+            {"a": {"test": "1"}}, {"a": {"test": []}}, {"a": {"test": []}}, id="str_to_list"
+        ),
+    ],
+)
+def test_deep_update_nested_dict_new_type_return_merge(original, update, expected_result):
+    assert _deep_update(original, update) == expected_result
+
+
+@pytest.mark.parametrize(
+    "original,update,expected_result",
+    [
+        pytest.param({}, {"b": 3, "c": 4}, {"b": 3, "c": 4}, id="empty-original"),
+        pytest.param({"a": 1, "b": 2}, {}, {"a": 1, "b": 2}, id="empty-update"),
+        pytest.param({}, {}, {}, id="empty-both"),
+    ],
+)
+def test_deep_update_configs_empty_return_merge(original, update, expected_result):
+    assert _deep_update(original, update) == expected_result
+
+
+################################################################################
+#
+#   test_validate_and_convert (bytes and dict)
+#
+################################################################################
 
 
 def test_validate_and_convert_to_bytes_valid_json():
@@ -157,6 +209,13 @@ def test_validate_and_convert_to_dict_empty_yaml():
     assert data == {}
 
 
+################################################################################
+#
+#   test_find_first_invalid_subpath()
+#
+################################################################################
+
+
 def test_find_first_invalid_subpath_valid(zk_mock):
     """Test _find_first_invalid_subpath with valid path"""
     path = f"{ZK_ROOT_PATH}/defaults/software_a/config.yml"
@@ -179,3 +238,33 @@ def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):
     """Test _find_first_invalid_subpath with invalid subpath (near beginning)"""
     path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
     assert _find_first_invalid_subpath(zk_mock, path) == "/scratchbad"
+
+
+################################################################################
+#
+#   test_get_scope_from_identifier_names()
+#
+################################################################################
+
+
+def test_get_scope_from_identifier_names_valid_hostname_return_scopes():
+    identifier_names = {"hostname": "w11dt000001"}
+    expected_scope = {"computers": "w11dt000001"}
+    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
+
+
+def test_get_scope_from_multi_identifier_names_valid_hostname_return_scopes():
+    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    expected_scope = {"computers": "w11dt000001", "subjects": "614173"}
+    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
+
+
+def test_get_scope_from_identifier_names_invalid_hostname_return_scopes():
+    identifier_names = {"unknown-scope": "w11dt000001"}
+    with pytest.raises(InvalidScopeIdentifierError):
+        _get_scope_from_identifier_names(identifier_names)
+
+
+def test_get_scope_from_identifier_names_empty_return_empty():
+    identifier_names = {}
+    assert _get_scope_from_identifier_names(identifier_names) == {}

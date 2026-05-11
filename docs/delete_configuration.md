@@ -21,7 +21,7 @@ computers/
 Request: 
 
 ```
-DELETE /api/configs/software_a/config.yml
+DELETE /v1/namespaces/software_a/config/config.yml
 ```
 
 Response:

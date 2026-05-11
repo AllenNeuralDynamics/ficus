@@ -20,3 +20,9 @@ class UnsupportedFileTypeError(Exception):
 
 class PathIsDirectoryError(Exception):
     pass
+
+class InvalidScopeIdentifierError(Exception):
+    pass
+
+class MultipleScopeIdentifiersError(Exception):
+    pass
