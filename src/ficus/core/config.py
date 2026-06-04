@@ -36,16 +36,16 @@ class Settings(BaseSettings):
     zk_host: str = "eng-logtools:2181"
     zk_root_node: str = "scratch"
     scopes: list[ScopeSchema] = [
-        {
-            "name": "computers",
-            "identifier_name": "hostname",
-            "description": "All computers in the system",
-        },
-        {
-            "name": "subjects",
-            "identifier_name": "subject_id",
-            "description": "All subjects in the system",
-        },
+        ScopeSchema(
+            name="computers",
+            identifier_name="hostname",
+            description="All computers in the system",
+        ),
+        ScopeSchema(
+            name="subjects",
+            identifier_name="subject_id",
+            description="All subjects in the system",
+        ),
     ]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

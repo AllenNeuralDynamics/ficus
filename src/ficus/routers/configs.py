@@ -4,7 +4,7 @@ import fastapi
 from fastapi import APIRouter, Body
 from fastapi import HTTPException
 from pathlib import Path
-from typing import Callable
+from typing import Annotated, Callable
 
 
 from ficus.core.config import settings
@@ -34,6 +34,8 @@ from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErro
 
 router = APIRouter()
 BASEDIR = Path(__file__).resolve().parents[3]
+
+WINDOWS_SAFE_PATTERN = r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$"
 
 
 def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str, Callable, str]]:
@@ -73,6 +75,13 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
             annotation=str,
             default=fastapi.Path(..., description=f"The ID for {scope_name}"),
         )
+        dynamic_param = dynamic_param.replace(
+            default=fastapi.Path(
+                ...,
+                description=f"The ID for {scope_name}",
+                pattern=WINDOWS_SAFE_PATTERN,
+            )
+        )
         # Insert the dynamic parameter
         new_params.append(dynamic_param)
         # Update the function signature
@@ -95,10 +104,22 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
     responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
 def get_configuration(
-    namespace: str,
-    filename: str | None = None,
-    hostname: str | None = None,
-    subject_id: str | None = None,
+    namespace: Annotated[
+        str,
+        fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN),
+    ],
+    filename: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
+    hostname: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
+    subject_id: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
     merge: bool = True,
 ) -> ConfigDataResponse:
     try:
@@ -139,10 +160,22 @@ def get_create_config_handler() -> Callable:
     """
 
     async def create_config_handler(
-        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
-        filename: str = fastapi.Path(
-            ..., description="The name of the configuration file, including extension."
-        ),
+        namespace: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The namespace for the configuration file",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
+        filename: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The name of the configuration file, including extension.",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
         data: dict = Body(None, description="The configuration data."),
         **kwargs,
     ) -> ConfigDataResponse:
@@ -178,8 +211,8 @@ def get_create_config_handler() -> Callable:
     },
 )
 async def create_defaults_config(
-    namespace: str,
-    filename: str,
+    namespace: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
+    filename: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
     data: dict | None = None,
 ):
     handler = get_create_config_handler()
@@ -224,10 +257,22 @@ def get_update_config_handler() -> Callable:
     """
 
     async def update_config_handler(
-        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
-        filename: str = fastapi.Path(
-            ..., description="The name of the configuration file, including extension."
-        ),
+        namespace: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The namespace for the configuration file",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
+        filename: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The name of the configuration file, including extension.",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
         data: dict = Body(None, description="The configuration data."),
         **kwargs,
     ) -> ConfigDataResponse:
@@ -266,8 +311,8 @@ def get_update_config_handler() -> Callable:
     },
 )
 async def update_defaults_config(
-    namespace: str,
-    filename: str,
+    namespace: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
+    filename: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
     data: dict | None = None,
 ):
     handler = get_update_config_handler()
@@ -312,10 +357,22 @@ def get_delete_config_handler() -> Callable:
     """
 
     async def delete_config_handler(
-        namespace: str = fastapi.Path(..., description="The namespace for the configuration file"),
-        filename: str = fastapi.Path(
-            ..., description="The name of the configuration file, including extension."
-        ),
+        namespace: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The namespace for the configuration file",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
+        filename: Annotated[
+            str,
+            fastapi.Path(
+                ...,
+                description="The name of the configuration file, including extension.",
+                pattern=WINDOWS_SAFE_PATTERN,
+            ),
+        ],
         **kwargs,
     ) -> ConfigResponse:
         try:
@@ -344,8 +401,8 @@ def get_delete_config_handler() -> Callable:
     },
 )
 async def delete_defaults_config(
-    namespace: str,
-    filename: str,
+    namespace: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
+    filename: Annotated[str, fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN)],
 ):
     handler = get_delete_config_handler()
     return await handler(namespace=namespace, filename=filename)
@@ -381,10 +438,22 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
     responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
 def get_all_files_in_path(
-    namespace: str,
-    filename: str | None = None,
-    hostname: str | None = None,
-    subject_id: str | None = None,
+    namespace: Annotated[
+        str,
+        fastapi.Path(..., pattern=WINDOWS_SAFE_PATTERN),
+    ],
+    filename: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
+    hostname: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
+    subject_id: Annotated[
+        str | None,
+        fastapi.Query(pattern=WINDOWS_SAFE_PATTERN),
+    ] = None,
 ) -> ConfigDataResponse:
     try:
         identifier_names = {}
