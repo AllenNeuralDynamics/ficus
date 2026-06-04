@@ -433,7 +433,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
 
 
 @router.get(
-    "/list_files/{namespace}/configs",
+    "/namespace/{namespace}/configs",
     description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
     responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
 )
@@ -472,3 +472,21 @@ def get_all_files_in_path(
         )
     except ConfigNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+################################################################################
+#
+#   Metadata
+#
+################################################################################
+
+
+@router.get(
+    "/metadata/scopes",
+)
+def get_scopes_metadata() -> ConfigDataResponse:
+    return ConfigDataResponse(
+        message="Successfully retrieved scopes metadata",
+        data=settings.scopes,
+        details={},
+    )
