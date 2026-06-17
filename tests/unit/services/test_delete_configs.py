@@ -3,8 +3,8 @@ import pytest
 
 from ficus.core.exceptions import (
     ConfigNotFoundError,
-    InvalidScopeIdentifierError,
     PathIsDirectoryError,
+    InvalidScopeError,
     MultipleScopeIdentifiersError,
 )
 from ficus.services.configs import delete_config
@@ -20,42 +20,42 @@ from tests.constants import ZK_ROOT_PATH
 
 def test_delete_config_no_identifier_names_return_path(zk_mock):
     namespace = "software_a"
-    identifier_names = {}
+    scope_identifiers = {}
     filename = "config.yml"
     path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
 
-    result_path = delete_config(namespace, filename, identifier_names)
+    result_path = delete_config(namespace, filename, scope_identifiers)
     assert result_path == path
     assert not zk_mock.exists(path)
 
 
 def test_delete_config_with_identifier_names_return_path(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001"}
+    scope_identifiers = {"hostname": "w11dt000001"}
     filename = "config.yml"
-    path = f"{ZK_ROOT_PATH}/computers/{identifier_names['hostname']}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/hostname/{scope_identifiers['hostname']}/{namespace}/{filename}"
 
-    result_path = delete_config(namespace, filename, identifier_names)
+    result_path = delete_config(namespace, filename, scope_identifiers)
     assert result_path == path
     assert not zk_mock.exists(path)
 
 
 def test_delete_config_multi_identifiers_return_multiple_scope_identifiers_error(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = "config.yml"
 
     with pytest.raises(MultipleScopeIdentifiersError):
-        delete_config(namespace, filename, identifier_names)
+        delete_config(namespace, filename, scope_identifiers)
 
 
 def test_delete_config_invalid_identifier_names_return_invalid_scope_identifier_error(zk_mock):
     namespace = "software_a"
-    identifier_names = {"fakefake": "value"}
+    scope_identifiers = {"fakefake": "value"}
     filename = "config.yml"
 
-    with pytest.raises(InvalidScopeIdentifierError):
-        delete_config(namespace, filename, identifier_names)
+    with pytest.raises(InvalidScopeError):
+        delete_config(namespace, filename, scope_identifiers=scope_identifiers)
 
 
 @pytest.mark.parametrize(
@@ -79,8 +79,8 @@ def test_delete_config_path_is_directory_return_path_is_directory_error(zk_mock)
     this. However, this could occur if users added nodes with zoonavigator.
     """
     namespace = "test_delete_path_error"
-    identifier_names = {}
+    scope_identifiers = {}
     filename = "additional_node"  # this is a directory, not a file
 
     with pytest.raises(PathIsDirectoryError):
-        delete_config(namespace, filename, identifier_names)
+        delete_config(namespace, filename, scope_identifiers)

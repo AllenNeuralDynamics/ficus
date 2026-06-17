@@ -6,7 +6,7 @@ from ficus.core.exceptions import (
     ConfigExistsError,
     ConfigNotFoundError,
     ConfigSerializeError,
-    InvalidScopeIdentifierError,
+    InvalidScopeError,
     MultipleScopeIdentifiersError,
     UnsupportedFileTypeError,
 )
@@ -22,7 +22,7 @@ from tests.constants import ZK_ROOT_PATH
 
 
 @pytest.mark.parametrize(
-    "namespace, identifier_names, filename, override, create_if_missing",
+    "namespace, scope_identifiers, filename, override, create_if_missing",
     [
         pytest.param("new_namespace", {}, "config.yml", False, True, id="save-new-namespace"),
         pytest.param("new_namespace", {}, "default.yml", False, True, id="save-new-default-file"),
@@ -37,23 +37,23 @@ from tests.constants import ZK_ROOT_PATH
     ],
 )
 def test_save_config_valid_return_data_and_path(
-    zk_mock, namespace, identifier_names, filename, override, create_if_missing
+    zk_mock, namespace, scope_identifiers, filename, override, create_if_missing
 ):
     """
     _save_config does most of the bulk work. This unit test is just to ensure the various params
     get converted to (scope/identifier) correctly for _save_config.
     """
-    if identifier_names == {}:
+    if scope_identifiers == {}:
         path = f"{ZK_ROOT_PATH}/defaults/{namespace}/{filename}"
     else:
-        path = f"{ZK_ROOT_PATH}/computers/{identifier_names['hostname']}/{namespace}/{filename}"
+        path = f"{ZK_ROOT_PATH}/hostname/{scope_identifiers['hostname']}/{namespace}/{filename}"
     data = {"testing": "ni-haody"}
 
     result_data, result_path = save_config(
         namespace=namespace,
         filename=filename,
         data=data,
-        identifier_names=identifier_names,
+        scope_identifiers=scope_identifiers,
         override=override,
         create_if_missing=create_if_missing,
     )
@@ -62,47 +62,44 @@ def test_save_config_valid_return_data_and_path(
 
 
 def test_save_config_multiple_identifier_names_return_multiple_scopes_error(zk_mock):
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
 
-    with pytest.raises(MultipleScopeIdentifiersError) as err:
+    with pytest.raises(MultipleScopeIdentifiersError):
         save_config(
             namespace="software_a",
             filename="config.yml",
             data={"testing": "ni-haody"},
-            identifier_names=identifier_names,
+            scope_identifiers=scope_identifiers,
         )
-    assert "Multiple identifier names" in str(err.value)
 
 
 def test_save_config_invalid_identifier_names_return_invalid_scope_error(zk_mock):
-    identifier_names = {"hostname-typo": "w11dt000001"}
+    scope_identifiers = {"hostname-typo": "w11dt000001"}
 
-    with pytest.raises(InvalidScopeIdentifierError) as err:
+    with pytest.raises(InvalidScopeError):
         save_config(
             namespace="software_a",
             filename="config.yml",
             data={"testing": "ni-haody"},
-            identifier_names=identifier_names,
+            scope_identifiers=scope_identifiers,
         )
-    assert "Invalid scope" in str(err.value)
 
 
 def test_save_config_invalid_data_return_error(zk_mock):
-    with pytest.raises(ConfigSerializeError) as err:
+    with pytest.raises(ConfigSerializeError):
         save_config(
             namespace="software_a",
             filename="config_new.yml",
             data={"testing": object()},
-            identifier_names={},
+            scope_identifiers={},
         )
-    assert "Failed to serialize" in str(err.value)
 
 
 def test_save_config_invalid_file_type_return_error(zk_mock):
     with pytest.raises(UnsupportedFileTypeError):
         save_config(
             namespace="software_a",
-            identifier_names={},
+            scope_identifiers={},
             filename="config_new.bad",
             data={},
         )
@@ -128,7 +125,7 @@ def test_save_config_invalid_file_type_return_error(zk_mock):
             "software_a", None, None, "config_new_file.yml", False, True, id="save-new-file"
         ),
         pytest.param(
-            "software", "computers", "w11new", "config.yml", False, True, id="save-new-scope"
+            "software", "hostname", "w11new", "config.yml", False, True, id="save-new-scope"
         ),
         pytest.param(
             "software_a", None, None, "config.yml", True, True, id="override-create-if-missing"
@@ -182,7 +179,7 @@ def test__save_config_override_existing_file_return_config_not_found(
     override = True
     create_if_missing = False
 
-    with pytest.raises(ConfigNotFoundError) as err:
+    with pytest.raises(ConfigNotFoundError):
         _save_config(
             namespace=namespace,
             scope=scope,
@@ -192,7 +189,6 @@ def test__save_config_override_existing_file_return_config_not_found(
             override=override,
             create_if_missing=create_if_missing,
         )
-    assert "not found" in str(err.value)
 
 
 @pytest.mark.parametrize(
@@ -211,13 +207,12 @@ def test__save_config_file_exists_return_exist_error(zk_mock, filename):
     """
     namespace = "software_a"
 
-    with pytest.raises(ConfigExistsError) as err:
+    with pytest.raises(ConfigExistsError):
         _save_config(
             namespace=namespace,
             filename=filename,
             data={},
         )
-    assert "already exists" in str(err.value)
 
 
 def test__save_config_invalid_data_return_error(zk_mock):

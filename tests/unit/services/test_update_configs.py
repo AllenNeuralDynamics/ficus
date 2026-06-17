@@ -3,8 +3,8 @@ import pytest
 from ficus.core.exceptions import (
     ConfigNotFoundError,
     ConfigSerializeError,
-    InvalidScopeIdentifierError,
-    MultipleScopeIdentifiersError,
+    InvalidScopeError,
+    MultipleScopeIdentifiersError
 )
 from ficus.services.configs import update_config
 from tests.constants import ZK_ROOT_PATH
@@ -38,13 +38,13 @@ def test_update_config_with_identifier_names_return_data_and_path(zk_mock):
     namespace = "software_a"
     identifier_names = {"hostname": "w11dt000001"}
     filename = "config.yml"
-    path = f"{ZK_ROOT_PATH}/computers/{identifier_names['hostname']}/{namespace}/{filename}"
+    path = f"{ZK_ROOT_PATH}/hostname/{identifier_names['hostname']}/{namespace}/{filename}"
 
     update_data = {"scope": "w11dt000001new", "testing": "ni-haody"}
     result_data, result_path = update_config(namespace, filename, update_data, identifier_names)
     assert result_data == {
         "scope": "w11dt000001new",  # override
-        "computer-layer-value": "boop boop",  # from computers/w11dt000001/config.yml
+        "computer-layer-value": "boop boop",  # from hostname/w11dt000001/config.yml
         "testing": "ni-haody",
     }
     assert result_path == path
@@ -66,12 +66,12 @@ def test_update_config_invalid_identifiers_return_invalid_scope_error(zk_mock):
     filename = "config.yml"
     update_data = {"scope": "w11dt000001new", "testing": "ni-haody"}
 
-    with pytest.raises(InvalidScopeIdentifierError):
+    with pytest.raises(InvalidScopeError):
         update_config(namespace, filename, update_data, identifier_names)
 
 
 @pytest.mark.parametrize(
-    "namespace, identifier_names, filename",
+    "namespace, scope_identifiers, filename",
     [
         pytest.param("new_namespace", {}, "config.yml", id="missing-namespace"),
         pytest.param("software_a", {}, "config_new.yml", id="missing-file"),
@@ -79,14 +79,14 @@ def test_update_config_invalid_identifiers_return_invalid_scope_error(zk_mock):
     ],
 )
 def test_update_config_missing_file_return_config_not_found_error(
-    zk_mock, namespace, identifier_names, filename
+    zk_mock, namespace, scope_identifiers, filename
 ):
     with pytest.raises(ConfigNotFoundError):
         update_config(
             namespace=namespace,
             filename=filename,
             data={},
-            identifier_names=identifier_names,
+            scope_identifiers=scope_identifiers
         )
 
 

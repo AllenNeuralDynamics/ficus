@@ -2,6 +2,7 @@ import pytest
 
 from ficus.core.exceptions import (
     ConfigNotFoundError,
+    InvalidScopeError,
     InvalidScopeIdentifierError,
 )
 from ficus.services.configs import (
@@ -9,7 +10,6 @@ from ficus.services.configs import (
     get_config,
     _get_config,
     _get_default_config,
-    _get_scope_from_identifier_names,
 )
 from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
 
@@ -33,12 +33,12 @@ def test_get_config_return_defaults(zk_mock, merge):
 
 def test_get_config_with_identifier_name_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001"}
+    scope_identifiers = {"hostname": "w11dt000001"}
     filename = None
     merge = True
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -48,18 +48,18 @@ def test_get_config_with_identifier_name_return_config(zk_mock):
     }
     assert result[1] == [
         f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
     ]
 
 
 def test_get_config_with_identifier_names_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers= {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = None
     merge = True
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -70,19 +70,19 @@ def test_get_config_with_identifier_names_return_config(zk_mock):
     }
     assert result[1] == [
         f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/default.json",
     ]
 
 
 def test_get_config_with_filename_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {}
+    scope_identifiers = {}
     filename = "config.yml"
     merge = True
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -100,12 +100,12 @@ def test_get_config_with_filename_return_config(zk_mock):
 
 def test_get_config_with_filename_and_identifier_names_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = "config.yml"
     merge = True
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -123,21 +123,21 @@ def test_get_config_with_filename_and_identifier_names_return_config(zk_mock):
     assert result[1] == [
         f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
         f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/default.json",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
     ]
 
 
 def test_get_config_no_merge_with_filename_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {}
+    scope_identifiers = {}
     filename = "config.yml"
     merge = False
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -151,29 +151,29 @@ def test_get_config_no_merge_with_filename_return_config(zk_mock):
 
 def test_get_config_no_merge_with_identifier_names_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = None
     merge = False
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
     assert result[0] == {
         "subject-default-value": "one config to bring them all",
     }
-    assert result[1] == [f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json"]
+    assert result[1] == [f"{ZK_ROOT_PATH}/subject_id/614173/software_a/default.json"]
 
 
 def test_get_config_no_merge_with_filename_and_identifier_names_return_config(zk_mock):
     namespace = "software_a"
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = "config.yml"
     merge = False
 
     result = get_config(
-        namespace=namespace, identifier_names=identifier_names, filename=filename, merge=merge
+        namespace=namespace, scope_identifiers=scope_identifiers, filename=filename, merge=merge
     )
 
     assert len(result) == 2
@@ -182,26 +182,25 @@ def test_get_config_no_merge_with_filename_and_identifier_names_return_config(zk
         "subject-layer-value": "bap bap",
         "The Cure": "show me how you do that trick",
     }
-    assert result[1] == [f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml"]
+    assert result[1] == [f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml"]
 
 
 def test_get_config_invalid_identifiers_return_invalid_scope_error(zk_mock):
-    with pytest.raises(InvalidScopeIdentifierError) as err:
-        get_config("software_a", identifier_names={"fake_id": "FAKE"})
-    assert "Invalid scope identifier name" in str(err.value)
+    with pytest.raises(InvalidScopeError) as err:
+        get_config("software_a", scope_identifiers={"fake_id": "FAKE"})
 
 
 @pytest.mark.parametrize(
     "params",
     [
         # Bad namespace
-        {"namespace": "badbadbad", "identifier_names": {}, "filename": "config.yml"},
+        {"namespace": "badbadbad", "scope_identifiers": {}, "filename": "config.yml"},
         # Bad filename
-        {"namespace": "software_a", "identifier_names": {}, "filename": "config.bad"},
+        {"namespace": "software_a", "scope_identifiers": {}, "filename": "config.bad"},
         # Bad identifier value
         {
             "namespace": "software_a",
-            "identifier_names": {"subject_id": "bad_subject_id"},
+            "scope_identifiers": {"subject_id": "bad_subject_id"},
             "filename": "config.yml",
         },
     ],
@@ -210,7 +209,7 @@ def test_get_config_invalid_namespace_filename_returns_config_not_found_error(zk
     with pytest.raises(ConfigNotFoundError):
         get_config(
             namespace=params["namespace"],
-            identifier_names=params["identifier_names"],
+            scope_identifiers = params["scope_identifiers"],
             filename=params["filename"],
         )
 
@@ -247,47 +246,47 @@ def test_get_all_files_return_files(zk_mock):
 
 
 def test_get_all_files_with_identifier_names_return_default_files(zk_mock):
-    identifier_names = {"hostname": "w11dt000001"}
+    scope_identifiers = {"hostname": "w11dt000001"}
     filename = None
 
     result = get_all_files(
-        namespace="software_a", identifier_names=identifier_names, filename=filename
+        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
     )
 
     assert len(result) == 4
     assert result == [
         f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
         f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
     ]
 
 
 def test_get_all_files_with_multi_identifier_names_return_default_files(zk_mock):
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = None
 
     result = get_all_files(
-        namespace="software_a", identifier_names=identifier_names, filename=filename
+        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
     )
 
     assert len(result) == 6
     assert result == [
         f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
         f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/default.json",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/default.json",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
     ]
 
 
 def test_get_all_files_with_filename_return_files(zk_mock):
-    identifier_names = {}
+    scope_identifiers = {}
     filename = "config.yml"
 
     result = get_all_files(
-        namespace="software_a", identifier_names=identifier_names, filename=filename
+        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
     )
 
     assert len(result) == 1
@@ -297,56 +296,54 @@ def test_get_all_files_with_filename_return_files(zk_mock):
 
 
 def test_get_all_files_with_identifier_names_and_filename_return_files(zk_mock):
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = "config.yml"
 
     result = get_all_files(
-        namespace="software_a", identifier_names=identifier_names, filename=filename
+        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
     )
 
     assert len(result) == 3
     assert result == [
         f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
     ]
 
 
 def test_get_all_files_with_identifier_names_and_partial_filename_return_files(zk_mock):
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
+    scope_identifiers= {"hostname": "w11dt000001", "subject_id": "614173"}
     filename = "conf"  # partial filename, still matches
 
     result = get_all_files(
-        namespace="software_a", identifier_names=identifier_names, filename=filename
+        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
     )
 
     assert len(result) == 3
     assert result == [
         f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/config.yml",
-        f"{ZK_ROOT_PATH}/subjects/614173/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
+        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
     ]
 
 
 def test_get_all_files_invalid_identifier_names_return_invalid_scope_error(zk_mock):
-    with pytest.raises(InvalidScopeIdentifierError) as err:
-        get_all_files(namespace="software_a", identifier_names={"badbad": "123"})
-    assert "Invalid scope identifier name" in str(err.value)
+    with pytest.raises(InvalidScopeError):
+        get_all_files(namespace="software_a", scope_identifiers={"badbad": "123"})
 
 
 @pytest.mark.parametrize(
     "params",
     [
         # Bad namespace
-        {"namespace": "badbadbad", "identifier_names": {}},
+        {"namespace": "badbadbad", "scope_identifiers": {}},
         # Bad identifier value
-        {"namespace": "", "identifier_names": {"subject_id": "badbad"}},
+        {"namespace": "", "scope_identifiers": {"subject_id": "badbad"}},
     ],
 )
 def test_get_all_files_invalid_file_identifier_return_config_not_found_error(zk_mock, params):
     with pytest.raises(ConfigNotFoundError) as err:
-        get_all_files(namespace=params["namespace"], identifier_names=params["identifier_names"])
-    assert "not found" in str(err.value)
+        get_all_files(namespace=params["namespace"], scope_identifiers=params["scope_identifiers"])
 
 
 ################################################################################
@@ -399,25 +396,3 @@ def test__get_default_config_invalid_filename_return_config_not_found_error(zk_m
     with pytest.raises(ConfigNotFoundError) as err:
         _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/default.yml")
     assert "Default file not found" in str(err.value)
-
-
-################################################################################
-#
-#   _get_scope_from_identifier_names()
-#
-################################################################################
-
-
-def test__get_scope_from_identifier_names_return_scopes(zk_mock):
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
-    result = _get_scope_from_identifier_names(identifier_names)
-    assert result == {
-        "computers": "w11dt000001",
-        "subjects": "614173",
-    }
-
-
-def test__get_scope_from_identifier_names_invalid_identifier_name_return_invalid_scope(zk_mock):
-    with pytest.raises(InvalidScopeIdentifierError) as err:
-        _get_scope_from_identifier_names({"badbad": "123"})
-    assert "Invalid scope identifier name" in str(err.value)

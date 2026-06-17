@@ -1,3 +1,4 @@
+import logging
 import json
 import os
 from pathlib import Path
@@ -5,6 +6,8 @@ from typing import Tuple, Type
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class JsonConfigSettingsSource(PydanticBaseSettingsSource):
@@ -14,39 +17,27 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
     def __call__(self):
         path_from_env = os.getenv("FICUS_CONFIG_PATH")
         if path_from_env:
+            logging.debug(f"Found FICUS config path from environment variable: "
+                          f"{str(path_from_env)}")
             json_path = Path(path_from_env)
         else:
             json_path = Path(__file__).parents[3] / "data" / "ficus_setup.json"
+            logging.debug(f"Falling back to default FICUS config from: "
+                          f"{str(json_path)}")
 
         if json_path.exists():
             with open(json_path, "r") as f:
                 return json.load(f)
 
-        return {}
-
-
-class ScopeSchema(BaseModel):
-    name: str
-    description: str
-    identifier_name: str
+        return {}  # should not happen.
 
 
 class Settings(BaseSettings):
+    """Settings for a Ficus Instance."""
     config_filename: str = "ficus_setup.json"
     zk_host: str = "eng-logtools:2181"
     zk_root_node: str = "scratch"
-    scopes: list[ScopeSchema] = [
-        {
-            "name": "computers",
-            "identifier_name": "hostname",
-            "description": "All computers in the system",
-        },
-        {
-            "name": "subjects",
-            "identifier_name": "subject_id",
-            "description": "All subjects in the system",
-        },
-    ]
+    scopes: set[str] = {"hostname", "subject_id"}
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

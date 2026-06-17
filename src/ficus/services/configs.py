@@ -10,7 +10,7 @@ from ficus.core.exceptions import (
     ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
-    InvalidScopeIdentifierError,
+    InvalidScopeError,
     MultipleScopeIdentifiersError,
     PathIsDirectoryError,
     UnsupportedFileTypeError,
@@ -25,18 +25,17 @@ DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
 PATH_PREFIX = f"/{settings.zk_root_node}"
 
 
-IdentifierName = str
 ScopeName = str
 
 
 def get_config(
     namespace: str,
-    identifier_names: dict[IdentifierName, str] = {},
+    scope_identifiers: dict[ScopeName, str] | None = None,
     filename: str | None = None,
     merge: bool = True,
 ) -> tuple[ConfigData, list[str]]:
     """
-    Get config file from zookeeper based on namespace, scope, and identifier.
+    Get config file from store based on namespace and scopes.
 
     If filename is not given, function will search for the default config file. The default config
     files are default.yml, default.yaml, and default.json.
@@ -49,8 +48,12 @@ def get_config(
     -----------
         namespace: str
             The namespace for the configuration file.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dictionary of scope identifier names. Scope *resolution order* is
+            determined by dict order. aka: Overrides are applied from back to front.
+            (i.e: for dict: `{"subject_id": "mouse_0", "hostname": "W10BRUNO"}`,
+            values from the hostname: W10BRUNO override values in subject_id: mouse_0,
+            which override any defaults.)
         filename: str | None
             The name of the configuration file, including extension. If None, the default config
             file will be used.
@@ -63,10 +66,14 @@ def get_config(
         tuple[ConfigData, list[str]]
             A tuple containing the configuration data and a list of paths the config was made from.
     """
+    if scope_identifiers is None:
+        scope_identifiers = {}
     # Order of identifier_names determines order of scopes to merge
-    scopes = _get_scope_from_identifier_names(identifier_names)
     paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
-    for scope, identifier in scopes.items():
+    for scope, identifier in scope_identifiers.items():
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
         paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
 
     valid_paths = []
@@ -118,12 +125,12 @@ def save_config(
     namespace: str,
     filename: str,
     data: dict,
-    identifier_names: dict[IdentifierName, str],
+    scope_identifiers: dict[ScopeName, str],
     override: bool = False,
     create_if_missing: bool = True,
 ) -> tuple[dict, str]:
     """
-    Save config file to zookeeper based on namespace, scope, and identifier.
+    Save config file to zookeeper based on namespace, scopes, and identifier.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
@@ -140,8 +147,8 @@ def save_config(
             The name of the configuration file, including extension.
         data: dict
             The configuration data to save.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
         override: bool
             Whether to override the config file if it already exists. If false and file exists,
             error will be raised.
@@ -153,16 +160,19 @@ def save_config(
         tuple[dict, str]
             A tuple containing the configuration data and the path the config was saved to.
     """
-    if identifier_names and len(identifier_names) > 1:
+    if scope_identifiers and len(scope_identifiers) > 1:
         raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. "
+            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
             "Only one is allowed."
         )
 
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
+    scope = None
+    identifier = None
+    if scope_identifiers:
+        (scope, identifier), = scope_identifiers.items()
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
 
     # Convert data to bytes and save to zookeeper using helper function
     data_as_bytes = _validate_and_convert_to_bytes(filename, data)
@@ -178,7 +188,7 @@ def save_config(
 
 
 def update_config(
-    namespace: str, filename: str, data: dict, identifier_names: dict[IdentifierName, str]
+    namespace: str, filename: str, data: dict, scope_identifiers: dict[ScopeName, str]
 ):
     """
     Update config file in zookeeper based on namespace, scope, and identifier.
@@ -195,26 +205,30 @@ def update_config(
             The name of the configuration file, including extension.
         data: dict
             The configuration data to update.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
     --------
         tuple[dict, str]
             A tuple containing the updated configuration data and the path the config was saved to.
     """
-    if len(identifier_names) > 1:
+    if scope_identifiers and len(scope_identifiers) > 1:
         raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
+            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
+            "Only one is allowed."
         )
-
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
+    scope = None
+    identifier = None
+    if scope_identifiers:
+        (scope, identifier), = scope_identifiers.items()
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
 
     current_config, _ = get_config(
-        namespace=namespace, filename=filename, identifier_names=identifier_names, merge=False
+        namespace=namespace, filename=filename, scope_identifiers=scope_identifiers,
+        merge=False
     )
     _validate_and_convert_to_bytes(
         filename=f"{filename}", data=data
@@ -233,7 +247,7 @@ def update_config(
 
 
 def delete_config(
-    namespace: str, filename: str, identifier_names: dict[IdentifierName, str]
+    namespace: str, filename: str, scope_identifiers: dict[ScopeName, str] | None = None
 ) -> str:
     """
     Delete config file in zookeeper based on namespace, scope, and identifier.
@@ -248,24 +262,28 @@ def delete_config(
             The namespace for the configuration file.
         filename: str
             The name of the configuration file, including extension.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
     --------
         str
             The path of the deleted config file.
     """
-    if len(identifier_names) > 1:
+    if scope_identifiers and len(scope_identifiers) > 1:
         raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
+            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
+            "Only one is allowed."
         )
+    scope = None
+    identifier = None
+    if scope_identifiers:
+        (scope, identifier), = scope_identifiers.items()
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
 
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
-
+    # FIXME: can scope be defined but not identifier??
     if scope and identifier:
         path = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}/{filename}"
     else:
@@ -285,8 +303,8 @@ def delete_config(
 
 
 def get_all_files(
-    namespace: str, identifier_names: dict[IdentifierName, str] = {}, filename: str | None = None
-) -> list[str]:
+    namespace: str, scope_identifiers: dict[ScopeName, str] | None = None,
+filename: str | None = None) -> list[str]:
     """
     Get all config files in zookeeper based on namespace, scope, and identifier.
 
@@ -300,21 +318,26 @@ def get_all_files(
     -----------
         namespace: str
             The namespace for the configuration files.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
         filename: str | None
             The name of the configuration file to filter by, including extension. If None, all files
               are returned.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
     --------
         list[str]
             A list of full paths of the config files.
     """
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
+    if scope_identifiers is None:
+        scope_identifiers = {}
     paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
-    for scope, identifier in scopes.items():
+    for scope, identifier in scope_identifiers.items():
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
         paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
 
     all_files = []
@@ -452,7 +475,7 @@ def _save_config(
         scope: str | None, optional
             The scope of the configuration file.
         identifier: str | None, optional
-            The identifier for the configuration file.
+            The config file identifier for the given scope.
         override: bool, optional
             Whether to override the existing configuration file.
         create_if_missing: bool, optional
@@ -529,37 +552,3 @@ def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
         return data_as_dict
     except (json.JSONDecodeError, yaml.YAMLError):
         raise ConfigDecodeError(f"Failed to decode data for {filename}")
-
-
-def _get_scope_from_identifier_names(
-    identifier_names: dict[IdentifierName, str],
-) -> dict[ScopeName, str]:
-    """
-    Given a dictionary of identifier names, validates that they correspond to actual scopes and
-    returns a dictionary mapping scope names to identifier values.
-
-    The scope to identifier name mapping is determined by the settings file (ficus_setup.json)
-
-    Parameters:
-    -----------
-    identifier_names: dict[IdentifierName, str]
-        A dictionary of identifier names for different scopes, where keys are scope identifier
-        names and values are the corresponding identifier values.
-
-    Returns:
-    --------
-        dict[ScopeName, str]
-            A dictionary mapping scope names to identifier values.
-    """
-    id_name_to_scope_name_mapping = {scope.identifier_name: scope for scope in settings.scopes}
-    scopes = {}
-    for id_name in identifier_names:
-        # Validates id_name maps to a scope
-        if id_name not in id_name_to_scope_name_mapping:
-            raise InvalidScopeIdentifierError(
-                f"Invalid scope identifier name: {id_name}. "
-                f"Valid options are: {list(id_name_to_scope_name_mapping.keys())}"
-            )
-        scope = id_name_to_scope_name_mapping[id_name]
-        scopes[scope.name] = identifier_names[id_name]  # identifier value
-    return scopes

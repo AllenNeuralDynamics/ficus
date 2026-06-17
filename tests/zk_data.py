@@ -73,8 +73,8 @@ ZK_EXAMPLE = Node(
                         ),
                     },
                 ),
-                "computers": Node(
-                    name="computers",
+                "hostname": Node(
+                    name="hostname",
                     children={
                         "w11dt000001": Node(
                             name="w11dt000001",
@@ -143,8 +143,8 @@ ZK_EXAMPLE = Node(
                         ),
                     },
                 ),
-                "subjects": Node(
-                    name="subjects",
+                "subject_id": Node(
+                    name="subject_id",
                     children={
                         "614173": Node(
                             name="614173",

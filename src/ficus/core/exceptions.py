@@ -21,6 +21,9 @@ class UnsupportedFileTypeError(Exception):
 class PathIsDirectoryError(Exception):
     pass
 
+class InvalidScopeError(Exception):
+    pass
+
 class InvalidScopeIdentifierError(Exception):
     pass
 

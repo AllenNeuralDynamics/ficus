@@ -15,7 +15,7 @@ def test_get_node(zk_mock):
 
 
 def test_get_node_computers(zk_mock):
-    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_a/default.json")
+    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json")
     assert result == ({"computer-default-value": "to rule them all"}, [])
 
 
@@ -26,25 +26,25 @@ def test_invalid_get_node_path(zk_mock):
 
 def test_add_node(zk_mock, encode_data):
     with pytest.raises(NoNodeError):
-        get_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+        get_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
 
     add_node(
         zk_mock,
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml",
         encode_data({"test-add": "new data added"}),
     )
-    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
     assert result == ({"test-add": "new data added"}, [])
 
 
 def test_add_node_invalid(zk_mock):
     with pytest.raises(NoNodeError):
-        get_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+        get_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
 
     with pytest.raises(TypeError):
         add_node(
             zk_mock,
-            f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml",
+            f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml",
             {"test-add": "new data added"},  # not bytes
         )
 
@@ -52,22 +52,22 @@ def test_add_node_invalid(zk_mock):
 def test_delete_no_node(zk_mock):
     with pytest.raises(NoNodeError):
         delete_node(
-            zk_mock, f"/{ZK_ROOT_NODE}-bad/computers/w11dt000001/software_b_test/config.yml"
+            zk_mock, f"/{ZK_ROOT_NODE}-bad/hostname/w11dt000001/software_b_test/config.yml"
         )
 
 
 def test_delete_node(zk_mock, encode_data):
     with pytest.raises(NoNodeError):
-        delete_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+        delete_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
 
     add_node(
         zk_mock,
-        f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml",
+        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml",
         encode_data({"test-add": "new data added"}),
     )
-    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+    result = get_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
     assert result == ({"test-add": "new data added"}, [])
 
-    delete_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+    delete_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")
     with pytest.raises(NoNodeError):
-        delete_node(zk_mock, f"{ZK_ROOT_PATH}/computers/w11dt000001/software_b_test/config.yml")
+        delete_node(zk_mock, f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_b_test/config.yml")

@@ -9,7 +9,6 @@ from ficus.core.exceptions import (
 from ficus.services.configs import (
     _deep_update,
     _find_first_invalid_subpath,
-    _get_scope_from_identifier_names,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
 )
@@ -238,33 +237,3 @@ def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):
     """Test _find_first_invalid_subpath with invalid subpath (near beginning)"""
     path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
     assert _find_first_invalid_subpath(zk_mock, path) == "/scratchbad"
-
-
-################################################################################
-#
-#   test_get_scope_from_identifier_names()
-#
-################################################################################
-
-
-def test_get_scope_from_identifier_names_valid_hostname_return_scopes():
-    identifier_names = {"hostname": "w11dt000001"}
-    expected_scope = {"computers": "w11dt000001"}
-    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
-
-
-def test_get_scope_from_multi_identifier_names_valid_hostname_return_scopes():
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
-    expected_scope = {"computers": "w11dt000001", "subjects": "614173"}
-    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
-
-
-def test_get_scope_from_identifier_names_invalid_hostname_return_scopes():
-    identifier_names = {"unknown-scope": "w11dt000001"}
-    with pytest.raises(InvalidScopeIdentifierError):
-        _get_scope_from_identifier_names(identifier_names)
-
-
-def test_get_scope_from_identifier_names_empty_return_empty():
-    identifier_names = {}
-    assert _get_scope_from_identifier_names(identifier_names) == {}
