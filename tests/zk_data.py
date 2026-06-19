@@ -179,8 +179,10 @@ ZK_EXAMPLE = Node(
 )
 
 
+# Fake ZK KazooClient
 class FakeZK:
-    def __init__(self, root: Node = ZK_EXAMPLE):
+    def __init__(self, hosts: list[str], root: Node = ZK_EXAMPLE):
+        self.hosts = hosts  # Preserve KazooClient api.
         # Deep-copy so ZK_EXAMPLE isn't persisted between tests
         root = copy.deepcopy(ZK_EXAMPLE)
         self.root = root
@@ -213,6 +215,12 @@ class FakeZK:
         except KeyError:
             return False
         return True
+
+    def create(self, path: str, data: bytes, makepath: bool = False):
+        if not self.exists(path) and not makepath:
+            raise NoNodeError("Node does not exist!")
+        self.ensure_path(path=path)
+        self.set(path, data)
 
     def get(self, path):
         return self._get_zk_node(path)
@@ -247,7 +255,8 @@ class FakeZK:
         except KeyError:
             raise NoNodeError
 
-    def delete(self, path: str):
+    def delete(self, path: str, recursive: bool = False):
+        # FIXME: implement recursive delete.
         parts = path.strip("/").split("/")
         filename = parts[-1]
         node = self.root
@@ -261,3 +270,12 @@ class FakeZK:
             del node.children[filename]
         except KeyError:
             raise NoNodeError
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def close(self):
+        pass

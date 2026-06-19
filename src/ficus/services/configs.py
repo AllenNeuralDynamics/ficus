@@ -2,9 +2,6 @@ import json
 import re
 import yaml
 
-from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, NotEmptyError
-
 from ficus.core.exceptions import (
     ConfigExistsError,
     ConfigDecodeError,
@@ -12,28 +9,30 @@ from ficus.core.exceptions import (
     ConfigSerializeError,
     InvalidScopeError,
     MultipleScopeIdentifiersError,
+    NotEmptyError,
     PathIsDirectoryError,
+    PathNotFoundError,
     UnsupportedFileTypeError,
 )
 from ficus.core.config import settings
-from ficus.crud.zookeeper import get_node, add_node, delete_node
-from ficus.database.zookeeper import get_zk_client
+from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigData
+from pathlib import Path
 
 
 DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
-PATH_PREFIX = f"/{settings.zk_root_node}"
 
 
 ScopeName = str
 
 
 def get_config(
+    data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str] | None = None,
     filename: str | None = None,
     merge: bool = True,
-) -> tuple[ConfigData, list[str]]:
+) -> tuple[ConfigData, list[Path]]:
     """
     Get config file from store based on namespace and scopes.
 
@@ -63,65 +62,64 @@ def get_config(
 
     Returns:
     --------
-        tuple[ConfigData, list[str]]
+        tuple[ConfigData, list[Path]]
             A tuple containing the configuration data and a list of paths the config was made from.
     """
     if scope_identifiers is None:
         scope_identifiers = {}
     # Order of identifier_names determines order of scopes to merge
-    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
+    paths = [data_store.rootdir / Path(f"defaults/{namespace}")]
     for scope, identifier in scope_identifiers.items():
         if scope not in settings.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
                                     f"are: {settings.scopes}.")
-        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
+        paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
 
     valid_paths = []
     config: dict = {}
 
-    with get_zk_client() as client:
+    def get_data_and_append_path(
+        path: Path, is_default: bool = False, ignore_error: bool = False
+    ) -> dict:
+        try:
+            if is_default:
+                data, data_path = _get_default_config(data_store, path)
+                valid_paths.append(data_path)
+            else:
+                data = _get_config(data_store, path)
+                valid_paths.append(path)
+            return data
+        except ConfigNotFoundError as e:
+            if ignore_error:
+                return {}
+            else:
+                raise e
 
-        def get_data_and_append_path(
-            path: str, is_default: bool = False, ignore_error: bool = False
-        ) -> dict:
-            try:
-                if is_default:
-                    data, data_path = _get_default_config(client, path)
-                    valid_paths.append(data_path)
-                else:
-                    data = _get_config(client, path)
-                    valid_paths.append(path)
-                return data
-            except ConfigNotFoundError as e:
-                if ignore_error:
-                    return {}
-                else:
-                    raise e
-
-        if merge:
-            for path in paths:
-                if filename:
+    if merge:
+        for path in paths:
+            if filename:
+                config = _deep_update(
+                    config, get_data_and_append_path(path, is_default=True, ignore_error=True)
+                )
+                # Checks if file was already retrieved (if user asks for default)
+                if Path(f"{path}/{filename}") not in valid_paths:
                     config = _deep_update(
-                        config, get_data_and_append_path(path, is_default=True, ignore_error=True)
+                        config, get_data_and_append_path(Path(f"{path}/{filename}"))
                     )
-                    # Checks if file was already retrieved (if user asks for default)
-                    if f"{path}/{filename}" not in valid_paths:
-                        config = _deep_update(
-                            config, get_data_and_append_path(f"{path}/{filename}")
-                        )
-                else:
-                    config = _deep_update(config, get_data_and_append_path(path, is_default=True))
-        else:
-            config = (
-                get_data_and_append_path(f"{paths[-1]}/{filename}")
-                if filename
-                else get_data_and_append_path(paths[-1], is_default=True)
-            )
+            else:
+                config = _deep_update(config, get_data_and_append_path(path, is_default=True))
+    else:
+        config = (
+            get_data_and_append_path(paths[-1] / f"{filename}")
+            if filename
+            else get_data_and_append_path(paths[-1], is_default=True)
+        )
 
     return config, valid_paths
 
 
 def save_config(
+    data_store: DataStore,
     namespace: str,
     filename: str,
     data: dict,
@@ -177,6 +175,7 @@ def save_config(
     # Convert data to bytes and save to zookeeper using helper function
     data_as_bytes = _validate_and_convert_to_bytes(filename, data)
     return _save_config(
+        data_store=data_store,
         namespace=namespace,
         filename=filename,
         data=data_as_bytes,
@@ -188,7 +187,11 @@ def save_config(
 
 
 def update_config(
-    namespace: str, filename: str, data: dict, scope_identifiers: dict[ScopeName, str]
+    data_store: DataStore,
+    namespace: str,
+    filename: str,
+    data: dict,
+    scope_identifiers: dict[ScopeName, str]
 ):
     """
     Update config file in zookeeper based on namespace, scope, and identifier.
@@ -227,15 +230,15 @@ def update_config(
                                     f"are: {settings.scopes}.")
 
     current_config, _ = get_config(
-        namespace=namespace, filename=filename, scope_identifiers=scope_identifiers,
-        merge=False
+        data_store=data_store, namespace=namespace, filename=filename,
+        scope_identifiers=scope_identifiers, merge=False
     )
-    _validate_and_convert_to_bytes(
-        filename=f"{filename}", data=data
-    )  # Throw away value, only want to validate
+    # Throw away value, only want to validate
+    _validate_and_convert_to_bytes(filename=f"{filename}", data=data)
     raw_config = _deep_update(current_config, data)
     config = _validate_and_convert_to_bytes(filename, raw_config)
     return _save_config(
+        data_store=data_store,
         namespace=namespace,
         filename=filename,
         data=config,
@@ -247,7 +250,8 @@ def update_config(
 
 
 def delete_config(
-    namespace: str, filename: str, scope_identifiers: dict[ScopeName, str] | None = None
+    data_store: DataStore, namespace: str, filename: str,
+    scope_identifiers: dict[ScopeName, str] | None = None
 ) -> str:
     """
     Delete config file in zookeeper based on namespace, scope, and identifier.
@@ -283,28 +287,29 @@ def delete_config(
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
                                     f"are: {settings.scopes}.")
 
-    # FIXME: can scope be defined but not identifier??
     if scope and identifier:
-        path = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}/{filename}"
+        path = data_store.rootdir / f"{scope}/{identifier}/{namespace}/{filename}"
     else:
-        path = f"{PATH_PREFIX}/defaults/{namespace}/{filename}"
+        path = data_store.rootdir / f"defaults/{namespace}/{filename}"
 
-    with get_zk_client() as client:
-        try:
-            delete_node(client, path)
-            return path
-        except NotEmptyError:
-            raise PathIsDirectoryError(f"Path is a directory and cannot be deleted: {path}")
-        except NoNodeError:
-            invalid_subpath = _find_first_invalid_subpath(client, path)
-            if invalid_subpath:
-                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
-            raise ConfigNotFoundError(f"Config file not found at path: {path}")
+    try:
+        data_store.delete(path)
+        return str(path)
+    except NotEmptyError:
+        raise PathIsDirectoryError(f"Path is a directory and cannot be deleted: {path}")
+    except PathNotFoundError:
+        invalid_subpath = _find_first_invalid_subpath(data_store, path)
+        if invalid_subpath:
+            raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
+        raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
 def get_all_files(
-    namespace: str, scope_identifiers: dict[ScopeName, str] | None = None,
-filename: str | None = None) -> list[str]:
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    filename: str | None = None
+) -> list[str]:
     """
     Get all config files in zookeeper based on namespace, scope, and identifier.
 
@@ -333,6 +338,7 @@ filename: str | None = None) -> list[str]:
     """
     if scope_identifiers is None:
         scope_identifiers = {}
+    # FIXME: settings.zk_root_node should come from data_store object.
     paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
     for scope, identifier in scope_identifiers.items():
         if scope not in settings.scopes:
@@ -341,23 +347,21 @@ filename: str | None = None) -> list[str]:
         paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
 
     all_files = []
-    with get_zk_client() as client:
+    def collect_files(subpath: str):
+        if data_store.exists(subpath):
+            for file in data_store.list_files(subpath):
+                if filename is None or re.search(filename, file, re.IGNORECASE):
+                    all_files.append(f"{subpath}/{file}")
+        else:
+            invalid_subpath = _find_first_invalid_subpath(data_store, subpath)
+            if invalid_subpath:
+                raise ConfigNotFoundError(
+                    f"Subpath '{invalid_subpath}' not found in path: {subpath}"
+                )
+            raise ConfigNotFoundError(f"Path not found: {subpath}")
 
-        def collect_files(subpath: str):
-            if client.exists(subpath):
-                for file in get_node(client, subpath)[1]:
-                    if filename is None or re.search(filename, file, re.IGNORECASE):
-                        all_files.append(f"{subpath}/{file}")
-            else:
-                invalid_subpath = _find_first_invalid_subpath(client, subpath)
-                if invalid_subpath:
-                    raise ConfigNotFoundError(
-                        f"Subpath '{invalid_subpath}' not found in path: {subpath}"
-                    )
-                raise ConfigNotFoundError(f"Path not found: {subpath}")
-
-        for path in paths:
-            collect_files(path)
+    for path in paths:
+        collect_files(path)
 
     return all_files
 
@@ -399,7 +403,7 @@ def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
     return updated_mapping
 
 
-def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
+def _get_default_config(data_store: DataStore, path: Path) -> tuple[dict, Path]:
     """
     Helper function to get default config file from zookeeper and handle errors.
     Checks all default file options (default.yml, default.yaml, default.json) and returns the first
@@ -408,32 +412,38 @@ def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
     """
     for defaults in DEFAULT_FILES:
         try:
-            default_data = _get_config(client, f"{path}/{defaults}")
+            default_data = _get_config(data_store, path / f"{defaults}")
             if default_data is None:
                 default_data = {}
-            return default_data, f"{path}/{defaults}"
+            return default_data, path/ f"{defaults}"
         except ConfigNotFoundError:
             pass  # Ignore file not found, default could have different extension
-    raise ConfigNotFoundError(f"Default file not found at path: {path}/default.[yml/yaml/json]")
+    raise ConfigNotFoundError(f"default.[yml/yaml/json] not found at path: {path}")
 
 
-def _get_config(client: KazooClient, path: str) -> dict:
+def _get_config(data_store: DataStore, path: Path) -> dict:
     """
     Helper function to get config file from zookeeper and handle errors.
     Function will check each subpath incrementally and return the first subpath that failed if file
     is not found.
     """
     try:
-        data, _ = get_node(client, path)
+        data = _validate_and_convert_to_dict(path, data_store.read(path))
+        # Not a config!
+        if not isinstance(data, dict):
+            raise ConfigNotFoundError(f"File at {path} is not a valid config!")
         return data
-    except NoNodeError:
-        invalid_subpath = _find_first_invalid_subpath(client, path)
+    except PathNotFoundError:
+        invalid_subpath = _find_first_invalid_subpath(data_store, path)
         if invalid_subpath:
             raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def _find_first_invalid_subpath(client: KazooClient, path: str, is_file: bool = True) -> str | None:
+def _find_first_invalid_subpath(
+    data_store: DataStore,
+    path: Path | str, is_file: bool = True
+) -> str | None:
     """
     Given a path, finds the first "directory" or zk node that does not exists.
 
@@ -442,15 +452,16 @@ def _find_first_invalid_subpath(client: KazooClient, path: str, is_file: bool = 
         str | None
             subpath if one does not exists, or None if path is valid
     """
-    subpaths = path.split("/")
-    for i in range(1, len(subpaths) + (-1 if is_file else 0)):
-        subpath = "/".join(subpaths[: i + 1])
-        if not client.exists(subpath):
-            return subpath
+    path = Path(path)
+    for parent in reversed(path.parents):
+        if not parent.exists():
+            return str(path)
+    return None
     return None
 
 
 def _save_config(
+    data_store: DataStore,
     namespace: str,
     filename: str,
     data: bytes,
@@ -488,44 +499,43 @@ def _save_config(
     """
 
     if scope and identifier:
-        CONFIG_PATH = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}"
+        CONFIG_PATH = data_store.rootdir / f"{scope}/{identifier}/{namespace}"
     else:
-        CONFIG_PATH = f"{PATH_PREFIX}/defaults/{namespace}"
-    with get_zk_client() as client:
-        if not override:
-            # Not overriding, check default file doesn't already exist (if saving default)
-            if filename in DEFAULT_FILES:
-                for df in DEFAULT_FILES:
-                    if client.exists(f"{CONFIG_PATH}/{df}"):
-                        raise ConfigExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+        CONFIG_PATH = data_store.rootdir / f"defaults/{namespace}"
+    filepath = f"{CONFIG_PATH}/{filename}"
+    if not override:
+        # Not overriding, check default file doesn't already exist (if saving default)
+        if filename in DEFAULT_FILES:
+            for df in DEFAULT_FILES:
+                if data_store.path_exists(f"{CONFIG_PATH}/{df}"):
+                    raise ConfigExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+        # Not overriding, check normal file doesn't already exist
+        if data_store.path_exists(filepath):
+            raise ConfigExistsError(f"File already exists: {filepath}")
+    # Overriding, if create_if_missing is false, check file exists before overriding
+    if not data_store.path_exists(filepath) and not create_if_missing:
+        invalid_subpath = _find_first_invalid_subpath(data_store, filepath)
+        if invalid_subpath:
+            raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in "
+                                      f"path: {filepath}")
+        raise ConfigNotFoundError(f"Config file not found at path: {filepath}")
+    # Overriding and create if missing
+    if data_store.path_exists(filepath):
+        data_store.update(filepath, data)
+    else:
+        data_store.create(filepath, data)
+    return _validate_and_convert_to_dict(filename, data), filepath
 
-            # Not overriding, check normal file doesn't already exist
-            if client.exists(f"{CONFIG_PATH}/{filename}"):
-                raise ConfigExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
 
-        # Overriding, if create_if_missing is false, check file exists before overriding
-        if not client.exists(f"{CONFIG_PATH}/{filename}") and not create_if_missing:
-            path = f"{CONFIG_PATH}/{filename}"
-            invalid_subpath = _find_first_invalid_subpath(client, path)
-            if invalid_subpath:
-                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
-            raise ConfigNotFoundError(f"Config file not found at path: {path}")
-
-        # Overriding & creating if missing
-        add_node(client, f"{CONFIG_PATH}/{filename}", data)
-
-    return _validate_and_convert_to_dict(filename, data), f"{CONFIG_PATH}/{filename}"
-
-
-def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
+def _validate_and_convert_to_bytes(filename: Path, data: dict) -> bytes:
     """
     Validates filename based on extension and converts data into bytes.
     Only attempts to validate/convert json and yaml files.
     """
     try:
-        if filename.endswith((".json")):
+        if filename.suffix == ".json":
             data_as_bytes = json.dumps(data).encode("utf-8")
-        elif filename.endswith((".yml", ".yaml")):
+        elif filename.suffix in [".yml", ".yaml"]:
             data_as_bytes = yaml.safe_dump(data).encode("utf-8")
         else:
             raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
@@ -534,15 +544,15 @@ def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
         raise ConfigSerializeError(f"Failed to serialize data for {filename}")
 
 
-def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
+def _validate_and_convert_to_dict(filename: Path, data: bytes) -> dict:
     """
     Validates filename based on extension and converts data into dictionary.
     Only attempts to validate/convert json and yaml files.
     """
     try:
-        if filename.endswith((".json")):
+        if filename.suffix == ".json":
             data_as_dict = json.loads(data)  # Throw away - decoding for validation only
-        elif filename.endswith((".yml", ".yaml")):
+        elif filename.suffix in [".yml", ".yaml"]:
             data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
             if data_as_dict is None:
                 # yaml.safe_load returns None for empty files, convert to empty dict
