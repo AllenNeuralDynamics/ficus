@@ -3,7 +3,6 @@ import pytest
 from ficus.core.exceptions import (
     ConfigSerializeError,
     ConfigDecodeError,
-    InvalidScopeIdentifierError,
     UnsupportedFileTypeError,
 )
 from ficus.services.configs import (
@@ -12,7 +11,7 @@ from ficus.services.configs import (
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
 )
-from tests.constants import ZK_ROOT_PATH
+from pathlib import Path, PurePath
 
 
 ################################################################################
@@ -126,7 +125,7 @@ def test_validate_and_convert_to_bytes_valid_json():
     """Test _validate_and_convert_to_bytes with valid JSON input"""
     filename = "config.json"
     data = {"key": "value"}
-    result = _validate_and_convert_to_bytes(filename, data)
+    result = _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
     assert isinstance(result, bytes)
     print(result)
     assert result == b'{"key": "value"}'
@@ -136,7 +135,7 @@ def test_validate_and_convert_to_bytes_valid_json():
 def test_validate_and_convert_to_bytes_valid_yml(filename):
     """Test _validate_and_convert_to_bytes with valid YAML input"""
     data = {"key": "value"}
-    result = _validate_and_convert_to_bytes(filename, data)
+    result = _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
     assert isinstance(result, bytes)
     print(result)
     assert result == b"key: value\n"
@@ -147,7 +146,7 @@ def test_validate_and_convert_to_bytes_invalid_filetype():
     filename = "config.txt"
     data = {"key": "value"}
     with pytest.raises(UnsupportedFileTypeError):
-        _validate_and_convert_to_bytes(filename, data)
+        _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_bytes_invalid_data():
@@ -155,14 +154,14 @@ def test_validate_and_convert_to_bytes_invalid_data():
     filename = "config.yml"
     data = {"key": object()}
     with pytest.raises(ConfigSerializeError):
-        _validate_and_convert_to_bytes(filename, data)
+        _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_valid_json():
     """Test _validate_and_convert_to_dict with valid JSON input"""
     filename = "config.json"
     data = b'{"key": "value"}'
-    result = _validate_and_convert_to_dict(filename, data)
+    result = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert isinstance(result, dict)
     assert result == {"key": "value"}
 
@@ -171,7 +170,7 @@ def test_validate_and_convert_to_dict_valid_json():
 def test_validate_and_convert_to_dict_valid_yml(filename):
     """Test _validate_and_convert_to_dict with valid YAML input"""
     data = b"key: value"
-    result = _validate_and_convert_to_dict(filename, data)
+    result = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert isinstance(result, dict)
     assert result == {"key": "value"}
 
@@ -181,7 +180,7 @@ def test_validate_and_convert_to_dict_invalid_filetype():
     filename = "config.txt"
     data = b"asdlfkj"
     with pytest.raises(UnsupportedFileTypeError):
-        _validate_and_convert_to_dict(filename, data)
+        _validate_and_convert_to_dict(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_invalid_data():
@@ -189,14 +188,14 @@ def test_validate_and_convert_to_dict_invalid_data():
     filename = "config.yml"
     data = b"\x01"
     with pytest.raises(ConfigDecodeError):
-        _validate_and_convert_to_dict(filename, data)
+        _validate_and_convert_to_dict(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_empty_json():
     """Test _validate_and_convert_to_dict with empty json"""
     filename = "config.json"
     data = b"{}"
-    data = _validate_and_convert_to_dict(filename, data)
+    data = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert data == {}
 
 
@@ -204,7 +203,7 @@ def test_validate_and_convert_to_dict_empty_yaml():
     """Test _validate_and_convert_to_dict with empty json"""
     filename = "config.yml"
     data = b""
-    data = _validate_and_convert_to_dict(filename, data)
+    data = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert data == {}
 
 
@@ -215,25 +214,33 @@ def test_validate_and_convert_to_dict_empty_yaml():
 ################################################################################
 
 
-def test_find_first_invalid_subpath_valid(zk_mock):
+def test_find_first_invalid_subpath_valid(data_store):
     """Test _find_first_invalid_subpath with valid path"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a/config.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) is None
+    path = data_store.rootdir / Path("defaults/software_a/config.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) is None
 
 
-def test_find_first_invalid_subpath_invalid_file(zk_mock):
+def test_find_first_invalid_subpath_invalid_file(data_store):
     """Test _find_first_invalid_subpath with invalid file, ignores file check"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path, is_file=True) is None
+    path = data_store.rootdir / Path("defaults/software_a/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) is None
 
 
-def test_find_first_invalid_subpath_invalid_subpath(zk_mock):
+def test_find_first_invalid_subpath_invalid_subpath(data_store):
     """Test _find_first_invalid_subpath with invalid subpath (near end)"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a_BAD/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) == f"{ZK_ROOT_PATH}/defaults/software_a_BAD"
+    path = data_store.rootdir / Path("defaults/software_a_BAD/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == \
+        data_store.rootdir / Path("defaults/software_a_BAD")
 
 
-def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):
+def test_find_first_invalid_subpath_invalid_subpath_early(data_store):
     """Test _find_first_invalid_subpath with invalid subpath (near beginning)"""
-    path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) == "/scratchbad"
+    path = data_store.rootdir / Path("scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == \
+        data_store.rootdir / Path("scratchbad")
+
+
+def test_find_first_invalid_subpath_invalid_root(data_store):
+    """Test _find_first_invalid_subpath with wrong root"""
+    path = Path("/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml") # different root
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == Path("/")

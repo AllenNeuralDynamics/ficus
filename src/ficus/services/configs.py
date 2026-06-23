@@ -19,7 +19,7 @@ from ficus.core.exceptions import (
 from ficus.core.config import settings
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigData
-from pathlib import Path
+from pathlib import Path, PurePath
 
 
 DEFAULT_FILES = {"default.yml", "default.yaml", "default.json"}
@@ -51,8 +51,7 @@ def _get_all_search_paths(
         paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
         if not data_store.exists(paths[-1]):
             first_invalid_subpath = _find_first_invalid_subpath(data_store=data_store,
-                                                                path=paths[-1],
-                                                                is_file=False)
+                                                                path=paths[-1])
             error_map = \
             {
                 f"{scope}": InvalidScopeError,
@@ -180,7 +179,7 @@ def save_config(
                                     f"are: {settings.scopes}.")
 
     # Convert data to bytes and save to zookeeper using helper function
-    data_as_bytes = _validate_and_convert_to_bytes(filename, data)
+    data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
     return _save_config(
         data_store=data_store,
         namespace=namespace,
@@ -223,6 +222,7 @@ def update_config(
         tuple[dict, str]
             A tuple containing the updated configuration data and the path the config was saved to.
     """
+    filepath = PurePath(filename) # convert for suffix
     if scope_identifiers and len(scope_identifiers) > 1:
         raise MultipleScopeIdentifiersError(
             f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
@@ -241,13 +241,13 @@ def update_config(
         scope_identifiers=scope_identifiers, merge=False
     )
     # Throw away value, only want to validate
-    _validate_and_convert_to_bytes(filename=f"{filename}", data=data)
+    _validate_and_convert_to_bytes(filepath.suffix, data=data)
     raw_config = _deep_update(current_config, data)
-    config = _validate_and_convert_to_bytes(filename, raw_config)
+    config = _validate_and_convert_to_bytes(filepath.suffix, raw_config)
     return _save_config(
         data_store=data_store,
         namespace=namespace,
-        filename=filename,
+        filename=str(filename),
         data=config,
         scope=scope,
         identifier=identifier,
@@ -462,7 +462,6 @@ def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
 def _find_first_invalid_subpath(
     data_store: DataStore,
     path: Path | str,
-    is_file: bool = True
 ) -> Path | None:
     """
     Given a path, finds the first "directory" or zk node that does not exists.
@@ -473,9 +472,14 @@ def _find_first_invalid_subpath(
             subpath if one does not exists, or None if path is valid
     """
     path = Path(path)
-    for parent in reversed(path.relative_to(data_store.rootdir).parents):
-        if not data_store.exists(parent):
-            return parent
+    try:
+        # might raise ValueError if path is not relative to data_store.rootdir
+        subpath_from_root = path.relative_to(data_store.rootdir)
+        for parent in reversed(subpath_from_root.parents):
+            if not data_store.exists(parent):
+                return data_store.rootdir / parent  # reattach root
+    except ValueError:
+        return path.parents[-1]
     return None
 
 
@@ -488,8 +492,8 @@ def _save_config(
     identifier: str | None = None,
     override: bool = False,
     create_if_missing: bool = True,
-) -> tuple[dict, str]:
-    """Helper function to save config file to zookeeper.
+) -> tuple[dict, Path]:
+    """Helper function to save config file to data_store.
 
     Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
     new default file, unless overriding.
@@ -518,32 +522,33 @@ def _save_config(
     """
 
     if scope and identifier:
-        CONFIG_PATH = data_store.rootdir / f"{scope}/{identifier}/{namespace}"
+        CONFIG_PATH = data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}")
     else:
-        CONFIG_PATH = data_store.rootdir / f"defaults/{namespace}"
-    filepath = f"{CONFIG_PATH}/{filename}"
+        CONFIG_PATH = data_store.rootdir / Path(f"defaults/{namespace}")
+    filepath = CONFIG_PATH / f"{filename}"
     if not override:
         # Not overriding, check default file doesn't already exist (if saving default)
         if filename in DEFAULT_FILES:
             for df in DEFAULT_FILES:
-                if data_store.path_exists(f"{CONFIG_PATH}/{df}"):
-                    raise ConfigExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
+                df_path = CONFIG_PATH / df
+                if data_store.exists(df_path):
+                    raise ConfigExistsError(f"Default File already exists: {df_path}")
         # Not overriding, check normal file doesn't already exist
-        if data_store.path_exists(filepath):
+        if data_store.exists(filepath):
             raise ConfigExistsError(f"File already exists: {filepath}")
     # Overriding, if create_if_missing is false, check file exists before overriding
-    if not data_store.path_exists(filepath) and not create_if_missing:
+    if not data_store.exists(filepath) and not create_if_missing:
         invalid_subpath = _find_first_invalid_subpath(data_store, filepath)
         if invalid_subpath:
             raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in "
                                       f"path: {filepath}")
         raise ConfigNotFoundError(f"Config file not found at path: {filepath}")
     # Overriding and create if missing
-    if data_store.path_exists(filepath):
+    if data_store.exists(filepath):
         data_store.update(filepath, data)
     else:
         data_store.create(filepath, data)
-    return _validate_and_convert_to_dict(filename, data), filepath
+    return _validate_and_convert_to_dict(filepath.suffix, data), filepath
 
 
 def _validate_and_convert_to_bytes(suffix: str, data: dict) -> bytes:

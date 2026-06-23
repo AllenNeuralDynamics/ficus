@@ -11,10 +11,7 @@ from ficus.services.configs import (
     get_all_override_stacks,
     get_file_override_stack,
     get_config,
-    _get_config,
-    _get_default_config,
 )
-from tests.constants import ZK_ROOT_NODE, ZK_ROOT_PATH
 from pathlib import Path
 
 

@@ -63,9 +63,7 @@ class FileSysStore(DataStore):
         path = self._sanitize(path)
         if path.exists():
             raise FileExistsError(f"File already exists at: {path}")
-        if not path.is_file():
-            raise ValueError(f"Cannot write data to non-file path: {path}")
-        path.parent.mkdir(parents=True, exist_ok=False)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
 
     def read(self, path: Path | str) -> bytes:

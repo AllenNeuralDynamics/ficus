@@ -1,4 +1,3 @@
-from _pytest import scope
 import pytest
 from pathlib import Path
 
@@ -9,7 +8,6 @@ from ficus.core.exceptions import (
     MultipleScopeIdentifiersError,
 )
 from ficus.services.configs import delete_config
-from tests.constants import ZK_ROOT_PATH
 
 
 ################################################################################
