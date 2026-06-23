@@ -1,5 +1,4 @@
 import json
-import re
 import yaml
 
 from ficus.core.exceptions import (
@@ -44,7 +43,6 @@ def _get_all_search_paths(
     if not data_store.exists(paths[-1]):
         raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     for scope, identifier in scope_identifiers.items():
-        # FIXME: global settings
         if scope not in settings.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
                                     f"are: {settings.scopes}.")
@@ -63,7 +61,8 @@ def _get_all_search_paths(
     return paths
 
 
-def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None
+def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None,
+    validate_scope: bool = True,
 )-> tuple[ScopeName | None, str | None]:
     scope, identifier = None, None
     if scope_identifiers and len(scope_identifiers) > 1:
@@ -73,7 +72,7 @@ def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None
         )
     if scope_identifiers:
         (scope, identifier), = scope_identifiers.items()
-        if scope not in settings.scopes:
+        if validate_scope and scope not in settings.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
                                     f"are: {settings.scopes}.")
     return scope, identifier
@@ -148,16 +147,17 @@ def save_config(
     scope_identifiers: dict[ScopeName, str],
     override: bool = False,
     create_if_missing: bool = True,
-) -> tuple[dict, str]:
+) -> tuple[dict, Path]:
     """
-    Save config file to zookeeper based on namespace, scopes, and identifier.
+    Save config file to data store based on namespace, scope, and identifier.
+    Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
+    new default file, unless overriding.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
     scope.
 
-    Data will also be expected to be a valid yaml or json based on filename extension, and will be
-    validated and converted to bytes before saving to zookeeper.
+    Data will be saved to a valid yaml or json based on filename extension.
 
     Parameters:
     -----------
@@ -180,20 +180,42 @@ def save_config(
         tuple[dict, str]
             A tuple containing the configuration data and the path the config was saved to.
     """
-    scope, identifier = _ensure_single_scope(scope_identifiers)
-
-    # Convert data to bytes and save to zookeeper using helper function
+    # Check if scope exists only if we are overriding.
+    scope, identifier = _ensure_single_scope(scope_identifiers, validate_scope=(not override))
     data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
-    return _save_config(
-        data_store=data_store,
-        namespace=namespace,
-        filename=filename,
-        data=data_as_bytes,
-        scope=scope,
-        identifier=identifier,
-        override=override,
-        create_if_missing=create_if_missing,
-    )
+
+    if scope and identifier:
+        CONFIG_PATH = data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}")
+    else:
+        CONFIG_PATH = data_store.rootdir / Path(f"defaults/{namespace}")
+    filepath = CONFIG_PATH / f"{filename}"
+    if not override:
+        # Not overriding, check default file doesn't already exist (if saving default)
+        if filename in DEFAULT_FILES:
+            for df in DEFAULT_FILES:
+                df_path = CONFIG_PATH / df
+                if data_store.exists(df_path):
+                    raise ConfigExistsError(f"Default File already exists: {df_path}")
+        # Not overriding, check normal file doesn't already exist
+        if data_store.exists(filepath):
+            raise ConfigExistsError(f"File already exists: {filepath}")
+    # Overriding, if create_if_missing is false, check file exists before overriding
+    if not data_store.exists(filepath) and not create_if_missing:
+        first_invalid_subpath = _find_first_invalid_subpath(data_store, filepath) or Path()
+        error_map = \
+        {
+            f"{scope}": InvalidScopeError,
+            f"{identifier}": InvalidScopeIdentifierError,
+            f"{namespace}": InvalidNamespaceError
+        }
+        error_msg = f"Path does not exist: {first_invalid_subpath}"
+        raise error_map.get(first_invalid_subpath.name, ConfigNotFoundError)(error_msg)
+    # Overriding and create if missing
+    if data_store.exists(filepath):
+        data_store.update(filepath, data_as_bytes)
+    else:
+        data_store.create(filepath, data_as_bytes)
+    return _validate_and_convert_to_dict(filepath.suffix, data_as_bytes), filepath
 
 
 def update_config(
@@ -235,17 +257,14 @@ def update_config(
     # Throw away value, only want to validate
     _validate_and_convert_to_bytes(filepath.suffix, data=data)
     raw_config = _deep_update(current_config, data)
-    config = _validate_and_convert_to_bytes(filepath.suffix, raw_config)
-    return _save_config(
-        data_store=data_store,
-        namespace=namespace,
-        filename=str(filename),
-        data=config,
-        scope=scope,
-        identifier=identifier,
-        override=True,
-        create_if_missing=False,
-    )
+    return save_config(data_store=data_store,
+                       namespace=namespace,
+                       filename=filename,
+                       data=raw_config,
+                       scope_identifiers=scope_identifiers,
+                       override=True,
+                       create_if_missing=False
+                       )
 
 
 def delete_config(
@@ -346,15 +365,6 @@ def get_file_override_stack(
             # Append default if it exists.
             if filename_ in valid_files:
                 override_stack.append(folder_path / filename_)
-    # FIXME: what do we want to happen here?
-    #if must_exist_in_any_scope:
-    #    found_filenames = [f.name for f in override_stack]
-    #    if filename not in found_filenames:
-    #        raise FileNotFoundError()
-    #if must_exist_in_lowest_scope:
-    #    if override_stack[-1].name != filename:
-    #        raise FileNotFoundError()
-
     if must_exist_in_any_scope:
         found_filenames = [f.stem for f in override_stack]
         if Path(filename).stem not in found_filenames:
@@ -461,74 +471,6 @@ def _find_first_invalid_subpath(
     except ValueError:
         return path.parents[-1]
     return None
-
-
-def _save_config(
-    data_store: DataStore,
-    namespace: str,
-    filename: str,
-    data: bytes,
-    scope: str | None = None,
-    identifier: str | None = None,
-    override: bool = False,
-    create_if_missing: bool = True,
-) -> tuple[dict, Path]:
-    """Helper function to save config file to data_store.
-
-    Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
-    new default file, unless overriding.
-
-    Parameters:
-    -----------
-        namespace: str
-            The namespace for the configuration file.
-        filename: str
-            The name of the configuration file.
-        data: bytes
-            The data to be saved in the configuration file.
-        scope: str | None, optional
-            The scope of the configuration file.
-        identifier: str | None, optional
-            The config file identifier for the given scope.
-        override: bool, optional
-            Whether to override the existing configuration file.
-        create_if_missing: bool, optional
-            Whether to create the configuration file if it does not exist.
-
-    Returns:
-    --------
-        tuple[dict, str]
-            A tuple containing the configuration data and the path the config was saved to.
-    """
-
-    if scope and identifier:
-        CONFIG_PATH = data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}")
-    else:
-        CONFIG_PATH = data_store.rootdir / Path(f"defaults/{namespace}")
-    filepath = CONFIG_PATH / f"{filename}"
-    if not override:
-        # Not overriding, check default file doesn't already exist (if saving default)
-        if filename in DEFAULT_FILES:
-            for df in DEFAULT_FILES:
-                df_path = CONFIG_PATH / df
-                if data_store.exists(df_path):
-                    raise ConfigExistsError(f"Default File already exists: {df_path}")
-        # Not overriding, check normal file doesn't already exist
-        if data_store.exists(filepath):
-            raise ConfigExistsError(f"File already exists: {filepath}")
-    # Overriding, if create_if_missing is false, check file exists before overriding
-    if not data_store.exists(filepath) and not create_if_missing:
-        invalid_subpath = _find_first_invalid_subpath(data_store, filepath)
-        if invalid_subpath:
-            raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in "
-                                      f"path: {filepath}")
-        raise ConfigNotFoundError(f"Config file not found at path: {filepath}")
-    # Overriding and create if missing
-    if data_store.exists(filepath):
-        data_store.update(filepath, data)
-    else:
-        data_store.create(filepath, data)
-    return _validate_and_convert_to_dict(filepath.suffix, data), filepath
 
 
 def _validate_and_convert_to_bytes(suffix: str, data: dict) -> bytes:

@@ -1,16 +1,16 @@
-import json
 import pytest
 
 from ficus.core.exceptions import (
-    ConfigDecodeError,
     ConfigExistsError,
     ConfigNotFoundError,
     ConfigSerializeError,
+    InvalidNamespaceError,
     InvalidScopeError,
+    InvalidScopeIdentifierError,
     MultipleScopeIdentifiersError,
     UnsupportedFileTypeError,
 )
-from ficus.services.configs import save_config, _save_config
+from ficus.services.configs import save_config
 from pathlib import Path
 
 
@@ -109,88 +109,60 @@ def test_save_config_invalid_file_type_return_error(data_store):
             data={},
         )
 
-
-################################################################################
-#
-#   _save_config()
-#
-################################################################################
-
-
-@pytest.mark.parametrize(
-    "namespace, scope, identifier, filename, override, create_if_missing",
-    [
-        pytest.param(
-            "new_namespace", None, None, "config.yml", False, True, id="save-new-namespace"
-        ),
-        pytest.param(
-            "new_namespace", None, None, "default.yml", False, True, id="save-new-default-file"
-        ),
-        pytest.param(
-            "software_a", None, None, "config_new_file.yml", False, True, id="save-new-file"
-        ),
-        pytest.param(
-            "software", "hostname", "w11new", "config.yml", False, True, id="save-new-scope"
-        ),
-        pytest.param(
-            "software_a", None, None, "config.yml", True, True, id="override-create-if-missing"
-        ),
-        pytest.param(
-            "software_a", None, None, "config.yml", True, False, id="override-no-create-if-missing"
-        ),
-    ],
-)
-def test__save_config_valid_return_data_and_path(
-    data_store, namespace, scope, identifier, filename, override, create_if_missing
+def test_save_config_override_existing_file_missing_return_config_not_found_error(
+    data_store
 ):
-    if scope and identifier:
-        path = data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}/{filename}")
-    else:
-        path = data_store.rootdir / Path(f"defaults/{namespace}/{filename}")
-
-    data = {"testing": "ni-haody"}
-
-    result_data, result_path = _save_config(
-        data_store=data_store,
-        namespace=namespace,
-        scope=scope,
-        identifier=identifier,
-        filename=filename,
-        data=json.dumps(data).encode("utf-8"),
-        override=override,
-        create_if_missing=create_if_missing,
-    )
-    assert result_data == data
-    assert result_path == path
-
-
-@pytest.mark.parametrize(
-    "namespace, scope, identifier, filename",
-    [
-        pytest.param("new_namespace", None, None, "config.yml", id="namespace-missing"),
-        pytest.param("software_a", "computer", "w10bad", "config.yml", id="scope-missing"),
-        pytest.param("software_a", None, None, "config-bad.yml", id="filename-missing"),
-    ],
-)
-def test__save_config_override_existing_file_return_config_not_found(
-    data_store, namespace, scope, identifier, filename
-):
-    """
-    ConfigNotFoundErrors only occur if user wants to override, and they don't want to create a file
-    if it is missing.
-
-    If the user gives a path to a file that they think exists, but it actually doesn't exist, then
-    we want to error out since the user explicitly said to override.
-    """
+    namespace = "software_a"
+    scope_identifiers = {}
+    filename = "config-bad.yml"
     override = True
     create_if_missing = False
 
     with pytest.raises(ConfigNotFoundError):
-        _save_config(
+        save_config(
             data_store=data_store,
             namespace=namespace,
-            scope=scope,
-            identifier=identifier,
+            scope_identifiers=scope_identifiers,
+            filename=filename,
+            data={},
+            override=override,
+            create_if_missing=create_if_missing,
+        )
+
+def test_save_config_override_existing_wrong_namespace_return_invalid_namespace(
+    data_store
+):
+    namespace = "new namespace"
+    scope_identifiers = {}
+    filename = "config.yml"
+    override = True
+    create_if_missing = False
+
+    with pytest.raises(InvalidNamespaceError):
+        save_config(
+            data_store=data_store,
+            namespace=namespace,
+            scope_identifiers=scope_identifiers,
+            filename=filename,
+            data={},
+            override=override,
+            create_if_missing=create_if_missing,
+        )
+
+def test_save_config_override_existing_wrong_scope_id_return_invalid_scope_id(
+    data_store
+):
+    namespace = "new namespace"
+    scope_identifiers = {"hostname": "w10bad"}
+    filename = "config.yml"
+    override = True
+    create_if_missing = False
+
+    with pytest.raises(InvalidScopeIdentifierError):
+        save_config(
+            data_store=data_store,
+            namespace=namespace,
+            scope_identifiers=scope_identifiers,
             filename=filename,
             data={},
             override=override,
@@ -205,7 +177,7 @@ def test__save_config_override_existing_file_return_config_not_found(
         pytest.param("default.yml", id="namespace-missing"),
     ],
 )
-def test__save_config_file_exists_return_exist_error(data_store, filename):
+def test_save_config_file_exists_return_exist_error(data_store, filename):
     """
     Config exist errors only occur when config already exists and override is false.
 
@@ -215,19 +187,10 @@ def test__save_config_file_exists_return_exist_error(data_store, filename):
     namespace = "software_a"
 
     with pytest.raises(ConfigExistsError):
-        _save_config(
+        save_config(
             data_store=data_store,
             namespace=namespace,
             filename=filename,
+            scope_identifiers={},
             data={},
-        )
-
-
-def test__save_config_invalid_data_return_error(data_store):
-    with pytest.raises(ConfigDecodeError):
-        _save_config(
-            data_store=data_store,
-            namespace="software_a",
-            filename="config_new.json",
-            data=b'{"ruh: "roh-}',
         )
