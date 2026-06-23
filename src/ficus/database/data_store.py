@@ -42,6 +42,7 @@ class DataStore(ABC):
     # utility
     @abstractmethod
     def exists(self, path: Path | str) -> bool:
+        """True if the path specified (folder or file) exists."""
         pass
 
     @abstractmethod

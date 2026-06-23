@@ -56,7 +56,8 @@ def filesys_store(tmp_path):
             else:
                 current_path.parent.mkdir(parents=True, exist_ok=True)
                 current_path.touch(exist_ok=True)
-                current_path.write_bytes(_validate_and_convert_to_bytes(current_path, content))
+                current_path.write_bytes(_validate_and_convert_to_bytes(current_path.suffix,
+                                                                        content))
 
     file_structure = {
         "defaults": {

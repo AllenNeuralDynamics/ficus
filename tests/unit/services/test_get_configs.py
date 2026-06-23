@@ -6,7 +6,9 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
 )
 from ficus.services.configs import (
-    get_all_files,
+    list_all_filenames,
+    get_all_override_stacks,
+    get_file_override_stack,
     get_config,
     _get_config,
     _get_default_config,
@@ -199,6 +201,8 @@ def test_get_config_invalid_identifiers_return_invalid_scope_error(data_store):
                    scope_identifiers={"fake_id": "FAKE"})
 
 
+# FIXME: should these be returning more specific kinds of errors?
+# InvalidScopeIdentifierError, InvalidScopeError, etc?
 @pytest.mark.parametrize(
     "params",
     [
@@ -240,71 +244,131 @@ def test_get_config_filename_default_return_defaults(data_store):
 
 #################################################################################
 ##
-##   get_all_files()
+##   get_get_file_override_stack()
 ##
 #################################################################################
 #
 #
-def test_get_all_files_return_files(data_store):
-    result = get_all_files(data_store=data_store, namespace="software_a")
+def test_get_override_stack_with_default_filename_return_stack(data_store):
+    namespace="software_a"
+    scope_identifiers = {}
+    filename = "default.yml"
 
-    assert len(result) == 2
+    result = get_file_override_stack(
+        data_store=data_store, namespace=namespace,
+        scope_identifiers=scope_identifiers, filename=filename
+    )
+
     assert result == [
-        data_store.rootdir / "defaults/software_a/default.yml",
-        data_store.rootdir / "defaults/software_a/config.yml",
+        data_store.rootdir / Path("defaults/software_a/default.yml"),
+    ]
+
+def test_get_override_stack_with_namespace_and_filename_return_stack(data_store):
+    namespace="software_a"
+    scope_identifiers = {}
+    filename = "config.yml"
+
+    result = get_file_override_stack(
+        data_store=data_store, namespace=namespace,
+        scope_identifiers=scope_identifiers, filename=filename
+    )
+
+    assert result == [
+        data_store.rootdir / Path("defaults/software_a/default.yml"),
+        data_store.rootdir / Path("defaults/software_a/config.yml")
+    ]
+
+def test_get_override_stack_with_multi_scopes_and_filename_return_stack(data_store):
+    namespace="software_a"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    filename = "config.yml"
+
+    result = get_file_override_stack(
+        data_store=data_store, namespace=namespace,
+        scope_identifiers=scope_identifiers, filename=filename
+    )
+
+    assert result == [
+        data_store.rootdir / Path("defaults/software_a/default.yml"),
+        data_store.rootdir / Path("defaults/software_a/config.yml"),
+        data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+        data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
+        data_store.rootdir / Path("subject_id/614173/software_a/default.json"),
+        data_store.rootdir / Path("subject_id/614173/software_a/config.yml")
     ]
 
 
-#def test_get_all_files_with_identifier_names_return_default_files(zk_mock):
-#    scope_identifiers = {"hostname": "w11dt000001"}
-#    filename = None
-#
-#    result = get_all_files(
-#        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
-#    )
-#
-#    assert len(result) == 4
-#    assert result == [
-#        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
-#        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-#        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
-#        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
-#    ]
+#################################################################################
+##
+##   get_all_override_stacks()
+##
+#################################################################################
 #
 #
-#def test_get_all_files_with_multi_identifier_names_return_default_files(zk_mock):
-#    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-#    filename = None
-#
-#    result = get_all_files(
-#        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
-#    )
-#
-#    assert len(result) == 6
-#    assert result == [
-#        f"{ZK_ROOT_PATH}/defaults/software_a/default.yml",
-#        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-#        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/default.json",
-#        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
-#        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/default.json",
-#        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
-#    ]
-#
-#
-#def test_get_all_files_with_filename_return_files(zk_mock):
-#    scope_identifiers = {}
-#    filename = "config.yml"
-#
-#    result = get_all_files(
-#        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
-#    )
-#
-#    assert len(result) == 1
-#    assert result == [
-#        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-#    ]
-#
-#
+def test_get_all_override_stacks_default_scope_return_override_stacks(data_store):
+    result = get_all_override_stacks(data_store=data_store, namespace="software_a")
+
+    assert len(result) == 2
+    assert result == [
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+            data_store.rootdir / Path("defaults/software_a/config.yml"),
+        ],
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+        ]
+    ]
+
+
+def test_get_all_override_stacks_with_hostname_return_override_stacks(data_store):
+    scope_identifiers = {"hostname": "w11dt000001"}
+
+    result = get_all_override_stacks(
+        data_store=data_store, namespace="software_a",
+        scope_identifiers=scope_identifiers)
+
+    assert len(result) == 2
+    assert result == [
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+            data_store.rootdir / Path("defaults/software_a/config.yml"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
+        ],
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+        ]
+    ]
+
+
+def test_get_all_override_stacks_with_multi_identifier_names_return_override_stacks(data_store):
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+
+    result = get_all_override_stacks(
+        data_store=data_store,
+        namespace="software_a",
+        scope_identifiers=scope_identifiers)
+
+    assert len(result) == 2
+    assert result == [
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+            data_store.rootdir / Path("defaults/software_a/config.yml"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
+            data_store.rootdir / Path("subject_id/614173/software_a/default.json"),
+            data_store.rootdir / Path("subject_id/614173/software_a/config.yml")
+        ],
+        [
+            data_store.rootdir / Path("defaults/software_a/default.yml"),
+            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+            data_store.rootdir / Path("subject_id/614173/software_a/default.json")
+        ],
+    ]
+
+
+
 #def test_get_all_files_with_identifier_names_and_filename_return_files(zk_mock):
 #    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
 #    filename = "config.yml"

@@ -93,7 +93,10 @@ class ZKStore(DataStore):
 
     def list_files(self, path: Path | str) -> list[str]:
         with self._get_zk_client() as zk:
-            return zk.get_children(str(path))
+            children: list = zk.get_children(str(path))
+            if len(children) == 0:
+                raise ValueError(f"Cannot list files on a file: {path}")
+            return children
 
 
 def setup_scopes():

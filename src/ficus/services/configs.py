@@ -8,6 +8,7 @@ from ficus.core.exceptions import (
     ConfigNotFoundError,
     ConfigSerializeError,
     InvalidScopeError,
+    InvalidScopeIdentifierError,
     MultipleScopeIdentifiersError,
     NotEmptyError,
     PathIsDirectoryError,
@@ -20,10 +21,32 @@ from ficus.schemas.configs import ConfigData
 from pathlib import Path
 
 
-DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
+DEFAULT_FILES = {"default.yml", "default.yaml", "default.json"}
 
 
 ScopeName = str
+
+def _get_all_search_paths(
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str] | None = None) -> list[Path]:
+    """Get all folder paths for the specified namespace and scope idenfitiers.
+
+    Return path order is in merge priority order (highest to lowest) starting
+    with defaults and followed by scopes in scope priority order.
+
+    Scope priority is specified by the order the input `scope_identifiers` dict.
+    """
+    if scope_identifiers is None:
+        scope_identifiers = {}
+    paths = [data_store.rootdir / Path(f"defaults/{namespace}")]
+    for scope, identifier in scope_identifiers.items():
+        # FIXME: global settings
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
+        paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
+    return paths
 
 
 def get_config(
@@ -40,7 +63,7 @@ def get_config(
     files are default.yml, default.yaml, and default.json.
 
     If merge is true, function will merge config files found in each scope. The merge is done in
-    order of scopes given by the dictionary of identifier names. Later configs will override
+    order of scopes given by the dictionary of scope identifiers. Later configs will override
     previous configs.
 
     Parameters:
@@ -65,57 +88,27 @@ def get_config(
         tuple[ConfigData, list[Path]]
             A tuple containing the configuration data and a list of paths the config was made from.
     """
-    if scope_identifiers is None:
-        scope_identifiers = {}
-    # Order of identifier_names determines order of scopes to merge
-    paths = [data_store.rootdir / Path(f"defaults/{namespace}")]
-    for scope, identifier in scope_identifiers.items():
-        if scope not in settings.scopes:
-            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
-        paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
-
-    valid_paths = []
-    config: dict = {}
-
-    def get_data_and_append_path(
-        path: Path, is_default: bool = False, ignore_error: bool = False
-    ) -> dict:
-        try:
-            if is_default:
-                data, data_path = _get_default_config(data_store, path)
-                valid_paths.append(data_path)
-            else:
-                data = _get_config(data_store, path)
-                valid_paths.append(path)
-            return data
-        except ConfigNotFoundError as e:
-            if ignore_error:
-                return {}
-            else:
-                raise e
-
-    if merge:
-        for path in paths:
-            if filename:
-                config = _deep_update(
-                    config, get_data_and_append_path(path, is_default=True, ignore_error=True)
-                )
-                # Checks if file was already retrieved (if user asks for default)
-                if Path(f"{path}/{filename}") not in valid_paths:
-                    config = _deep_update(
-                        config, get_data_and_append_path(Path(f"{path}/{filename}"))
-                    )
-            else:
-                config = _deep_update(config, get_data_and_append_path(path, is_default=True))
-    else:
-        config = (
-            get_data_and_append_path(paths[-1] / f"{filename}")
-            if filename
-            else get_data_and_append_path(paths[-1], is_default=True)
-        )
-
-    return config, valid_paths
+    if filename is None:
+        filename = "default.yml"
+    config = {}
+    try:
+        file_override_paths = get_file_override_stack(data_store=data_store,
+                                                      namespace=namespace,
+                                                      scope_identifiers=scope_identifiers,
+                                                      filename=filename)
+    except FileNotFoundError:
+        raise ConfigNotFoundError()
+    if not file_override_paths:
+        raise ConfigNotFoundError()
+    print(f"file override paths: {file_override_paths}")
+    # Iterate backwards so we can return immediately if not merging.
+    for filepath in reversed(file_override_paths):
+        override_config_bytes = data_store.read(filepath)
+        override_config = _validate_and_convert_to_dict(filepath.suffix, override_config_bytes)
+        config = _deep_update(override_config, config)
+        if not merge:
+            return config, [file_override_paths[-1]]
+    return config, file_override_paths
 
 
 def save_config(
@@ -304,66 +297,115 @@ def delete_config(
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def get_all_files(
+def list_all_filenames(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str] | None = None,
-    filename: str | None = None
 ) -> list[str]:
+    """For a given namespace and scope identifiers, return all matching files.
+    Returns
+    -------
+        list[str]
+            list of filenames matching namespace and scope identifiers in
+            alphabetical order.
     """
-    Get all config files in zookeeper based on namespace, scope, and identifier.
+    lowest_scope_path = _get_all_search_paths(data_store=data_store,
+                                              namespace=namespace,
+                                              scope_identifiers=scope_identifiers)[-1]
+    return sorted(data_store.list_files(lowest_scope_path), key=str.lower)
 
-    If filename is given, function will filter files by the filename (case-insensitive).
-    If no identifiers are given, function will only check the defaults scope.
-    If multiple scopes, the order of files is returned as the same order as how they would be merged
-    (e.g. defaults (default file, config file) > scope 1 (default file, config file) > ... )
-
+def get_file_override_stack(
+    data_store: DataStore,
+    namespace: str,
+    filename: str,
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    must_exist_in_any_scope: bool = True,
+    must_exist_in_lowest_scope: bool = True
+) -> list[Path]:
+    """For a given namespace, scope_identifiers, and filename, return the full
+    hierarchy of files that apply to this file in reverse override order i.e:
+    val[-1] overrides val[-2] which overrides ... val[-N]
 
     Parameters:
     -----------
+        data_store: DataStore
+            storage location to search.
         namespace: str
             The namespace for the configuration files.
         scope_identifiers: dict[ScopeName, str]
-            A dict, keyed by scope name, of identifiers per scope.
+            A dict, keyed by scope name, of identifiers per scope to filter by.
+            If None are provided, only include the default scope.
         filename: str | None
-            The name of the configuration file to filter by, including extension. If None, all files
-              are returned.
+            The name of the configuration file to filter by, including extension.
+    """
+    # Warning: we don't check to see if multiple defaults are present.
+    override_stack = []
+    valid_files = DEFAULT_FILES | {filename}
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    # Get defaults, followed by config name in each namespace.
+    for folder_path in paths:
+        if not data_store.exists(folder_path):
+            raise InvalidScopeIdentifierError()
+        # Sort with defaults first.
+        for filename_ in sorted(data_store.list_files(folder_path),
+                           key=lambda x: "" if x.lower() in DEFAULT_FILES else x.lower()):
+            # Append default if it exists.
+            if filename_ in valid_files:
+                override_stack.append(folder_path / filename_)
+    # FIXME: what do we want to happen here?
+    #if must_exist_in_any_scope:
+    #    found_filenames = [f.name for f in override_stack]
+    #    if filename not in found_filenames:
+    #        raise FileNotFoundError()
+    #if must_exist_in_lowest_scope:
+    #    if override_stack[-1].name != filename:
+    #        raise FileNotFoundError()
+
+    if must_exist_in_any_scope:
+        found_filenames = [f.stem for f in override_stack]
+        if Path(filename).stem not in found_filenames:
+            raise FileNotFoundError()
+    if must_exist_in_lowest_scope:
+        if override_stack[-1].stem != Path(filename).stem:
+            raise FileNotFoundError()
+    return override_stack
+
+
+def get_all_override_stacks(
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str] | None = None) -> list[list[Path]]:
+    """
+    Get override stacks for all files matching namespace and scope(s).
+
+    If no scopes are given, function will only check the defaults scope.
+    If multiple scopes, the path order is the order of the scope_identifiers.
+    (This order is also the same as the merge order.)
+
+    Parameters:
+    -----------
+        data_store: DataStore
+            storage location to search.
+        namespace: str
+            The namespace for the configuration files.
         scope_identifiers: dict[ScopeName, str]
-            A dict, keyed by scope name, of identifiers per scope.
+            A dict, keyed by scope name, of identifiers per scope to filter by.
+            If None are provided, only include the default scope.
 
     Returns:
     --------
-        list[str]
-            A list of full paths of the config files.
+        list[list[Path]]
+            A list of file override stacks for each file at the lowest level
+            scope that matches the namespace. List order is aphabetical by filename.
     """
-    if scope_identifiers is None:
-        scope_identifiers = {}
-    # FIXME: settings.zk_root_node should come from data_store object.
-    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
-    for scope, identifier in scope_identifiers.items():
-        if scope not in settings.scopes:
-            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
-        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
-
-    all_files = []
-    def collect_files(subpath: str):
-        if data_store.exists(subpath):
-            for file in data_store.list_files(subpath):
-                if filename is None or re.search(filename, file, re.IGNORECASE):
-                    all_files.append(f"{subpath}/{file}")
-        else:
-            invalid_subpath = _find_first_invalid_subpath(data_store, subpath)
-            if invalid_subpath:
-                raise ConfigNotFoundError(
-                    f"Subpath '{invalid_subpath}' not found in path: {subpath}"
-                )
-            raise ConfigNotFoundError(f"Path not found: {subpath}")
-
-    for path in paths:
-        collect_files(path)
-
-    return all_files
+    file_stacks = []
+    filenames = list_all_filenames(data_store, namespace, scope_identifiers)
+    for filename in filenames:
+        file_stacks.append(get_file_override_stack(data_store=data_store,
+                                                   namespace=namespace,
+                                                   scope_identifiers=scope_identifiers,
+                                                   filename=filename))
+    return file_stacks
 
 
 ################################################################################
@@ -527,38 +569,38 @@ def _save_config(
     return _validate_and_convert_to_dict(filename, data), filepath
 
 
-def _validate_and_convert_to_bytes(filename: Path, data: dict) -> bytes:
+def _validate_and_convert_to_bytes(suffix: str, data: dict) -> bytes:
     """
     Validates filename based on extension and converts data into bytes.
     Only attempts to validate/convert json and yaml files.
     """
     try:
-        if filename.suffix == ".json":
+        if suffix == ".json":
             data_as_bytes = json.dumps(data).encode("utf-8")
-        elif filename.suffix in [".yml", ".yaml"]:
+        elif suffix in [".yml", ".yaml"]:
             data_as_bytes = yaml.safe_dump(data).encode("utf-8")
         else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
+            raise UnsupportedFileTypeError(f"Unsupported file type: {suffix}")
         return data_as_bytes
     except (TypeError, yaml.YAMLError):
-        raise ConfigSerializeError(f"Failed to serialize data for {filename}")
+        raise ConfigSerializeError(f"Failed to serialize data for {suffix}")
 
 
-def _validate_and_convert_to_dict(filename: Path, data: bytes) -> dict:
+def _validate_and_convert_to_dict(suffix: str, data: bytes) -> dict:
     """
     Validates filename based on extension and converts data into dictionary.
     Only attempts to validate/convert json and yaml files.
     """
     try:
-        if filename.suffix == ".json":
+        if suffix == ".json":
             data_as_dict = json.loads(data)  # Throw away - decoding for validation only
-        elif filename.suffix in [".yml", ".yaml"]:
+        elif suffix in [".yml", ".yaml"]:
             data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
             if data_as_dict is None:
                 # yaml.safe_load returns None for empty files, convert to empty dict
                 data_as_dict = {}
         else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
+            raise UnsupportedFileTypeError(f"Unsupported file type: {suffix}")
         return data_as_dict
     except (json.JSONDecodeError, yaml.YAMLError):
-        raise ConfigDecodeError(f"Failed to decode data for {filename}")
+        raise ConfigDecodeError(f"Failed to decode data for {suffix}")
