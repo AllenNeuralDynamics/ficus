@@ -63,6 +63,22 @@ def _get_all_search_paths(
     return paths
 
 
+def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None
+)-> tuple[ScopeName | None, str | None]:
+    scope, identifier = None, None
+    if scope_identifiers and len(scope_identifiers) > 1:
+        raise MultipleScopeIdentifiersError(
+            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
+            "Only one is allowed."
+        )
+    if scope_identifiers:
+        (scope, identifier), = scope_identifiers.items()
+        if scope not in settings.scopes:
+            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
+                                    f"are: {settings.scopes}.")
+    return scope, identifier
+
+
 def get_config(
     data_store: DataStore,
     namespace: str,
@@ -164,19 +180,7 @@ def save_config(
         tuple[dict, str]
             A tuple containing the configuration data and the path the config was saved to.
     """
-    if scope_identifiers and len(scope_identifiers) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
-            "Only one is allowed."
-        )
-
-    scope = None
-    identifier = None
-    if scope_identifiers:
-        (scope, identifier), = scope_identifiers.items()
-        if scope not in settings.scopes:
-            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
+    scope, identifier = _ensure_single_scope(scope_identifiers)
 
     # Convert data to bytes and save to zookeeper using helper function
     data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
@@ -223,19 +227,7 @@ def update_config(
             A tuple containing the updated configuration data and the path the config was saved to.
     """
     filepath = PurePath(filename) # convert for suffix
-    if scope_identifiers and len(scope_identifiers) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
-            "Only one is allowed."
-        )
-    scope = None
-    identifier = None
-    if scope_identifiers:
-        (scope, identifier), = scope_identifiers.items()
-        if scope not in settings.scopes:
-            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
-
+    scope, identifier = _ensure_single_scope(scope_identifiers)
     current_config, _ = get_config(
         data_store=data_store, namespace=namespace, filename=filename,
         scope_identifiers=scope_identifiers, merge=False
@@ -281,19 +273,7 @@ def delete_config(
         str
             The path of the deleted config file.
     """
-    if scope_identifiers and len(scope_identifiers) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
-            "Only one is allowed."
-        )
-    scope = None
-    identifier = None
-    if scope_identifiers:
-        (scope, identifier), = scope_identifiers.items()
-        if scope not in settings.scopes:
-            raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
-
+    scope, identifier = _ensure_single_scope(scope_identifiers)
     if scope and identifier:
         path = data_store.rootdir / f"{scope}/{identifier}/{namespace}/{filename}"
     else:
