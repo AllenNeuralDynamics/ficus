@@ -2,6 +2,7 @@ import pytest
 
 from ficus.core.exceptions import (
     ConfigNotFoundError,
+    InvalidNamespaceError,
     InvalidScopeError,
     InvalidScopeIdentifierError,
 )
@@ -201,30 +202,42 @@ def test_get_config_invalid_identifiers_return_invalid_scope_error(data_store):
                    scope_identifiers={"fake_id": "FAKE"})
 
 
-# FIXME: should these be returning more specific kinds of errors?
-# InvalidScopeIdentifierError, InvalidScopeError, etc?
-@pytest.mark.parametrize(
-    "params",
-    [
-        # Bad namespace
-        {"namespace": "badbadbad", "scope_identifiers": {}, "filename": "config.yml"},
-        # Bad filename
-        {"namespace": "software_a", "scope_identifiers": {}, "filename": "config.bad"},
-        # Bad identifier value
-        {
-            "namespace": "software_a",
-            "scope_identifiers": {"subject_id": "bad_subject_id"},
-            "filename": "config.yml",
-        },
-    ],
-)
-def test_get_config_invalid_namespace_filename_returns_config_not_found_error(data_store, params):
+def test_get_config_invalid_namespace_returns_invalid_namespace_error(data_store):
+    namespace = "badbadbad"
+    scope_identifiers = {}
+    filename = "config.yml"
+    with pytest.raises(InvalidNamespaceError):
+        get_config(
+            data_store=data_store,
+            namespace=namespace,
+            scope_identifiers = scope_identifiers,
+            filename=filename,
+        )
+
+
+def test_get_config_invalid_filename_returns_config_not_found_error(data_store):
+    namespace = "software_a"
+    scope_identifiers = {}
+    filename = "config.bad"
     with pytest.raises(ConfigNotFoundError):
         get_config(
             data_store=data_store,
-            namespace=params["namespace"],
-            scope_identifiers = params["scope_identifiers"],
-            filename=params["filename"],
+            namespace=namespace,
+            scope_identifiers = scope_identifiers,
+            filename=filename,
+        )
+
+
+def test_get_config_invalid_scope_identifier_returns_invalid_scope_identifier(data_store):
+    namespace = "software_a"
+    scope_identifiers = {"subject_id": "bad_subject_id"}
+    filename = "config.yml"
+    with pytest.raises(InvalidScopeIdentifierError):
+        get_config(
+            data_store=data_store,
+            namespace=namespace,
+            scope_identifiers = scope_identifiers,
+            filename=filename,
         )
 
 

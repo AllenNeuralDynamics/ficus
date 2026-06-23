@@ -7,6 +7,7 @@ from ficus.core.exceptions import (
     ConfigDecodeError,
     ConfigNotFoundError,
     ConfigSerializeError,
+    InvalidNamespaceError,
     InvalidScopeError,
     InvalidScopeIdentifierError,
     MultipleScopeIdentifiersError,
@@ -40,12 +41,26 @@ def _get_all_search_paths(
     if scope_identifiers is None:
         scope_identifiers = {}
     paths = [data_store.rootdir / Path(f"defaults/{namespace}")]
+    if not data_store.exists(paths[-1]):
+        raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     for scope, identifier in scope_identifiers.items():
         # FIXME: global settings
         if scope not in settings.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
                                     f"are: {settings.scopes}.")
         paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
+        if not data_store.exists(paths[-1]):
+            first_invalid_subpath = _find_first_invalid_subpath(data_store=data_store,
+                                                                path=paths[-1],
+                                                                is_file=False)
+            error_map = \
+            {
+                f"{scope}": InvalidScopeError,
+                f"{identifier}": InvalidScopeIdentifierError,
+                f"{namespace}": InvalidNamespaceError
+            }
+            error_msg = f"Path does not exist: {first_invalid_subpath}"
+            raise error_map.get(first_invalid_subpath.name, PathNotFoundError)(error_msg)
     return paths
 
 
@@ -100,7 +115,6 @@ def get_config(
         raise ConfigNotFoundError()
     if not file_override_paths:
         raise ConfigNotFoundError()
-    print(f"file override paths: {file_override_paths}")
     # Iterate backwards so we can return immediately if not merging.
     for filepath in reversed(file_override_paths):
         override_config_bytes = data_store.read(filepath)
@@ -345,7 +359,7 @@ def get_file_override_stack(
     # Get defaults, followed by config name in each namespace.
     for folder_path in paths:
         if not data_store.exists(folder_path):
-            raise InvalidScopeIdentifierError()
+            raise InvalidScopeIdentifierError(f"Folder does not exist: {folder_path}")
         # Sort with defaults first.
         for filename_ in sorted(data_store.list_files(folder_path),
                            key=lambda x: "" if x.lower() in DEFAULT_FILES else x.lower()):
@@ -484,8 +498,9 @@ def _get_config(data_store: DataStore, path: Path) -> dict:
 
 def _find_first_invalid_subpath(
     data_store: DataStore,
-    path: Path | str, is_file: bool = True
-) -> str | None:
+    path: Path | str,
+    is_file: bool = True
+) -> Path | None:
     """
     Given a path, finds the first "directory" or zk node that does not exists.
 
@@ -495,10 +510,9 @@ def _find_first_invalid_subpath(
             subpath if one does not exists, or None if path is valid
     """
     path = Path(path)
-    for parent in reversed(path.parents):
-        if not parent.exists():
-            return str(path)
-    return None
+    for parent in reversed(path.relative_to(data_store.rootdir).parents):
+        if not data_store.exists(parent):
+            return parent
     return None
 
 

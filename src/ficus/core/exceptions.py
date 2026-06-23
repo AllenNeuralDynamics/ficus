@@ -30,6 +30,9 @@ class InvalidScopeError(Exception):
 class InvalidScopeIdentifierError(Exception):
     pass
 
+class InvalidNamespaceError(Exception):
+    pass
+
 class MultipleScopeIdentifiersError(Exception):
     pass
 
