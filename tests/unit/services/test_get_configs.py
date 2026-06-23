@@ -381,23 +381,18 @@ def test_get_all_override_stacks_with_multi_identifier_names_return_override_sta
     ]
 
 
+def test_get_all_files_with_identifier_names_and_filename_return_files(data_store):
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
 
-#def test_get_all_files_with_identifier_names_and_filename_return_files(zk_mock):
-#    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-#    filename = "config.yml"
-#
-#    result = get_all_files(
-#        namespace="software_a", scope_identifiers=scope_identifiers, filename=filename
-#    )
-#
-#    assert len(result) == 3
-#    assert result == [
-#        f"{ZK_ROOT_PATH}/defaults/software_a/config.yml",
-#        f"{ZK_ROOT_PATH}/hostname/w11dt000001/software_a/config.yml",
-#        f"{ZK_ROOT_PATH}/subject_id/614173/software_a/config.yml",
-#    ]
-#
-#
+    result = list_all_filenames(
+        data_store=data_store,
+        namespace="software_a",
+        scope_identifiers=scope_identifiers
+    )
+
+    assert result == ["config.yml", "default.json"]
+
+
 #def test_get_all_files_with_identifier_names_and_partial_filename_return_files(zk_mock):
 #    scope_identifiers= {"hostname": "w11dt000001", "subject_id": "614173"}
 #    filename = "conf"  # partial filename, still matches
@@ -431,56 +426,3 @@ def test_get_all_override_stacks_with_multi_identifier_names_return_override_sta
 #def test_get_all_files_invalid_file_identifier_return_config_not_found_error(zk_mock, params):
 #    with pytest.raises(ConfigNotFoundError) as err:
 #        get_all_files(namespace=params["namespace"], scope_identifiers=params["scope_identifiers"])
-#
-#
-#################################################################################
-##
-##   _get_config() and _get_default_config()
-##
-#################################################################################
-#
-#
-#def test__get_config_return_config(zk_mock):
-#    result = _get_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/config.yml")
-#    assert result == {
-#        "name": "config",
-#        "scope": "default",
-#        "default-layer-value": "beep beep",
-#    }
-#
-#
-#def test__get_config_invalid_subpath_return_config_not_found_error(zk_mock):
-#    with pytest.raises(ConfigNotFoundError) as err:
-#        _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/BAD_SUBPATH/config.yml")
-#    assert f"Subpath '{ZK_ROOT_NODE}/defaults/BAD_SUBPATH' not found" in str(err.value)
-#
-#
-#def test__get_config_invalid_filename_return_config_not_found_error(zk_mock):
-#    with pytest.raises(ConfigNotFoundError) as err:
-#        _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/software_a/config_FAKE.yml")
-#    assert "Config file not found" in str(err.value)
-#
-#
-#def test__get_config_no_filename_return_config_not_found_error(zk_mock):
-#    with pytest.raises(ConfigNotFoundError) as err:
-#        _get_config(zk_mock, f"{ZK_ROOT_NODE}/defaults/BAD_SUBPATH")
-#    assert "Config file not found" in str(err.value)
-#
-#
-#def test__get_default_config_return_config(zk_mock):
-#    result = _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a")
-#    assert result[0] == {"default-default-value": "the one ring"}
-#    assert result[1] == f"{ZK_ROOT_PATH}/defaults/software_a/default.yml"
-#
-#
-#def test__get_default_config_invalid_path_return_config_not_found_error(zk_mock):
-#    with pytest.raises(ConfigNotFoundError) as err:
-#        _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/badbadpath")
-#    assert "Default file not found" in str(err.value)
-#
-#
-#def test__get_default_config_invalid_filename_return_config_not_found_error(zk_mock):
-#    with pytest.raises(ConfigNotFoundError) as err:
-#        _get_default_config(zk_mock, f"{ZK_ROOT_PATH}/defaults/software_a/default.yml")
-#    assert "Default file not found" in str(err.value)
-#

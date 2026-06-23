@@ -459,43 +459,6 @@ def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
     return updated_mapping
 
 
-def _get_default_config(data_store: DataStore, path: Path) -> tuple[dict, Path]:
-    """
-    Helper function to get default config file from zookeeper and handle errors.
-    Checks all default file options (default.yml, default.yaml, default.json) and returns the first
-    one it finds, in that order. The write/save function will stop from saving a default file if one
-    already exists.
-    """
-    for defaults in DEFAULT_FILES:
-        try:
-            default_data = _get_config(data_store, path / f"{defaults}")
-            if default_data is None:
-                default_data = {}
-            return default_data, path/ f"{defaults}"
-        except ConfigNotFoundError:
-            pass  # Ignore file not found, default could have different extension
-    raise ConfigNotFoundError(f"default.[yml/yaml/json] not found at path: {path}")
-
-
-def _get_config(data_store: DataStore, path: Path) -> dict:
-    """
-    Helper function to get config file from zookeeper and handle errors.
-    Function will check each subpath incrementally and return the first subpath that failed if file
-    is not found.
-    """
-    try:
-        data = _validate_and_convert_to_dict(path, data_store.read(path))
-        # Not a config!
-        if not isinstance(data, dict):
-            raise ConfigNotFoundError(f"File at {path} is not a valid config!")
-        return data
-    except PathNotFoundError:
-        invalid_subpath = _find_first_invalid_subpath(data_store, path)
-        if invalid_subpath:
-            raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
-        raise ConfigNotFoundError(f"Config file not found at path: {path}")
-
-
 def _find_first_invalid_subpath(
     data_store: DataStore,
     path: Path | str,
