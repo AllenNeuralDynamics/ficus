@@ -18,6 +18,7 @@ patch("ficus.database.zookeeper.setup_scopes").start()
 
 @pytest.fixture
 def file_structure():
+    """Shared recipe for generating fake data store backend for each data store"""
     file_structure = {
         "scratch": {
             "defaults": {
