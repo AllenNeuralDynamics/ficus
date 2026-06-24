@@ -57,8 +57,8 @@ class FileSysStore(DataStore):
 
     def update(self, path: Path | str, data: bytes, force: bool = False) -> None:
         path = self._sanitize(path)
-        if not path.exists():
-            raise PathNotFoundError(f"File does not exist at: {path}")
+        if not path.exists() and not force:
+                raise PathNotFoundError(f"File does not exist at: {path}")
         if not path.is_file():
             raise PathIsDirectoryError(f"Cannot write data to non-file path: {path}")
         path.write_bytes(data)  # complete overwrite.

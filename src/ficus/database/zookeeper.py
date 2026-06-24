@@ -70,7 +70,8 @@ class ZKStore(DataStore):
     def update(self, path: Path | str, data: bytes, force: bool = False) -> None:
         path = self._sanitize(path)
         with self._get_zk_client() as zk:
-            version = -1 if force else self._path_versions[path.as_posix()]
+            # force if specified, or if we've never read the data in the first place.
+            version = -1 if force else self._path_versions.get(path.as_posix(), -1)
             try:
                 zk.set(path.as_posix(), data, version=version)
             except ZKBadVersionError:

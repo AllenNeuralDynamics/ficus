@@ -212,7 +212,8 @@ def save_config(
         raise error_map.get(first_invalid_subpath.name, ConfigNotFoundError)(error_msg)
     # Overriding and create if missing
     if data_store.exists(filepath):
-        data_store.update(filepath, data_as_bytes)
+        print(f"path exists: {filepath}")
+        data_store.update(filepath, data_as_bytes, force=True)
     else:
         data_store.create(filepath, data_as_bytes)
     return _validate_and_convert_to_dict(filepath.suffix, data_as_bytes), filepath
