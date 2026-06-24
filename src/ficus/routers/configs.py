@@ -54,7 +54,7 @@ BASEDIR = Path(__file__).resolve().parents[3]
 def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str, Callable, str]]:
     """
     Generates endpoint info (path, handler, scope_name) for each scope defined in settings.
-    Info is used to dynamically create endpoints for each scope (e.g. computers, subjects, etc.).
+    Info is used to dynamically create endpoints for each scope (e.g. hostname, subject_id, etc.).
     This function also dynamically injects appropriate identifier names to the function signature to
     ensure the swagger UI docs generate correctly.
 
@@ -70,11 +70,10 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
     """
     handlers = []
 
-    for scope in settings.scopes:
-        scope_name = scope.name
+    for scope_name in settings.scopes:
         identifier_name = scope.identifier_name
 
-        path = f"/{scope_name}/{{{identifier_name}}}/namespaces/{{namespace}}/config/{{filename}}"
+        path = f"/{{{scope_name}}}/namespaces/{{namespace}}/config/{{filename}}"
 
         handler = endpoint_creator()
 
@@ -162,7 +161,7 @@ def get_create_config_handler() -> Callable:
         **kwargs,
     ) -> ConfigDataResponse:
         try:
-            saved_data, path = save_config(
+            saved_data, path = save_config(data_store=data_store,
                 namespace=namespace, filename=filename, data=data, identifier_names=kwargs
             )
             return ConfigDataResponse(
@@ -183,14 +182,7 @@ def get_create_config_handler() -> Callable:
 @router.post(
     "/namespaces/{namespace}/config/{filename}",
     description=Path(BASEDIR / "docs/post_configuration.md").read_text(),
-    responses={
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {
-            "model": ConfigErrorResponse,
-            "description": "Failed to serialize configuration data",
-        },
-    },
+    responses=get_config_error_responses(409, 415, 400),
 )
 async def create_defaults_config(
     namespace: str,
@@ -209,14 +201,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_create_conf
         methods=["POST"],
         tags=[f"{scope_name}"],
         description=Path(BASEDIR / "docs/post_configuration.md").read_text(),
-        responses={
-            409: {"model": ConfigErrorResponse, "description": "File already exists"},
-            415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-            500: {
-                "model": ConfigErrorResponse,
-                "description": "Failed to serialize configuration data",
-            },
-        },
+        responses=get_config_error_responses(409, 415, 500)
     )
 
 
@@ -386,6 +371,7 @@ def get_all_files_in_path(
         if subject_id:
             identifier_names["subject_id"] = subject_id
 
+        # TODO: should be list_all_files
         data = get_all_files(namespace, identifier_names=identifier_names, filename=filename)
         message = f"Retrieved list of files in path defaults/{namespace} and scopes"
 

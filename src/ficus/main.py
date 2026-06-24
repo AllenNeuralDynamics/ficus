@@ -6,8 +6,18 @@ from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
 from typing import Any, Dict
 
-from ficus.database.zookeeper import kazoo_timeout_handler, setup_scopes
+from ficus.database.zookeeper import kazoo_timeout_handler
 from ficus.routers import router
+
+from ficus.database.zookeeper import ZKStore
+from ficus.database.filesys import FileSysStore
+
+from ficus.core.config import settings
+
+# FIXME: create the store specified in settings.store.
+zk_store = ZKStore(hosts=[settings.host],
+                   rootdir=settings.root_dir,
+                   scopes=settings.scopes)
 
 
 @asynccontextmanager
@@ -17,13 +27,12 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Ficus API...")
 
 
-setup_scopes()
-
-
 app_name = os.getenv("API_NAME", "ficus")
 app = FastAPI(
     root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan
 )
+
+app.data_store = zk_store
 
 
 app.include_router(router)

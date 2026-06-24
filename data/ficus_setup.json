@@ -1,5 +1,6 @@
 {
-  "zk_root_node": "scratch",
-  "zk_host": "eng-logtools:2181",
+  "host": "eng-logtools:2181",
+  "root_dir": "scratch",
+  "store": "ZKStore"
   "scopes": ["hostname", "subject_id"]
 }

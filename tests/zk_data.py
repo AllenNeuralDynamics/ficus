@@ -1,9 +1,7 @@
-import copy
 import json
 import yaml
 
 from kazoo.exceptions import NoNodeError, NotEmptyError
-from tests.constants import ZK_ROOT_NODE
 
 
 class Node:
@@ -11,7 +9,6 @@ class Node:
         self.name = name
         self.value = value
         self.children = children if children else {}
-
 
 
 def print_node(node: Node, indentation=0):

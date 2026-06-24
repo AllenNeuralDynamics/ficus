@@ -11,11 +11,8 @@ from kazoo.recipe.watchers import NoNodeError
 from loguru import logger
 from pathlib import Path
 
-from ficus.core.config import settings
 from ficus.database.data_store import DataStore
 
-
-# FIXME: Validation to ensure scopes are present?
 
 class ZKStore(DataStore):
     """CRUD functions for Zookeeper-based data store."""
@@ -34,7 +31,8 @@ class ZKStore(DataStore):
             zk.stop()
             zk.close()
 
-    def __init__(self, hosts: list[str], rootdir: Path | str):
+    def __init__(self, hosts: list[str], rootdir: Path | str, scopes: set[str],
+                 create_missing_scopes: bool = True):
         """
         Parameters
         ----------
@@ -45,14 +43,18 @@ class ZKStore(DataStore):
         self.hosts = hosts
         self._path_versions = {}  # dict of all file reads to track versions
                                   # when calling update() on the same path.
-        super().__init__(rootdir=rootdir)
+        super().__init__(rootdir=rootdir, scopes=scopes,
+                         create_missing_scopes=create_missing_scopes)
 
     # crud functions
-    def create(self, path: Path | str, data: bytes) -> None:
+    def create(self, path: Path | str, data: bytes | None) -> None:
         path = self._sanitize(path)
-        if self.exists(path):
+        if self.exists(path) and self.is_file(path):
             raise NotEmptyError(f"Path {path} already exists.")
         with self._get_zk_client() as zk:
+            if data is None:  # assume path is folder.
+                zk.ensure_path(path)
+                return
             zk.create(path.as_posix(), data, makepath=True)
 
     def read(self, path: Path | str) -> bytes:
@@ -94,6 +96,12 @@ class ZKStore(DataStore):
         with self._get_zk_client() as zk:
             return zk.exists(path.as_posix())
 
+    def is_file(self, path: Path | str) -> bool:
+        path = self._sanitize(path)
+        with self._get_zk_client() as zk:
+            children: list = zk.get_children(path.as_posix())
+            return len(children) == 0
+
     def list_files(self, path: Path | str) -> list[str]:
         path = self._sanitize(path)
         with self._get_zk_client() as zk:
@@ -103,16 +111,7 @@ class ZKStore(DataStore):
             return children
 
 
-def setup_scopes():
-    """
-    Ensures scopes defined in settings file exist in zookeeper, creates if they don't exist.
-    """
-    logger.info("Ensuring scopes exist in zookeeper")
-    with get_zk_client() as zk:
-        zk.ensure_path(f"/{settings.zk_root_node}/defaults")
-        for scope in settings.scopes:
-            if zk.ensure_path(f"/{settings.zk_root_node}/{scope.name}"):
-                logger.info(f"Scope '{scope.name}' in zookeeper")
+
 
 
 async def kazoo_timeout_handler(request: Request, exc: KazooTimeoutError):

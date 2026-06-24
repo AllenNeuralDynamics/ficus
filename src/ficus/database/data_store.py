@@ -6,8 +6,11 @@ class DataStore(ABC):
     """Base Class for interacting with generic storage: Folders, Database, etc.
     """
 
-    def __init__(self, rootdir: Path | str):
-        self.rootdir = Path(rootdir)
+    def __init__(self, rootdir: Path | str, scopes: set[str],
+                 create_missing_scopes: bool = True):
+        self.rootdir: Path = Path(rootdir)
+        self.scopes: set = scopes
+        self._validate_scopes(scopes, create_missing=create_missing_scopes)
 
     def _sanitize(self, path: str | Path) -> Path:
         """Coax path into path that is relative to self.rootdir.
@@ -28,9 +31,32 @@ class DataStore(ABC):
         # Relative path cases.
         return self.rootdir / path
 
+    def _validate_scopes(self, scopes: set[str], create_missing: bool = True):
+        """ Ensures scopes exist in the store."""
+        missing_scopes = set()
+        for scope in scopes:
+            scope_path = self.rootdir / Path(scope)
+            if not self.exists(self.rootdir / Path(scope)):
+                if create_missing:
+                    self.create(scope_path, data=None)
+                missing_scopes.add(scope)
+        if missing_scopes and not create_missing:
+                raise RuntimeError(f"The following scopes are missing from the "
+                                   f"data store: {missing_scopes}")
+
     # crud functions
     @abstractmethod
-    def create(self, path: Path | str, data: bytes) -> None:
+    def create(self, path: Path | str, data: bytes | None) -> None:
+        """Create the path specified.
+
+        Parameters
+        ----------
+        path:
+            path to file or folder.
+        data:
+            If data is `None` assume the path is a folder. If data is bytes-like
+            (including empty bytes), create the file with the data specified.
+        """
         pass
 
     @abstractmethod

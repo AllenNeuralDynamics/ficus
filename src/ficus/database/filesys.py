@@ -31,20 +31,24 @@ def ensure_write_permission(folder_path: str | Path):
     else:
         logger.debug(f"Write permissions are already granted for: {path}")
 
-# FIXME: Validation to ensure scopes are present?
 
 class FileSysStore(DataStore):
 
-    def __init__(self, rootdir: Path | str):
+    def __init__(self, rootdir: Path | str, scopes: set[str],
+                 create_missing_scopes: bool = True):
         self.log = logger.bind(custom_name=self.__class__.__name__)
         ensure_write_permission(rootdir)
-        super().__init__(rootdir=rootdir)
+        super().__init__(rootdir=rootdir, scopes=scopes,
+                         create_missing_scopes=create_missing_scopes)
 
-    def create(self, path: Path | str, data: bytes) -> None:
+    def create(self, path: Path | str, data: bytes | None) -> None:
         path = self._sanitize(path)
-        if path.exists():
+        if path.exists() and path.is_file():
             raise FileExistsError(f"File already exists at: {path}")
         path.parent.mkdir(parents=True, exist_ok=True)
+        if data is None:  # assume we are creating a folder.
+            path.mkdir(parents=True, exist_ok=True)
+            return
         path.write_bytes(data)
 
     def read(self, path: Path | str) -> bytes:

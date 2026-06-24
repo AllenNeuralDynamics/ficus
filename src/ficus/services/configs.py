@@ -15,7 +15,6 @@ from ficus.core.exceptions import (
     PathNotFoundError,
     UnsupportedFileTypeError,
 )
-from ficus.core.config import settings
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigData
 from pathlib import Path, PurePath
@@ -43,9 +42,9 @@ def _get_all_search_paths(
     if not data_store.exists(paths[-1]):
         raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     for scope, identifier in scope_identifiers.items():
-        if scope not in settings.scopes:
+        if scope not in data_store.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
+                                    f"are: {data_store.scopes}.")
         paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
         if not data_store.exists(paths[-1]):
             first_invalid_subpath = _find_first_invalid_subpath(data_store=data_store,
@@ -61,7 +60,9 @@ def _get_all_search_paths(
     return paths
 
 
-def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None,
+def _ensure_single_scope(
+    data_store: DataStore,
+    scope_identifiers: dict[ScopeName, str] | None = None,
     validate_scope: bool = True,
 )-> tuple[ScopeName | None, str | None]:
     scope, identifier = None, None
@@ -72,9 +73,9 @@ def _ensure_single_scope(scope_identifiers: dict[ScopeName, str] | None = None,
         )
     if scope_identifiers:
         (scope, identifier), = scope_identifiers.items()
-        if validate_scope and scope not in settings.scopes:
+        if validate_scope and scope not in data_store.scopes:
             raise InvalidScopeError(f"Scope {scope} does not exist. Valid scopes "
-                                    f"are: {settings.scopes}.")
+                                    f"are: {data_store.scopes}.")
     return scope, identifier
 
 
@@ -181,7 +182,8 @@ def save_config(
             A tuple containing the configuration data and the path the config was saved to.
     """
     # Check if scope exists only if we are overriding.
-    scope, identifier = _ensure_single_scope(scope_identifiers, validate_scope=(not override))
+    scope, identifier = _ensure_single_scope(data_store, scope_identifiers,
+                                             validate_scope=(not override))
     data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
 
     if scope and identifier:
@@ -212,7 +214,6 @@ def save_config(
         raise error_map.get(first_invalid_subpath.name, ConfigNotFoundError)(error_msg)
     # Overriding and create if missing
     if data_store.exists(filepath):
-        print(f"path exists: {filepath}")
         data_store.update(filepath, data_as_bytes, force=True)
     else:
         data_store.create(filepath, data_as_bytes)
@@ -250,7 +251,7 @@ def update_config(
             A tuple containing the updated configuration data and the path the config was saved to.
     """
     filepath = PurePath(filename) # convert for suffix
-    scope, identifier = _ensure_single_scope(scope_identifiers)
+    scope, identifier = _ensure_single_scope(data_store, scope_identifiers)
     current_config, _ = get_config(
         data_store=data_store, namespace=namespace, filename=filename,
         scope_identifiers=scope_identifiers, merge=False
@@ -293,7 +294,7 @@ def delete_config(
         str
             The path of the deleted config file.
     """
-    scope, identifier = _ensure_single_scope(scope_identifiers)
+    scope, identifier = _ensure_single_scope(data_store, scope_identifiers)
     if scope and identifier:
         path = data_store.rootdir / f"{scope}/{identifier}/{namespace}/{filename}"
     else:

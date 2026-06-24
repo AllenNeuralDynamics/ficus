@@ -12,12 +12,8 @@ import ficus.database.zookeeper
 from ficus.services.configs import _validate_and_convert_to_bytes
 
 
-# Patch setup_scopes BEFORE any ficus imports trigger it
-patch("ficus.database.zookeeper.setup_scopes").start()
-
-
 @pytest.fixture
-def file_structure():
+def store_structure():
     """Shared recipe for generating fake data store backend for each data store"""
     file_structure = {
         "scratch": {
@@ -64,7 +60,8 @@ def file_structure():
     return file_structure
 
 @pytest.fixture
-def filesys_store(tmp_path, file_structure):
+def filesys_store(tmp_path, store_structure):
+
     def create_structure(base_path: Path, structure: dict):
         """Recursively parse a dict to create file structure."""
         for name, content in structure.items():
@@ -78,11 +75,11 @@ def filesys_store(tmp_path, file_structure):
                 current_path.write_bytes(_validate_and_convert_to_bytes(current_path.suffix,
                                                                         content))
 
-    create_structure(tmp_path, file_structure)
-    return FileSysStore(rootdir= tmp_path / "scratch")
+    create_structure(tmp_path, store_structure)
+    return FileSysStore(rootdir= tmp_path / "scratch", scopes={"hostname", "subject_id"})
 
 @pytest.fixture
-def zookeeper_store(monkeypatch, file_structure):
+def zookeeper_store(monkeypatch, store_structure):
 
     def make_zk_node(node_name, value: dict | None = None, print_level=0) -> Node:
         """Recursively parse a dict to create ZK Node structure."""
@@ -97,15 +94,18 @@ def zookeeper_store(monkeypatch, file_structure):
                                           print_level=print_level+4)
         return Node(name=node_name, value=None, children=children)
 
-    root = make_zk_node(node_name="root", value=file_structure)
+    root = make_zk_node(node_name="root", value=store_structure)
     #print()
-    #print_node(root)
+    #print_node(root)  # For debugging.
     def fake_zk(hosts: list[str]):
         return FakeZK(hosts=hosts, root=root)
 
+    # Each KazooClient call will be replaced by FakeZK instance that points to
+    # the same underlying structure.
     monkeypatch.setattr(ficus.database.zookeeper, "KazooClient", fake_zk)
 
-    zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"))
+    zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"),
+                       scopes={"hostname", "subject_id"})
     yield zk_store
 
 
