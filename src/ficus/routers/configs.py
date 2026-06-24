@@ -1,8 +1,7 @@
-import copy
 import inspect
 import fastapi
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from fastapi import HTTPException
 from pathlib import Path
 from typing import Callable
@@ -16,12 +15,13 @@ from ficus.core.exceptions import (
     PathIsDirectoryError,
     UnsupportedFileTypeError,
 )
+from ficus.database.data_store import DataStore
 from ficus.services.configs import (
     get_config,
     save_config,
     update_config,
     delete_config,
-    get_all_files,
+    list_all_filenames,
 )
 from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErrorResponse
 
@@ -71,7 +71,6 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
     handlers = []
 
     for scope_name in settings.scopes:
-        identifier_name = scope.identifier_name
 
         path = f"/{{{scope_name}}}/namespaces/{{namespace}}/config/{{filename}}"
 
@@ -82,7 +81,7 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
         new_params = [p for p in sig.parameters.values() if p.kind != inspect.Parameter.VAR_KEYWORD]
         # Create dynamic parameter for identifier_name
         dynamic_param = inspect.Parameter(
-            identifier_name,
+            scope_name,
             inspect.Parameter.KEYWORD_ONLY,
             annotation=str,
             default=fastapi.Path(..., description=f"The ID for {scope_name}"),
@@ -109,6 +108,7 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
     responses=get_config_error_responses(404),
 )
 def get_configuration(
+    request: Request,
     namespace: str,
     filename: str | None = None,
     hostname: str | None = None,
@@ -123,6 +123,7 @@ def get_configuration(
             identifier_names["subject_id"] = subject_id
 
         config, paths = get_config(
+            data_store=request.app.state.data_store,
             namespace=namespace, filename=filename, identifier_names=identifier_names, merge=merge
         )
         return ConfigDataResponse(
@@ -141,7 +142,7 @@ def get_configuration(
 ################################################################################
 
 
-def get_create_config_handler() -> Callable:
+def get_create_config_handler(data_store: DataStore) -> Callable:
     """
     Factory function to create handler for creating new configs.
     Contains core functionality used by all endpoints related to config creation.
@@ -162,8 +163,10 @@ def get_create_config_handler() -> Callable:
     ) -> ConfigDataResponse:
         try:
             saved_data, path = save_config(data_store=data_store,
-                namespace=namespace, filename=filename, data=data, identifier_names=kwargs
-            )
+                                           namespace=namespace,
+                                           filename=filename,
+                                           data=data,
+                                           scope_identifiers=kwargs)
             return ConfigDataResponse(
                 message="Successfully added configuration file",
                 details={"path": path},
@@ -185,11 +188,12 @@ def get_create_config_handler() -> Callable:
     responses=get_config_error_responses(409, 415, 400),
 )
 async def create_defaults_config(
+    request: Request,
     namespace: str,
     filename: str,
     data: dict | None = None,
 ):
-    handler = get_create_config_handler()
+    handler = get_create_config_handler(data_store=request.app.state.data_store)
     return await handler(namespace=namespace, filename=filename, data=data)
 
 
@@ -212,7 +216,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_create_conf
 ################################################################################
 
 
-def get_update_config_handler() -> Callable:
+def get_update_config_handler(data_store: DataStore) -> Callable:
     """
     Factory function to create handler for updating configs.
     Contains core functionality used by all endpoints related to config updates.
@@ -232,9 +236,11 @@ def get_update_config_handler() -> Callable:
         **kwargs,
     ) -> ConfigDataResponse:
         try:
-            saved_data, path = update_config(
-                namespace=namespace, filename=filename, data=data, identifier_names=kwargs
-            )
+            saved_data, path = update_config(data_store=data_store,
+                                             namespace=namespace,
+                                             filename=filename,
+                                             data=data,
+                                             scope_identifiers=kwargs)
             return ConfigDataResponse(
                 message="Successfully updated configuration file",
                 details={"path": path},
@@ -258,11 +264,12 @@ def get_update_config_handler() -> Callable:
     responses=get_config_error_responses(404, 409, 415, 500)
 )
 async def update_defaults_config(
+    request: Request,
     namespace: str,
     filename: str,
     data: dict | None = None,
 ):
-    handler = get_update_config_handler()
+    handler = get_update_config_handler(data_store=request.app.state.data_store)
     return await handler(namespace=namespace, filename=filename, data=data)
 
 
@@ -284,7 +291,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_update_conf
 ################################################################################
 
 
-def get_delete_config_handler() -> Callable:
+def get_delete_config_handler(data_store: DataStore) -> Callable:
     """
     Factory function to create handler for deleting configs.
     Contains core functionality used by all endpoints related to config deletion.
@@ -303,7 +310,10 @@ def get_delete_config_handler() -> Callable:
         **kwargs,
     ) -> ConfigResponse:
         try:
-            path = delete_config(namespace=namespace, filename=filename, identifier_names=kwargs)
+            path = delete_config(data_store=data_store,
+                                 namespace=namespace,
+                                 filename=filename,
+                                 identifier_names=kwargs)
             return ConfigResponse(
                 message="Successfully deleted configuration file",
                 details={"path": path},
@@ -328,10 +338,11 @@ def get_delete_config_handler() -> Callable:
     },
 )
 async def delete_defaults_config(
+    request: Request,
     namespace: str,
     filename: str,
 ):
-    handler = get_delete_config_handler()
+    handler = get_delete_config_handler(data_store=request.app.state.data_store)
     return await handler(namespace=namespace, filename=filename)
 
 
@@ -359,20 +370,22 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
     responses=get_config_error_responses(404)
 )
 def get_all_files_in_path(
+    request: Request,
     namespace: str,
-    filename: str | None = None,
     hostname: str | None = None,
     subject_id: str | None = None,
 ) -> ConfigDataResponse:
     try:
-        identifier_names = {}
+        # FIXME: maybe just accept the dict of scope identifiers?
+        scope_identifiers = {}
         if hostname:
-            identifier_names["hostname"] = hostname
+            scope_identifiers["hostname"] = hostname
         if subject_id:
-            identifier_names["subject_id"] = subject_id
+            scope_identifiers["subject_id"] = subject_id
 
-        # TODO: should be list_all_files
-        data = get_all_files(namespace, identifier_names=identifier_names, filename=filename)
+        data = list_all_filenames(data_store=request.app.state.data_store,
+                                  namespace=namespace,
+                                  scope_identifiers=scope_identifiers)
         message = f"Retrieved list of files in path defaults/{namespace} and scopes"
 
         return ConfigDataResponse(

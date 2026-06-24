@@ -14,15 +14,16 @@ from ficus.database.filesys import FileSysStore
 
 from ficus.core.config import settings
 
-# FIXME: create the store specified in settings.store.
-zk_store = ZKStore(hosts=[settings.host],
-                   rootdir=settings.root_dir,
-                   scopes=settings.scopes)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Ficus API...")
+    logger.info("Connecting to DataStore")
+    # FIXME: create the store specified in settings.store.
+    app.state.zk_store = ZKStore(hosts=[settings.host],
+                                 rootdir=settings.root_dir,
+                                 scopes=settings.scopes)
     yield
     logger.info("Shutting down Ficus API...")
 
@@ -32,7 +33,6 @@ app = FastAPI(
     root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan
 )
 
-app.data_store = zk_store
 
 
 app.include_router(router)
