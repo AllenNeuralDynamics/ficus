@@ -13,178 +13,26 @@ class Node:
         self.children = children if children else {}
 
 
-"""
-EXAMPLE TEST STRUCTURE
-"""
-ZK_EXAMPLE = Node(
-    name="root",
-    children={
-        ZK_ROOT_NODE: Node(
-            name=ZK_ROOT_NODE,
-            children={
-                "defaults": Node(
-                    name="defaults",
-                    children={
-                        "software_a": Node(
-                            name="software_a",
-                            children={
-                                "default.yml": Node(
-                                    name="default.yml",
-                                    value={"default-default-value": "the one ring"},
-                                ),
-                                "config.yml": Node(
-                                    name="config.yml",
-                                    value={
-                                        "name": "config",
-                                        "scope": "default",
-                                        "default-layer-value": "beep beep",
-                                    },
-                                ),
-                            },
-                        ),
-                        "software_a_default_only": Node(
-                            name="software_a_default_only",
-                            children={
-                                "config.yml": Node(
-                                    name="config.yml",
-                                    value={
-                                        "name": "config_defaults_only",
-                                        "scope": "default",
-                                        "default-layer-value": "beep beep",
-                                    },
-                                ),
-                            },
-                        ),
-                        "test_delete_path_error": Node(
-                            name="test_delete_path_error",
-                            children={
-                                "additional_node": Node(
-                                    name="additional_node",
-                                    children={
-                                        "config.yml": Node(
-                                            name="config.yml",
-                                            value={
-                                                "name": "config-delete-path-error",
-                                            },
-                                        )
-                                    },
-                                ),
-                            },
-                        ),
-                    },
-                ),
-                "hostname": Node(
-                    name="hostname",
-                    children={
-                        "w11dt000001": Node(
-                            name="w11dt000001",
-                            children={
-                                "software_a": Node(
-                                    name="software_a",
-                                    children={
-                                        "default.json": Node(
-                                            name="default.json",
-                                            value={
-                                                "computer-default-value": "to rule them all",
-                                            },
-                                        ),
-                                        "config.yml": Node(
-                                            name="config.yml",
-                                            value={
-                                                # overrides "scope" in default/software_a/config.yml
-                                                "scope": "w11dt000001",
-                                                "computer-layer-value": "boop boop",  # append
-                                            },
-                                        ),
-                                    },
-                                ),
-                                "software_b": Node(
-                                    name="software_b",
-                                    children={
-                                        "default.yml": Node(
-                                            name="default.yml",
-                                            value={
-                                                "Three Dogs Night": "one is the loneliest number",
-                                            },
-                                        ),
-                                        "config.yml": Node(
-                                            name="config.yml",
-                                            value={
-                                                # overrides "scope" in default/software_a/config.yml
-                                                "scope": "w11dt000001",
-                                                "computer-layer-value": "one one one",  # append
-                                            },
-                                        ),
-                                    },
-                                ),
-                            },
-                        ),
-                        "w11dt000002": Node(
-                            name="w11dt000002",
-                            children={
-                                "software_a": Node(
-                                    name="software_a",
-                                    children={
-                                        "default.yaml": Node(
-                                            name="default.yaml",
-                                            value={},
-                                        ),
-                                        "config2.yml": Node(
-                                            name="config2.yml",
-                                            value={},
-                                        ),
-                                        "config3.json": Node(
-                                            name="config3.json",
-                                            value={},
-                                        ),
-                                    },
-                                ),
-                            },
-                        ),
-                    },
-                ),
-                "subject_id": Node(
-                    name="subject_id",
-                    children={
-                        "614173": Node(
-                            name="614173",
-                            children={
-                                "software_a": Node(
-                                    name="software_a",
-                                    children={
-                                        "default.json": Node(
-                                            name="default.json",
-                                            value={
-                                                "subject-default-value": "one config to bring them "
-                                                "all",
-                                            },
-                                        ),
-                                        "config.yml": Node(
-                                            name="config.yml",
-                                            value={
-                                                "scope": "614173",
-                                                "subject-layer-value": "bap bap",
-                                                "The Cure": "show me how you do that trick",
-                                            },
-                                        ),
-                                    },
-                                ),
-                            },
-                        )
-                    },
-                ),
-            },
-        )
-    },
-)
+
+def print_node(node: Node, indentation=0):
+    """Convenience function to print a node structure."""
+    print(" "*indentation + f"Node(name={node.name}", end="")
+    print(f", value={node.value}" if node.value else "", end="")
+    if node.children:
+        print(", ", end="")
+        print()
+        print(" "*(indentation+4) + f"children=")
+        for child_name, child_value in node.children.items():
+            print_node(child_value, indentation=8+indentation)
+        print(" "*indentation + ")")
+    else:
+        print(")")
 
 
 # Fake ZK KazooClient
 class FakeZK:
-    def __init__(self, hosts: list[str], root: Node = ZK_EXAMPLE):
+    def __init__(self, hosts: list[str], root: Node):
         self.hosts = hosts  # Preserve KazooClient api.
-        # Deep-copy so ZK_EXAMPLE isn't persisted between tests
-        root = copy.deepcopy(ZK_EXAMPLE)
         self.root = root
 
     def _get_zk_node(self, path):
@@ -228,7 +76,7 @@ class FakeZK:
     def get_children(self, path):
         return self._get_zk_node(path)[1]
 
-    def set(self, path: str, data: bytes):
+    def set(self, path: str, data: bytes, version: int = -1):
         if not isinstance(data, bytes):
             raise TypeError()
         parts = path.strip("/").split("/")

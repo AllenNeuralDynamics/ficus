@@ -9,6 +9,25 @@ class DataStore(ABC):
     def __init__(self, rootdir: Path | str):
         self.rootdir = Path(rootdir)
 
+    def _sanitize(self, path: str | Path) -> Path:
+        """Coax path into path that is relative to self.rootdir.
+
+        Raises
+        ------
+        ValueError:
+            if the path is absolute and not a subpath of `self.rootdir`
+        """
+        path = Path(path)
+        # Absolute path cases
+        if path.is_relative_to(self.rootdir): # path is absolute.
+            return path
+        if path.is_absolute():
+            raise ValueError(f"input paths specified as absolute paths must be "
+                             f"relative to rootdir: {self.rootdir}. Input path: "
+                             f"{path.absolute()}")
+        # Relative path cases.
+        return self.rootdir / path
+
     # crud functions
     @abstractmethod
     def create(self, path: Path | str, data: bytes) -> None:

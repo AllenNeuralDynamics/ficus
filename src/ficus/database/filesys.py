@@ -1,4 +1,4 @@
-from ficus.core.exceptions import NotEmptyError, BadVersionError, PathIsDirectoryError, PathNotFoundError
+from ficus.core.exceptions import PathIsDirectoryError, PathNotFoundError
 from ficus.database.data_store import DataStore
 from loguru import logger
 from pathlib import Path
@@ -39,25 +39,6 @@ class FileSysStore(DataStore):
         self.log = logger.bind(custom_name=self.__class__.__name__)
         ensure_write_permission(rootdir)
         super().__init__(rootdir=rootdir)
-
-    def _sanitize(self, path: str | Path) -> Path:
-        """Coax path into path that is relative to self.rootdir.
-
-        Raises
-        ------
-        ValueError:
-            if the path is absolute and not a subpath of `self.rootdir`
-        """
-        path = Path(path)
-        # Absolute path cases
-        if path.is_relative_to(self.rootdir): # path is absolute.
-            return path
-        if path.is_absolute():
-            raise ValueError(f"input paths specified as absolute paths must be "
-                             f"relative to rootdir: {self.rootdir}. Input path: "
-                             f"{path.absolute()}")
-        # Relative path cases.
-        return self.rootdir / path
 
     def create(self, path: Path | str, data: bytes) -> None:
         path = self._sanitize(path)

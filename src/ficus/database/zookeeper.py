@@ -49,38 +49,39 @@ class ZKStore(DataStore):
 
     # crud functions
     def create(self, path: Path | str, data: bytes) -> None:
-        if self.path_exists(str(path)):
+        path = self._sanitize(path)
+        if self.exists(path):
             raise NotEmptyError(f"Path {path} already exists.")
         with self._get_zk_client() as zk:
-            zk.create(str(path), data, makepath=True)
+            zk.create(path.as_posix(), data, makepath=True)
 
     def read(self, path: Path | str) -> bytes:
+        path = self._sanitize(path)
         with self._get_zk_client() as zk:
             data = None
             try:
-                data, stat = zk.get(str(path))
+                data, stat = zk.get(path.as_posix())
                 # Save stat to check if the path was altered when we try an update later.
-                self._path_versions[str(path)] = stat
+                self._path_versions[path.as_posix()] = stat
                 return data
             except NoNodeError:
                 raise PathNotFoundError(f"Path: {path} does not exist.")
-            self._path_versions[str(path)] = stat
-            if data is None:
-                return b""
 
     def update(self, path: Path | str, data: bytes, force: bool = False) -> None:
+        path = self._sanitize(path)
         with self._get_zk_client() as zk:
-            version = -1 if force else self._path_versions[str(path)]
+            version = -1 if force else self._path_versions[path.as_posix()]
             try:
-                zk.set(str(path), data, version=version)
+                zk.set(path.as_posix(), data, version=version)
             except ZKBadVersionError:
                 raise BadVersionError(f"Content at {path} has been updated by "
                                       f"another entity since reading.")
 
     def delete(self, path: Path | str, recursive: bool = False) -> None:
+        path = self._sanitize(path)
         with self._get_zk_client() as zk:
             try:
-                zk.delete(str(path), recursive=recursive)
+                zk.delete(path.as_posix(), recursive=recursive)
             except ZKNotEmptyError:
                 raise NotEmptyError(f"Failed to delete. Node contains children: {path}")
             except NoNodeError:
@@ -88,12 +89,14 @@ class ZKStore(DataStore):
 
     # utility
     def exists(self, path: Path | str) -> bool:
+        path = self._sanitize(path)
         with self._get_zk_client() as zk:
-            return zk.exists(str(path))
+            return zk.exists(path.as_posix())
 
     def list_files(self, path: Path | str) -> list[str]:
+        path = self._sanitize(path)
         with self._get_zk_client() as zk:
-            children: list = zk.get_children(str(path))
+            children: list = zk.get_children(path.as_posix())
             if len(children) == 0:
                 raise ValueError(f"Cannot list files on a file: {path}")
             return children

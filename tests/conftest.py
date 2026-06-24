@@ -1,8 +1,8 @@
-import json
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from tests.zk_data import FakeZK
+from tests.zk_data import Node, print_node
 
 from pathlib import Path
 
@@ -17,35 +17,53 @@ patch("ficus.database.zookeeper.setup_scopes").start()
 
 
 @pytest.fixture
-def encode_data():
-    def _encode(data: dict) -> bytes:
-        return json.dumps(data).encode()
-
-    return _encode
-
-
-@pytest.fixture(scope="class")
-def zk_mock():
-    fake_zk = FakeZK()
-    with (patch("kazoo.client.KazooClient") as fake_client,):
-        fake_client.return_value = fake_zk
-        yield fake_zk
-
-    #with (patch("ficus.services.configs.get_zk_client") as mock_svc,):
-    #    mock_svc.return_value.__enter__.return_value = fake_zk
-    #    yield fake_zk
-
-
-@pytest.fixture(scope="function")
-def zk_client(zk_mock):
-    from ficus.main import app
-
-    app.dependency_overrides[get_zk_client] = lambda: zk_mock
-    return TestClient(app)
-
+def file_structure():
+    file_structure = {
+        "scratch": {
+            "defaults": {
+                "software_a": {
+                    "default.yml": {"default-default-value": "the one ring"},
+                    "config.yml":   {
+                        "name": "config",
+                        "scope": "default",
+                        "default-layer-value": "beep beep"
+                    }
+                },
+                # Erroneously created extra folders in default.yml.
+                "test_delete_path_error": {
+                    "additional_node": {
+                        "config.yml": {
+                            "name": "config-delete-path-error"
+                        }
+                    }
+                }
+            },
+            "hostname": {
+                "w11dt000001": {
+                    "software_a": {
+                        "default.json": {"computer-default-value": "to rule them all"},
+                        "config.yml": {"computer-layer-value": "boop boop"}
+                    }
+                }
+            },
+            "subject_id": {
+                "614173": {
+                    "software_a": {
+                        "default.json": {"subject-default-value": "one config to bring them all"},
+                        "config.yml": {
+                            "subject-layer-value": "bap bap",
+                            "scope": "614173",
+                            "The Cure": "show me how you do that trick"
+                        }
+                    }
+                }
+            },
+        }
+    }
+    return file_structure
 
 @pytest.fixture
-def filesys_store(tmp_path):
+def filesys_store(tmp_path, file_structure):
     def create_structure(base_path: Path, structure: dict):
         """Recursively parse a dict to create file structure."""
         for name, content in structure.items():
@@ -59,53 +77,39 @@ def filesys_store(tmp_path):
                 current_path.write_bytes(_validate_and_convert_to_bytes(current_path.suffix,
                                                                         content))
 
-    file_structure = {
-        "defaults": {
-            "software_a": {
-                "default.yml": {"default-default-value": "the one ring"},
-                "config.yml":   {
-                    "name": "config",
-                    "scope": "default",
-                    "default-layer-value": "beep beep"
-                }
-            },
-            # Erroneously created extra folders in default.yml.
-            "test_delete_path_error": {
-                "additional_node": {}
-            }
-        },
-        "hostname": {
-            "w11dt000001": {
-                "software_a": {
-                    "default.json": {"computer-default-value": "to rule them all"},
-                    "config.yml": {"computer-layer-value": "boop boop"}
-                }
-            }
-        },
-        "subject_id": {
-            "614173": {
-                "software_a": {
-                    "default.json": {"subject-default-value": "one config to bring them all"},
-                    "config.yml": {
-                        "subject-layer-value": "bap bap",
-                        "scope": "614173",
-                        "The Cure": "show me how you do that trick"
-                    }
-                }
-            }
-        },
-    }
-
     create_structure(tmp_path, file_structure)
-
-    return FileSysStore(tmp_path)
+    return FileSysStore(rootdir= tmp_path / "scratch")
 
 @pytest.fixture
-def zookeeper_store(monkeypatch, tmp_path):
-    monkeypatch.setattr(ficus.database.zookeeper, "KazooClient", FakeZK)
-    return ZKStore(hosts=["localhost:9000"], rootdir=tmp_path)
+def zookeeper_store(monkeypatch, file_structure):
+
+    def make_zk_node(node_name, value: dict | None = None, print_level=0) -> Node:
+        """Recursively parse a dict to create ZK Node structure."""
+        if node_name.lower().endswith(("yml", "yaml", "json")):
+            return Node(name=node_name, value=value)
+        children = {}
+        if value is None:
+            value = {}
+        for name, content in value.items():
+            children[name] = make_zk_node(node_name=name,
+                                          value=content,
+                                          print_level=print_level+4)
+        return Node(name=node_name, value=None, children=children)
+
+    root = make_zk_node(node_name="root", value=file_structure)
+    #print()
+    #print_node(root)
+    def fake_zk(hosts: list[str]):
+        return FakeZK(hosts=hosts, root=root)
+
+    monkeypatch.setattr(ficus.database.zookeeper, "KazooClient", fake_zk)
+
+    zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"))
+    yield zk_store
+
 
 #@pytest.fixture(params=["filesys_store", "zookeeper_store"])
-@pytest.fixture(params=["filesys_store"])
+#@pytest.fixture(params=["filesys_store"])
+@pytest.fixture(params=["zookeeper_store"])
 def data_store(request):
     return request.getfixturevalue(request.param)
