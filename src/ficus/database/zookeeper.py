@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+#from contextlib import contextmanager
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -10,26 +10,44 @@ from ficus.core.exceptions import NotEmptyError, BadVersionError, PathNotFoundEr
 from kazoo.recipe.watchers import NoNodeError
 from loguru import logger
 from pathlib import Path
+from threading import Lock
 
 from ficus.database.data_store import DataStore
+
+class ZKClientContextManager:
+    """Reentrant context manager to manage one zookeeper connection with nested
+    connection calls."""
+
+    def __init__(self, hosts: list[str]):
+        self._depth: int = 0 # Tracks the nesting level.
+        self._lock: Lock = Lock()
+        self.hosts: list[str] = hosts
+        self._zk: KazooClient | None = None
+
+    def __enter__(self):
+        with self._lock:
+            if self._depth == 0:
+                self._zk = KazooClient(hosts=",".join(self.hosts))
+                self._zk.start()
+
+            self._depth += 1
+            return self._zk
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        with self._lock:
+            self._depth -= 1
+
+            if self._depth == 0:
+                self._zk.stop()
+                self._zk.close()
+                self._zk = None
+
+        # Return False to let exceptions propagate normally
+        return False
 
 
 class ZKStore(DataStore):
     """CRUD functions for Zookeeper-based data store."""
-
-    @contextmanager
-    def _get_zk_client(self):
-        """Context manager for KazooClient connection, ensures proper cleanup and
-        handles timeouts."""
-        self.log.debug(f"opening connection to zookeeper @ {self.hosts}")
-        zk = KazooClient(hosts=",".join(self.hosts))
-        zk.start()
-        try:
-            yield zk
-        finally:
-            self.log.debug(f"closing connection to zookeeper @ {self.hosts}")
-            zk.stop()
-            zk.close()
 
     def __init__(self, hosts: list[str], rootdir: Path | str, scopes: set[str],
                  create_missing_scopes: bool = True):
@@ -49,9 +67,9 @@ class ZKStore(DataStore):
     # crud functions
     def create(self, path: Path | str, data: bytes | None) -> None:
         path = self._sanitize(path)
-        if self.exists(path) and self.is_file(path):
-            raise NotEmptyError(f"Path {path} already exists.")
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
+            if self.exists(path) and self.is_file(path):
+                raise NotEmptyError(f"Path {path} already exists.")
             if data is None:  # assume path is folder.
                 zk.ensure_path(path)
                 return
@@ -59,7 +77,7 @@ class ZKStore(DataStore):
 
     def read(self, path: Path | str) -> bytes:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             data = None
             try:
                 data, stat = zk.get(path.as_posix())
@@ -71,7 +89,7 @@ class ZKStore(DataStore):
 
     def update(self, path: Path | str, data: bytes, force: bool = False) -> None:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             # force if specified, or if we've never read the data in the first place.
             version = -1 if force else self._path_versions.get(path.as_posix(), -1)
             try:
@@ -82,7 +100,7 @@ class ZKStore(DataStore):
 
     def delete(self, path: Path | str, recursive: bool = False) -> None:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             try:
                 zk.delete(path.as_posix(), recursive=recursive)
             except ZKNotEmptyError:
@@ -93,18 +111,18 @@ class ZKStore(DataStore):
     # utility
     def exists(self, path: Path | str) -> bool:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             return zk.exists(path.as_posix())
 
     def is_file(self, path: Path | str) -> bool:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             children: list = zk.get_children(path.as_posix())
             return len(children) == 0
 
     def list_files(self, path: Path | str) -> list[str]:
         path = self._sanitize(path)
-        with self._get_zk_client() as zk:
+        with ZKClientContextManager(self.hosts) as zk:
             children: list = zk.get_children(path.as_posix())
             if len(children) == 0:
                 raise ValueError(f"Cannot list files on a file: {path}")

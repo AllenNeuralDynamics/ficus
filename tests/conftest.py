@@ -1,6 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 from tests.zk_data import FakeZK
 from tests.zk_data import Node, print_node
 
