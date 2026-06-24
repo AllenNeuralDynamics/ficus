@@ -1,3 +1,4 @@
+import copy
 import inspect
 import fastapi
 
@@ -23,6 +24,20 @@ from ficus.services.configs import (
     get_all_files,
 )
 from ficus.schemas.configs import ConfigResponse, ConfigDataResponse, ConfigErrorResponse
+
+config_error_responses = {
+    400: {"model": ConfigErrorResponse, "description": "Path is a directory and "
+                                                       "cannot be deleted"},
+    404: {"model": ConfigErrorResponse, "description": "File not found"},
+    409: {"model": ConfigErrorResponse, "description": "File already exists"},
+    415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
+    500: {
+        "model": ConfigErrorResponse,
+        "description": "Failed to serialize configuration data",}
+}
+
+def get_config_error_responses(*responses) -> dict[int | str, dict[str, ConfigErrorResponse | str]]:
+    return {k: config_error_responses[k] for k in responses}
 
 
 ################################################################################
@@ -92,7 +107,7 @@ def _get_endpoint_info_from_scopes(endpoint_creator: Callable) -> list[tuple[str
 @router.get(
     "/namespaces/{namespace}/config",
     description=Path(BASEDIR / "docs/get_configuration.md").read_text(),
-    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
+    responses=get_config_error_responses(404),
 )
 def get_configuration(
     namespace: str,
@@ -255,15 +270,7 @@ def get_update_config_handler() -> Callable:
 @router.patch(
     "/namespaces/{namespace}/config/{filename}",
     description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
-    responses={
-        404: {"model": ConfigErrorResponse, "description": "File not found"},
-        409: {"model": ConfigErrorResponse, "description": "File already exists"},
-        415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-        500: {
-            "model": ConfigErrorResponse,
-            "description": "Failed to serialize configuration data",
-        },
-    },
+    responses=get_config_error_responses(404, 409, 415, 500)
 )
 async def update_defaults_config(
     namespace: str,
@@ -281,15 +288,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_update_conf
         methods=["PATCH"],
         tags=[f"{scope_name}"],
         description=Path(BASEDIR / "docs/patch_configuration.md").read_text(),
-        responses={
-            404: {"model": ConfigErrorResponse, "description": "File not found"},
-            409: {"model": ConfigErrorResponse, "description": "File already exists"},
-            415: {"model": ConfigErrorResponse, "description": "Unsupported file type"},
-            500: {
-                "model": ConfigErrorResponse,
-                "description": "Failed to serialize configuration data",
-            },
-        },
+        responses=get_config_error_responses(404, 409, 415, 500)
     )
 
 
@@ -358,13 +357,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
         methods=["DELETE"],
         tags=[f"{scope_name}"],
         description=Path(BASEDIR / "docs/delete_configuration.md").read_text(),
-        responses={
-            400: {
-                "model": ConfigErrorResponse,
-                "description": "Path is a directory and cannot be deleted",
-            },
-            404: {"model": ConfigErrorResponse, "description": "File not found"},
-        },
+        responses=get_config_error_responses(400, 404)
     )
 
 
@@ -378,7 +371,7 @@ for path, endpoint, scope_name in _get_endpoint_info_from_scopes(get_delete_conf
 @router.get(
     "/list_files/{namespace}/configs",
     description=Path(BASEDIR / "docs/get_all_files_in_path.md").read_text(),
-    responses={404: {"model": ConfigErrorResponse, "description": "File not found"}},
+    responses=get_config_error_responses(404)
 )
 def get_all_files_in_path(
     namespace: str,
