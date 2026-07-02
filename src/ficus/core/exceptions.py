@@ -13,6 +13,9 @@ class ConfigSerializeError(Exception):
 class ConfigDecodeError(Exception):
     pass
 
+class ConfigMutatedError(Exception):
+    pass
+
 
 class UnsupportedFileTypeError(Exception):
     pass

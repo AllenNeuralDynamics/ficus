@@ -1,9 +1,13 @@
+import copy
 import json
+from loguru import logger
+from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
 import yaml
 
 from ficus.core.exceptions import (
     ConfigExistsError,
     ConfigDecodeError,
+    ConfigMutatedError,
     ConfigNotFoundError,
     ConfigSerializeError,
     InvalidNamespaceError,
@@ -78,7 +82,7 @@ def _ensure_single_scope(
                                     f"are: {data_store.scopes}.")
     return scope, identifier
 
-
+# TODO: examples for when to use different scope orders.
 def get_config(
     data_store: DataStore,
     namespace: str,
@@ -143,14 +147,14 @@ def get_config(
 def save_config(
     data_store: DataStore,
     namespace: str,
+    scope_identifier: dict[ScopeName, str],
     filename: str,
     data: dict,
-    scope_identifiers: dict[ScopeName, str],
     override: bool = False,
     create_if_missing: bool = True,
 ) -> tuple[dict, Path]:
     """
-    Save config file to data store based on namespace, scope, and identifier.
+    Save input data to a single file in the data store based on namespace, scope, and identifier.
     Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
     new default file, unless overriding.
 
@@ -182,7 +186,7 @@ def save_config(
             A tuple containing the configuration data and the path the config was saved to.
     """
     # Check if scope exists only if we are overriding.
-    scope, identifier = _ensure_single_scope(data_store, scope_identifiers,
+    scope, identifier = _ensure_single_scope(data_store, scope_identifier,
                                              validate_scope=(not override))
     data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
 
@@ -218,6 +222,85 @@ def save_config(
     else:
         data_store.create(filepath, data_as_bytes)
     return _validate_and_convert_to_dict(filepath.suffix, data_as_bytes), filepath
+
+
+def save_config_deep(
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str],
+    filename: str,
+    data: dict,
+    override_defaults: bool = False,
+    append_new_fields_to_last_scope: bool = False,
+) -> dict:
+    """Deep save config file by walking up the override hierarchy specified in
+    scope_identifiers and saving fields back to the location where they were
+    inserted.
+
+    Parameters
+    ----------
+    namespace:
+        the config namespace.
+    filename:
+        the config filename including extension.
+    scope_identifiers:
+        dict of scope identifiers sorted in lowest-override-priority to
+        highest-override-priority.
+    override_defaults:
+        If True allow writing to the defaults config of any scope.
+        If False, put all fields that would be edited into the default file into
+        a config named `filename` at the same scope. Create if missing.
+    append_new_fields_to_last_scope:
+        if new fields are created, append them at the lowest level scope.
+        Error if new fields are created and this flag is set to False.
+    """
+    override_stack = get_file_override_stack(data_store=data_store,
+                                              namespace=namespace,
+                                              scope_identifiers=scope_identifiers,
+                                              filename=filename)
+    # Cache new config values before writing to each file.
+    new_cfg_data: dict[Path, dict] = {}
+    # Walk up the override stack and save new field values to the respective
+    # place they came from. Do this locally first to check if we have leftover data.
+    data_cpy = copy.deepcopy(data)
+    for filepath in reversed(override_stack):
+        old_level_cfg = _validate_and_convert_to_dict(filepath.suffix, data_store.read(filepath))
+        level_cfg = copy.deepcopy(old_level_cfg)
+        _deep_update_existing_destructive(level_cfg, data_cpy)
+        # Nothing to save back if nothing actually changed.
+        if old_level_cfg == level_cfg:
+            continue
+        # IF the data came from default.*, get a local copy of default.yml,
+        # save to filename at the same scope.
+        if filepath.stem.lower() == "default" and not override_defaults:
+            filepath = filepath.parent / f"{filename}"
+        # Respect override hierarchy if filename already exists at the scope that
+        # defaults would go.
+        if filepath in new_cfg_data:
+            priority_cfg = new_cfg_data[filepath]
+            level_cfg.update(priority_cfg)
+        # Track new config to be written back in batch after-the-fact.
+        new_cfg_data[filepath] = level_cfg
+    # Do the writes in batch after checking if extra fields exist.
+    # Put any new fields at the lowest level scope.
+    if data_cpy:
+        if append_new_fields_to_last_scope:
+            data_as_bytes = _validate_and_convert_to_bytes(override_stack[-1].suffix, data_cpy)
+            data_store.update(override_stack[-1], data_as_bytes)
+        else:
+            raise ConfigMutatedError("Config to be saved has additional fields not "
+                                     "previously found in the original config override "
+                                     f"stack. New fields: {data_cpy}")
+
+    for filepath, new_cfg_data in new_cfg_data.items():
+        data_as_bytes = _validate_and_convert_to_bytes(filepath.suffix, new_cfg_data)
+        if data_store.exists(filepath):
+            data_store.update(filepath, data_as_bytes)
+        else:
+            logger.warning(f"Cannot override default config at scope {filepath.parent}. "
+                           f"Creating new {filepath.name} to save values altered in the default.")
+            data_store.create(filepath, data_as_bytes)
+    return data_cpy
 
 
 def update_config(
@@ -419,37 +502,6 @@ def get_all_override_stacks(
 #   Utility
 #
 ################################################################################
-
-
-def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
-    """
-    Merge two dictionaries together, with values from the updating_mapping taking precedence over
-    mapping. Merges deeply (nested dictionaries will also merge) and handles overriding types.
-
-    Parameters:
-    -----------
-        mapping: dict
-            The main dictionary to merge into.
-        updating_mappings: dict
-            Dictionary with overrides to merge into the main dictionary.
-    Returns:
-    --------
-        dict
-            The merged dictionary.
-    """
-    updated_mapping = mapping.copy()
-    for updating_mapping in updating_mappings:
-        for k, v in updating_mapping.items():
-            if (
-                k in updated_mapping
-                and isinstance(updated_mapping[k], dict)
-                and isinstance(v, dict)
-            ):
-                updated_mapping[k] = _deep_update(updated_mapping[k], v)
-            else:
-                updated_mapping[k] = v
-    return updated_mapping
-
 
 def _find_first_invalid_subpath(
     data_store: DataStore,

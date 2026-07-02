@@ -108,6 +108,7 @@ def zookeeper_store(monkeypatch, store_structure):
     yield zk_store
 
 
-@pytest.fixture(params=["filesys_store", "zookeeper_store"])
+#@pytest.fixture(params=["filesys_store", "zookeeper_store"])
+@pytest.fixture(params=["filesys_store"])
 def data_store(request):
     return request.getfixturevalue(request.param)

@@ -15,7 +15,6 @@ from ficus.database.filesys import FileSysStore
 from ficus.core.config import settings
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Ficus API...")

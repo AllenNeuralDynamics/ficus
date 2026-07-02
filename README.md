@@ -92,6 +92,20 @@ Below is the precedence of merging config files from lowest to highest. Lower pr
 - subjects/{subject_id}/{namespace}/default.yml 
 - subjects/{subject_id}/{namespace}/{filename} 
 
+
+## How to use this Structure
+Use Scopes to store properties intrinsic to the scope.
+For example, the subject scope contains config values with properties intrinsic to that 
+
+
+## Alternatives
+### Why not just have a centralized confgi schema across all devices that use this package?
+It's worth considering: why do you need all this? If you have a common config schema across all software that uses configs, then you don't need the concept of a namespace.
+
+In practice, this isn't always possible.
+You might inherit legacy code, or it may not be practical to apply and maintain an adapter that converts a config from a shared schema to a software-specific one.
+
+
 ## Examples
 
 ### Subject-Specific Overrides

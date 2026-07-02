@@ -6,11 +6,11 @@ from ficus.core.exceptions import (
     UnsupportedFileTypeError,
 )
 from ficus.services.configs import (
-    _deep_update,
     _find_first_invalid_subpath,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
 )
+from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
 from pathlib import Path, PurePath
 
 

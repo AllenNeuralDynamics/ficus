@@ -32,6 +32,7 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
 class Settings(BaseSettings):
     """Settings for a Ficus Instance."""
     config_filename: str = "ficus_setup.json"
+    # TODO: if this is ordered, then we also drive merge order from here.
     scopes: set[str] = {"hostname", "subject_id"}
     store: str = "ZKStore"
     root_dir: str = "scratch"
