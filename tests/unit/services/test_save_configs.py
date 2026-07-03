@@ -25,7 +25,7 @@ from pathlib import Path
         pytest.param("new_namespace", {}, "default.yml", False, True, id="save-new-default-file"),
         pytest.param("software_a", {}, "config_new.yml", False, True, id="save-new-file"),
         pytest.param(
-            "software", {"hostname": "w11new"}, "config.yml", False, True, id="save-new-scope"
+            "software_a", {"hostname": "w11new"}, "config.yml", False, True, id="save-new-scope"
         ),
         pytest.param(
             "software_a", {}, "config.yml", True, True, id="override-create-missing-paths"

@@ -71,7 +71,7 @@ class ZKStore(DataStore):
             if self.exists(path) and self.is_file(path):
                 raise NotEmptyError(f"Path {path} already exists.")
             if data is None:  # assume path is folder.
-                zk.ensure_path(path)
+                zk.ensure_path(path.as_posix())
                 return
             zk.create(path.as_posix(), data, makepath=True)
 
@@ -112,20 +112,24 @@ class ZKStore(DataStore):
     def exists(self, path: Path | str) -> bool:
         path = self._sanitize(path)
         with ZKClientContextManager(self.hosts) as zk:
-            return zk.exists(path.as_posix())
+            exists = zk.exists(path.as_posix())
+            return exists
+            #return zk.exists(path.as_posix())
 
     def is_file(self, path: Path | str) -> bool:
         path = self._sanitize(path)
         with ZKClientContextManager(self.hosts) as zk:
+            data, _ = zk.get(path.as_posix())
             children: list = zk.get_children(path.as_posix())
-            return len(children) == 0
+            is_file = len(children) == 0 and len(data) > 0
+            return is_file
 
     def list_files(self, path: Path | str) -> list[str]:
         path = self._sanitize(path)
         with ZKClientContextManager(self.hosts) as zk:
-            children: list = zk.get_children(path.as_posix())
-            if len(children) == 0:
+            if self.is_file(path):
                 raise ValueError(f"Cannot list files on a file: {path}")
+            children: list = zk.get_children(path.as_posix())
             return children
 
 

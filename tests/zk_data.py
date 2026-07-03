@@ -38,7 +38,9 @@ class FakeZK:
         try:
             for part in parts:
                 node = node.children[part]
-            return json.dumps(node.value).encode("utf-8"), list(node.children.keys())
+            if node.value is not None:
+                return json.dumps(node.value).encode("utf-8"), list(node.children.keys())
+            return "".encode("utf-8"), list(node.children.keys())
         except KeyError:
             raise NoNodeError
 
@@ -46,7 +48,7 @@ class FakeZK:
         parts = path.strip("/").split("/")
         node = self.root
 
-        for part in parts[:-1]:
+        for part in parts:
             if part not in node.children:
                 node.children[part] = Node(name=part)
             node = node.children[part]

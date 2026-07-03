@@ -344,13 +344,6 @@ def save_config_deep(
         ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
         save_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                     filename=filename, data=new_cfg_data, override=True)
-        #data_as_bytes = _validate_and_convert_to_bytes(filepath.suffix, new_cfg_data)
-        #if data_store.exists(filepath):
-        #    data_store.update(filepath, data_as_bytes)
-        #else:
-        #    logger.warning(f"Cannot override default config at scope {filepath.parent}. "
-        #                   f"Creating new {filepath.name} to save values altered in the default.")
-        #    data_store.create(filepath, data_as_bytes)
     return data_cpy
 
 
@@ -409,7 +402,7 @@ def delete_config(
     scope_identifiers: dict[ScopeName, str] | None = None
 ) -> str:
     """
-    Delete config file in zookeeper based on namespace, scope, and identifier.
+    Delete config file based on namespace, scope, and identifier.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
@@ -429,12 +422,13 @@ def delete_config(
         str
             The path of the deleted config file.
     """
-    scope, identifier = _ensure_single_scope(data_store, scope_identifiers)
-    if scope and identifier:
-        path = data_store.rootdir / f"{scope}/{identifier}/{namespace}/{filename}"
-    else:
-        path = data_store.rootdir / f"defaults/{namespace}/{filename}"
 
+    paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
+                                  scope_identifiers=scope_identifiers)
+    # Should be at most default scope path and scoped path.
+    if len(paths) > 2:
+        raise MultipleScopeIdentifiersError()
+    path = paths[-1] / filename
     try:
         data_store.delete(path)
         return str(path)

@@ -3,7 +3,9 @@ from pathlib import Path
 
 from ficus.core.exceptions import (
     ConfigNotFoundError,
+    InvalidScopeIdentifierError,
     PathIsDirectoryError,
+    InvalidNamespaceError,
     InvalidScopeError,
     MultipleScopeIdentifiersError,
 )
@@ -63,17 +65,23 @@ def test_delete_config_invalid_identifier_names_return_invalid_scope_identifier_
 
 
 @pytest.mark.parametrize(
-    "namespace, scope_identifiers, filename",
+    "namespace, scope_identifiers, filename, error_type",
     [
-        pytest.param("new_namespace", {}, "config.yml", id="missing-namespace"),
-        pytest.param("software_a", {}, "config_new.yml", id="missing-file"),
-        pytest.param("software_a", {"hostname": "w11new"}, "config.yml", id="missing-scope-id"),
+        pytest.param(
+            "new_namespace", {}, "config.yml", InvalidNamespaceError, id="missing-namespace"
+            ),
+        pytest.param(
+            "software_a", {}, "config_new.yml", ConfigNotFoundError, id="missing-file"
+            ),
+        pytest.param(
+            "software_a", {"hostname": "w11new"}, "config.yml", InvalidScopeIdentifierError, id="missing-scope-id"
+            ),
     ],
 )
 def test_delete_config_missing_config_return_config_not_found_error(
-    data_store, namespace, scope_identifiers, filename
+    data_store, namespace, scope_identifiers, filename, error_type
 ):
-    with pytest.raises(ConfigNotFoundError):
+    with pytest.raises(error_type):
         delete_config(data_store=data_store, namespace=namespace, filename=filename,
             scope_identifiers=scope_identifiers)
 
