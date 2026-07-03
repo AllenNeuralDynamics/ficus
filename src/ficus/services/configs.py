@@ -39,6 +39,15 @@ def _get_all_search_paths(
     with defaults and followed by scopes in scope priority order.
 
     Scope priority is specified by the order the input `scope_identifiers` dict.
+
+    Raises
+    -------
+    InvalidScopeError
+        if the scope does not exist.
+    InvalidScopeIdentifierError
+        if the scope identifier does not exist.
+    InvalidNamespaceError
+        if the namespace does not exist.
     """
     if scope_identifiers is None:
         scope_identifiers = {}
@@ -64,6 +73,48 @@ def _get_all_search_paths(
     return paths
 
 
+def _ensure_paths(
+    data_store: DataStore,
+    namespace: str | None,
+    scope_identifiers: dict[ScopeName, str] | None):
+    """Create underlying data store structure to guarantee that namespace and
+    scope identifiers exist."""
+    namespace = namespace if namespace is not None else ""
+    scope_identifiers = scope_identifiers if scope_identifiers is not None else {}
+    # Create default namespace.
+    default_namespace_path = data_store.rootdir / Path(f"defaults/{namespace}")
+    if namespace and not data_store.exists(default_namespace_path):
+            data_store.create(path=default_namespace_path, data=None)
+            logger.debug(f"creating: {default_namespace_path}")
+    for scope, identifier in scope_identifiers.items():
+        # Create each scope with internal namespace.
+        scope_id_path = data_store.rootdir / Path(f"{scope}/{identifier}")
+        if namespace:
+            scope_id_path = scope_id_path / Path(namespace)
+        if not data_store.exists(scope_id_path):
+            logger.debug(f"creating: {scope_id_path}")
+            data_store.create(path=scope_id_path, data=None)
+
+
+def _get_parts_from_path(data_store: DataStore, path: Path
+) -> tuple[str, dict[ScopeName, str], str | None]:
+    namespace = ""
+    scope_identifier = {}
+    filename = None
+    subpath_from_root = data_store._sanitize(path).relative_to(data_store.rootdir)
+    path_parts = list(subpath_from_root.parts)
+    if path_parts[0] == "defaults":  # default scope case.
+        namespace = path_parts[1]
+        path_parts = path_parts[2:]
+    else:  # named scope case
+        scope_identifier[path_parts[0]] = path_parts[1]
+        namespace = path_parts[2]
+        path_parts = path_parts[3:]
+    if len(path_parts):
+        filename = path_parts[0]
+    return namespace, scope_identifier, filename
+
+
 def _ensure_single_scope(
     data_store: DataStore,
     scope_identifiers: dict[ScopeName, str] | None = None,
@@ -82,7 +133,7 @@ def _ensure_single_scope(
                                     f"are: {data_store.scopes}.")
     return scope, identifier
 
-# TODO: examples for when to use different scope orders.
+
 def get_config(
     data_store: DataStore,
     namespace: str,
@@ -151,12 +202,15 @@ def save_config(
     filename: str,
     data: dict,
     override: bool = False,
-    create_if_missing: bool = True,
+    create_missing_paths: bool = False
 ) -> tuple[dict, Path]:
     """
-    Save input data to a single file in the data store based on namespace, scope, and identifier.
-    Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
-    new default file, unless overriding.
+    Save input data to a single file in the data store based on namespace, scope,
+    and identifier. If the config does not already exist, create it. Throw an
+    error if the file already exists if `override=False`.
+
+    If scope and/or identifier do not exist and `create_missing_paths=True`,
+    create them.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
@@ -166,62 +220,56 @@ def save_config(
 
     Parameters:
     -----------
-        namespace: str
+        namespace
             The namespace for the configuration file.
-        filename: str
+        filename
             The name of the configuration file, including extension.
-        data: dict
+        data
             The configuration data to save.
-        scope_identifiers: dict[ScopeName, str]
+        scope_identifiers
             A dict, keyed by scope name, of identifiers per scope.
-        override: bool
-            Whether to override the config file if it already exists. If false and file exists,
-            error will be raised.
-        create_if_missing: bool
-            Whether to create the config file if it does not exist when overriding. If false and
-            file does not exist when overriding, error will be raised.
+        override
+            Whether to override the config file if it already exists (format agnostic).
+            Error if file exists and `override=False`
+        create_missing_path
+            whether to create namespace and identifier.
     Returns:
     --------
         tuple[dict, str]
             A tuple containing the configuration data and the path the config was saved to.
     """
-    # Check if scope exists only if we are overriding.
-    scope, identifier = _ensure_single_scope(data_store, scope_identifier,
-                                             validate_scope=(not override))
+    if create_missing_paths:
+        _ensure_paths(data_store=data_store, namespace=namespace,
+                      scope_identifiers=scope_identifier)
+    paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
+                                  scope_identifiers=scope_identifier)
+    # Should be at most default scope path and scoped path.
+    if len(paths) > 2:
+        raise MultipleScopeIdentifiersError()
+    filepath = paths[-1] / filename
+    files_in_scope = list_all_filenames(data_store=data_store, namespace=namespace,
+                                        scope_identifiers=scope_identifier)
+    # override and override_default need to check all file extensions.
+    file_stems_in_scope = [n.split(".")[0] for n in files_in_scope]
+    filestem = Path(filename).stem
+    if filestem in file_stems_in_scope and not override:
+        raise ConfigExistsError(f"Cannot override config: {filename} in {filepath} "
+                                "without override=True")
     data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
-
-    if scope and identifier:
-        CONFIG_PATH = data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}")
-    else:
-        CONFIG_PATH = data_store.rootdir / Path(f"defaults/{namespace}")
-    filepath = CONFIG_PATH / f"{filename}"
-    if not override:
-        # Not overriding, check default file doesn't already exist (if saving default)
-        if filename in DEFAULT_FILES:
-            for df in DEFAULT_FILES:
-                df_path = CONFIG_PATH / df
-                if data_store.exists(df_path):
-                    raise ConfigExistsError(f"Default File already exists: {df_path}")
-        # Not overriding, check normal file doesn't already exist
-        if data_store.exists(filepath):
-            raise ConfigExistsError(f"File already exists: {filepath}")
-    # Overriding, if create_if_missing is false, check file exists before overriding
-    if not data_store.exists(filepath) and not create_if_missing:
-        first_invalid_subpath = _find_first_invalid_subpath(data_store, filepath) or Path()
-        error_map = \
-        {
-            f"{scope}": InvalidScopeError,
-            f"{identifier}": InvalidScopeIdentifierError,
-            f"{namespace}": InvalidNamespaceError
-        }
-        error_msg = f"Path does not exist: {first_invalid_subpath}"
-        raise error_map.get(first_invalid_subpath.name, ConfigNotFoundError)(error_msg)
     # Overriding and create if missing
     if data_store.exists(filepath):
         data_store.update(filepath, data_as_bytes, force=True)
     else:
         data_store.create(filepath, data_as_bytes)
-    return _validate_and_convert_to_dict(filepath.suffix, data_as_bytes), filepath
+    # If extension changed, delete the previous format.
+    files_in_scope = list_all_filenames(data_store=data_store, namespace=namespace,
+                                        scope_identifiers=scope_identifier)
+    files_in_scope.remove(filename)
+    cfg_in_different_format = [f for f in files_in_scope if f.startswith(filestem)]
+    for cfg in cfg_in_different_format:  # should only be one other.
+        data_store.delete(paths[-1] / cfg)
+
+    return data, filepath
 
 
 def save_config_deep(
@@ -270,7 +318,7 @@ def save_config_deep(
         # Nothing to save back if nothing actually changed.
         if old_level_cfg == level_cfg:
             continue
-        # IF the data came from default.*, get a local copy of default.yml,
+        # IF the data came from default.*, get a local copy of default.*,
         # save to filename at the same scope.
         if filepath.stem.lower() == "default" and not override_defaults:
             filepath = filepath.parent / f"{filename}"
@@ -293,13 +341,16 @@ def save_config_deep(
                                      f"stack. New fields: {data_cpy}")
 
     for filepath, new_cfg_data in new_cfg_data.items():
-        data_as_bytes = _validate_and_convert_to_bytes(filepath.suffix, new_cfg_data)
-        if data_store.exists(filepath):
-            data_store.update(filepath, data_as_bytes)
-        else:
-            logger.warning(f"Cannot override default config at scope {filepath.parent}. "
-                           f"Creating new {filepath.name} to save values altered in the default.")
-            data_store.create(filepath, data_as_bytes)
+        ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
+        save_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+                    filename=filename, data=new_cfg_data, override=True)
+        #data_as_bytes = _validate_and_convert_to_bytes(filepath.suffix, new_cfg_data)
+        #if data_store.exists(filepath):
+        #    data_store.update(filepath, data_as_bytes)
+        #else:
+        #    logger.warning(f"Cannot override default config at scope {filepath.parent}. "
+        #                   f"Creating new {filepath.name} to save values altered in the default.")
+        #    data_store.create(filepath, data_as_bytes)
     return data_cpy
 
 
@@ -311,11 +362,10 @@ def update_config(
     scope_identifiers: dict[ScopeName, str]
 ):
     """
-    Update config file in zookeeper based on namespace, scope, and identifier.
+    Update config file based on namespace, scope, and identifier.
 
     This function will get the existing config and merge it with the data given. Afterwards it will
-    treat this merged config as a new config and save it to zookeeper, overriding the existing
-    config file (thus having same behavior/validations as the save and get functions)
+    override the existing config file (thus having same behavior/validations as the save and get functions)
 
     Parameters:
     -----------
@@ -333,6 +383,8 @@ def update_config(
         tuple[dict, str]
             A tuple containing the updated configuration data and the path the config was saved to.
     """
+    # FIXME: this is basically a save where the config must already exist.
+
     filepath = PurePath(filename) # convert for suffix
     scope, identifier = _ensure_single_scope(data_store, scope_identifiers)
     current_config, _ = get_config(
@@ -346,9 +398,9 @@ def update_config(
                        namespace=namespace,
                        filename=filename,
                        data=raw_config,
-                       scope_identifiers=scope_identifiers,
+                       scope_identifier=scope_identifiers,
                        override=True,
-                       create_if_missing=False
+                       create_missing_paths=False
                        )
 
 
@@ -439,11 +491,10 @@ def get_file_override_stack(
     # Warning: we don't check to see if multiple defaults are present.
     override_stack = []
     valid_files = DEFAULT_FILES | {filename}
+    # Will also validate: namespace, scope, scope identifier.
     paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
     # Get defaults, followed by config name in each namespace.
     for folder_path in paths:
-        if not data_store.exists(folder_path):
-            raise InvalidScopeIdentifierError(f"Folder does not exist: {folder_path}")
         # Sort with defaults first.
         for filename_ in sorted(data_store.list_files(folder_path),
                            key=lambda x: "" if x.lower() in DEFAULT_FILES else x.lower()):

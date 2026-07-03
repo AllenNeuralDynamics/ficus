@@ -6,12 +6,47 @@ from ficus.core.exceptions import (
     UnsupportedFileTypeError,
 )
 from ficus.services.configs import (
+    _ensure_paths,
     _find_first_invalid_subpath,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
 )
 from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
 from pathlib import Path, PurePath
+
+################################################################################
+#
+#  _ensure_paths()
+#
+################################################################################
+@pytest.mark.parametrize(
+    "namespace, scope_identifiers, resulting_subpaths",
+    [
+        pytest.param("", {"hostname": "w11dt000002"},
+            [Path("hostname/w11dt000002")],
+            id="no namespace (empty string)"),
+        pytest.param("new_namespace", {},
+            [Path("defaults/new_namespace")],
+            id="no scopes (empty dict)"),
+        pytest.param("new_namespace", None,
+            [Path("defaults/new_namespace")],
+            id="no scopes (None)"),
+        pytest.param(None, {"hostname": "w11dt000002"},
+            [Path("hostname/w11dt000002")],
+            id="no namespace (None)"),
+        pytest.param("new_namespace", {"hostname": "w11dt000002"},
+            [Path("defaults/new_namespace"),
+             Path("hostname/w11dt000002/new_namespace")],
+            id="new namespace"),
+    ],
+)
+def test_ensure_paths(namespace, scope_identifiers, resulting_subpaths, data_store):
+    resulting_paths = [data_store.rootdir / subpath for subpath in resulting_subpaths]
+    for path in resulting_paths:
+        assert not data_store.exists(path)
+    _ensure_paths(data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers)
+    for path in resulting_paths:
+        assert data_store.exists(path)
 
 
 ################################################################################
