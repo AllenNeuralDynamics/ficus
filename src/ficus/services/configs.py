@@ -372,7 +372,7 @@ def update_config(
     namespace: str,
     filename: str,
     data: dict,
-    scope_identifiers: dict[ScopeName, str]
+    scope_identifier: dict[ScopeName, str]
 ):
     """
     Update config file based on namespace, scope, and identifier.
@@ -399,10 +399,10 @@ def update_config(
     # FIXME: this is basically a save where the config must already exist.
 
     filepath = PurePath(filename) # convert for suffix
-    scope, identifier = _ensure_single_scope(data_store, scope_identifiers)
+    scope, identifier = _ensure_single_scope(data_store, scope_identifier)
     current_config, _ = get_config(
         data_store=data_store, namespace=namespace, filename=filename,
-        scope_identifiers=scope_identifiers, merge=False
+        scope_identifiers=scope_identifier, merge=False
     )
     # Throw away value, only want to validate
     _validate_and_convert_to_bytes(filepath.suffix, data=data)
@@ -411,7 +411,7 @@ def update_config(
                        namespace=namespace,
                        filename=filename,
                        data=raw_config,
-                       scope_identifier=scope_identifiers,
+                       scope_identifier=scope_identifier,
                        override=True,
                        create_missing_paths=False
                        )
