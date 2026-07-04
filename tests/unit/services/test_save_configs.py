@@ -24,6 +24,7 @@ from pathlib import Path
         pytest.param("new_namespace", {}, "config.yml", False, True, id="save-new-namespace"),
         pytest.param("new_namespace", {}, "default.yml", False, True, id="save-new-default-file"),
         pytest.param("software_a", {}, "config_new.yml", False, True, id="save-new-file"),
+        pytest.param("software_a", {}, "config.json", True, True, id="save-change_format"),
         pytest.param(
             "software_a", {"hostname": "w11new"}, "config.yml", False, True, id="save-new-scope"
         ),

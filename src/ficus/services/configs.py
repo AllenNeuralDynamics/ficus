@@ -25,6 +25,8 @@ from pathlib import Path, PurePath
 
 
 DEFAULT_FILES = {"default.yml", "default.yaml", "default.json"}
+VALID_EXTENSIONS = {".yaml", ".yml", ".json"}
+DEFAULT_SUFFIX = ".yml"
 
 
 ScopeName = str
@@ -162,8 +164,8 @@ def get_config(
             values from the hostname: W10BRUNO override values in subject_id: mouse_0,
             which override any defaults.)
         filename: str | None
-            The name of the configuration file, including extension. If None, the default config
-            file will be used.
+            The name of the configuration file (extension is ignored). If None,
+            the default config file will be used.
         merge: bool
             Whether to merge config files found in each scope. If false, only the config file in
             the last scope from identifier names will be returned.
@@ -180,7 +182,7 @@ def get_config(
         file_override_paths = get_file_override_stack(data_store=data_store,
                                                       namespace=namespace,
                                                       scope_identifiers=scope_identifiers,
-                                                      filename=filename)
+                                                      filestem=PurePath(filename).stem)
     except FileNotFoundError:
         raise ConfigNotFoundError()
     if not file_override_paths:
@@ -223,7 +225,9 @@ def save_config(
         namespace
             The namespace for the configuration file.
         filename
-            The name of the configuration file, including extension.
+            The name of the configuration file. Extension is optional. If specified,
+            save to the preferred extension. If unspecified, save in the default
+            format (yaml).
         data
             The configuration data to save.
         scope_identifiers
@@ -238,24 +242,28 @@ def save_config(
         tuple[dict, str]
             A tuple containing the configuration data and the path the config was saved to.
     """
+    file_as_path = PurePath(filename)
+    if not file_as_path.suffix:  # append default suffix for saving..
+        file_as_path.with_suffix(DEFAULT_SUFFIX)
+    if file_as_path.suffix not in VALID_EXTENSIONS:
+        raise UnsupportedFileTypeError(f"Cannot save {filename} to unknown format.")
     if create_missing_paths:
         _ensure_paths(data_store=data_store, namespace=namespace,
                       scope_identifiers=scope_identifier)
     paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
                                   scope_identifiers=scope_identifier)
-    # Should be at most default scope path and scoped path.
-    if len(paths) > 2:
+    if len(paths) > 2:  # Should be at most default scope path and scoped path.
         raise MultipleScopeIdentifiersError()
-    filepath = paths[-1] / filename
+    filepath = paths[-1] / file_as_path
     files_in_scope = list_all_filenames(data_store=data_store, namespace=namespace,
                                         scope_identifiers=scope_identifier)
     # override and override_default need to check all file extensions.
     file_stems_in_scope = [n.split(".")[0] for n in files_in_scope]
-    filestem = Path(filename).stem
+    filestem = file_as_path.stem
     if filestem in file_stems_in_scope and not override:
-        raise ConfigExistsError(f"Cannot override config: {filename} in {filepath} "
+        raise ConfigExistsError(f"Cannot override config: {filepath.name} in {filepath} "
                                 "without override=True")
-    data_as_bytes = _validate_and_convert_to_bytes(Path(filename).suffix, data)
+    data_as_bytes = _validate_and_convert_to_bytes(file_as_path.suffix, data)
     # Overriding and create if missing
     if data_store.exists(filepath):
         data_store.update(filepath, data_as_bytes, force=True)
@@ -289,8 +297,10 @@ def save_config_deep(
     ----------
     namespace:
         the config namespace.
-    filename:
-        the config filename including extension.
+    filename
+        The name of the configuration file. Extension is optional. If specified,
+        save to the preferred extension. If unspecified, save in the default
+        format (yaml).
     scope_identifiers:
         dict of scope identifiers sorted in lowest-override-priority to
         highest-override-priority.
@@ -302,10 +312,20 @@ def save_config_deep(
         if new fields are created, append them at the lowest level scope.
         Error if new fields are created and this flag is set to False.
     """
+    file_as_path = PurePath(filename)
+    if not file_as_path.suffix:  # append default suffix for saving..
+        file_as_path.with_suffix(DEFAULT_SUFFIX)
+    if file_as_path.suffix not in VALID_EXTENSIONS:
+        raise UnsupportedFileTypeError(f"Cannot save {filename} to unknown format.")
     override_stack = get_file_override_stack(data_store=data_store,
                                               namespace=namespace,
                                               scope_identifiers=scope_identifiers,
-                                              filename=filename)
+                                              filestem=file_as_path.stem)
+    # Convert all suffixes to the desired suffix.
+    # (Flat save_config will convert the file format.)
+    for filepath in override_stack:
+        if filepath.stem == file_as_path.stem:
+            filepath.with_suffix(file_as_path.suffix)
     # Cache new config values before writing to each file.
     new_cfg_data: dict[Path, dict] = {}
     # Walk up the override stack and save new field values to the respective
@@ -321,7 +341,7 @@ def save_config_deep(
         # IF the data came from default.*, get a local copy of default.*,
         # save to filename at the same scope.
         if filepath.stem.lower() == "default" and not override_defaults:
-            filepath = filepath.parent / f"{filename}"
+            filepath = filepath.parent / file_as_path
         # Respect override hierarchy if filename already exists at the scope that
         # defaults would go.
         if filepath in new_cfg_data:
@@ -399,7 +419,7 @@ def update_config(
 
 def delete_config(
     data_store: DataStore, namespace: str, filename: str,
-    scope_identifiers: dict[ScopeName, str] | None = None
+    scope_identifier: dict[ScopeName, str] | None = None
 ) -> str:
     """
     Delete config file based on namespace, scope, and identifier.
@@ -424,9 +444,8 @@ def delete_config(
     """
 
     paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
-                                  scope_identifiers=scope_identifiers)
-    # Should be at most default scope path and scoped path.
-    if len(paths) > 2:
+                                  scope_identifiers=scope_identifier)
+    if len(paths) > 2:  # Should be at most default scope path and scoped path.
         raise MultipleScopeIdentifiersError()
     path = paths[-1] / filename
     try:
@@ -439,6 +458,44 @@ def delete_config(
         if invalid_subpath:
             raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
+
+
+def delete_config_deep(
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str],
+    filename: str,
+    delete_defaults: bool = False,
+):
+    """Delete all configs with the specified name across all specified namespace and scopes.
+
+    Parameters
+    ----------
+    namespace:
+        the config namespace.
+    filename:
+        the config filename. Extension is ignored.
+    scope_identifiers:
+        dict of scope identifiers sorted in lowest-override-priority to
+        highest-override-priority.
+    override_defaults:
+        If True allow writing to the defaults config of any scope.
+        If False, put all fields that would be edited into the default file into
+        a config named `filename` at the same scope. Create if missing.
+    """
+    file_as_path = PurePath(filename)
+    override_stack = get_file_override_stack(data_store=data_store,
+                                              namespace=namespace,
+                                              scope_identifiers=scope_identifiers,
+                                              filestem=file_as_path.stem)
+    stems_to_delete = {file_as_path.stem} | ({"default"} if delete_defaults else set())
+    # Walk up the override stack and delete
+    for filepath in reversed(override_stack):
+        if filepath.stem in stems_to_delete:
+            ns, scope_id, filename = _get_parts_from_path(data_store=data_store,
+                                                          path=filepath)
+            delete_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+                          filename=filename)
 
 
 def list_all_filenames(
@@ -458,10 +515,11 @@ def list_all_filenames(
                                               scope_identifiers=scope_identifiers)[-1]
     return sorted(data_store.list_files(lowest_scope_path), key=str.lower)
 
+
 def get_file_override_stack(
     data_store: DataStore,
     namespace: str,
-    filename: str,
+    filestem: str,
     scope_identifiers: dict[ScopeName, str] | None = None,
     must_exist_in_any_scope: bool = True,
     must_exist_in_lowest_scope: bool = True
@@ -479,28 +537,32 @@ def get_file_override_stack(
         scope_identifiers: dict[ScopeName, str]
             A dict, keyed by scope name, of identifiers per scope to filter by.
             If None are provided, only include the default scope.
-        filename: str | None
-            The name of the configuration file to filter by, including extension.
+        filestem: str | None
+            The name of the configuration file *without extension*.
+
     """
+    file_as_path = PurePath(filestem)
     # Warning: we don't check to see if multiple defaults are present.
     override_stack = []
-    valid_files = DEFAULT_FILES | {filename}
+    valid_filestems = {"default"} | {Path(file_as_path).stem}
     # Will also validate: namespace, scope, scope identifier.
     paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
     # Get defaults, followed by config name in each namespace.
     for folder_path in paths:
-        # Sort with defaults first.
-        for filename_ in sorted(data_store.list_files(folder_path),
+        # Sort alphabetized with defaults first.
+        for found_file in sorted(data_store.list_files(folder_path),
                            key=lambda x: "" if x.lower() in DEFAULT_FILES else x.lower()):
+            fp = Path(found_file)
             # Append default if it exists.
-            if filename_ in valid_files:
-                override_stack.append(folder_path / filename_)
+            if fp.stem in valid_filestems and ((not fp.suffix)
+                                               or fp.suffix.lower() in VALID_EXTENSIONS):
+                override_stack.append(folder_path / found_file)
     if must_exist_in_any_scope:
         found_filenames = [f.stem for f in override_stack]
-        if Path(filename).stem not in found_filenames:
+        if file_as_path.stem not in found_filenames:
             raise FileNotFoundError()
     if must_exist_in_lowest_scope:
-        if override_stack[-1].stem != Path(filename).stem:
+        if override_stack[-1].stem != file_as_path.stem:
             raise FileNotFoundError()
     return override_stack
 
@@ -534,11 +596,13 @@ def get_all_override_stacks(
     """
     file_stacks = []
     filenames = list_all_filenames(data_store, namespace, scope_identifiers)
-    for filename in filenames:
+    # FIXME: Error if multiple files at the same scope with different.
+    filestems = set([PurePath(f).stem for f in filenames])
+    for filestem in filestems:
         file_stacks.append(get_file_override_stack(data_store=data_store,
                                                    namespace=namespace,
                                                    scope_identifiers=scope_identifiers,
-                                                   filename=filename))
+                                                   filestem=filestem))
     return file_stacks
 
 

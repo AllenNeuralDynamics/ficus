@@ -215,7 +215,7 @@ def test_get_config_invalid_namespace_returns_invalid_namespace_error(data_store
 def test_get_config_invalid_filename_returns_config_not_found_error(data_store):
     namespace = "software_a"
     scope_identifiers = {}
-    filename = "config.bad"
+    filename = "config_bad"
     with pytest.raises(ConfigNotFoundError):
         get_config(
             data_store=data_store,
@@ -262,11 +262,11 @@ def test_get_config_filename_default_return_defaults(data_store):
 def test_get_override_stack_with_default_filename_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {}
-    filename = "default.yml"
+    filestem = "default"
 
     result = get_file_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filename=filename
+        scope_identifiers=scope_identifiers, filestem=filestem
     )
 
     assert result == [
@@ -276,11 +276,11 @@ def test_get_override_stack_with_default_filename_return_stack(data_store):
 def test_get_override_stack_with_namespace_and_filename_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {}
-    filename = "config.yml"
+    filestem = "config"
 
     result = get_file_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filename=filename
+        scope_identifiers=scope_identifiers, filestem=filestem
     )
 
     assert result == [
@@ -291,11 +291,11 @@ def test_get_override_stack_with_namespace_and_filename_return_stack(data_store)
 def test_get_override_stack_with_multi_scopes_and_filename_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    filename = "config.yml"
+    filestem = "config"
 
     result = get_file_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filename=filename
+        scope_identifiers=scope_identifiers, filestem=filestem
     )
 
     assert result == [
@@ -306,6 +306,9 @@ def test_get_override_stack_with_multi_scopes_and_filename_return_stack(data_sto
         data_store.rootdir / Path("subject_id/614173/software_a/default.json"),
         data_store.rootdir / Path("subject_id/614173/software_a/config.yml")
     ]
+
+#def test_get_override_stack_with_filenames_of_different_extensions_return_stack(data_store):
+# TODO
 
 
 #################################################################################
