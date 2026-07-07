@@ -217,7 +217,7 @@ We usually use software as our namespace.
 
 ## FAQs
 
-## What file formats are supported?
+### What file formats are supported?
 Currently, we support json and yaml. Filenames within a folder must be unique, and this is enforced upon read/write.
 In other words, if the config originated from a yaml, you can save it back a json, and it will convert it from yaml to json.
 
