@@ -48,8 +48,8 @@ scope_name/
 Below is an example directory structure in which configs are stored using the following scopes and namespaces:
 
 **Scopes**
-- hostname: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
-- subject_id: identifier for a specific subject (ex. 614173, etc)
+- `hostname`: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
+- `subject_id`: identifier for a specific subject (ex. 614173, etc)
 
 **Namespaces**
 - `open_ephys`: the open ephys software for running electrophysiology experiments.
