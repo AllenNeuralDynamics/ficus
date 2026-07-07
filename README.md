@@ -185,6 +185,24 @@ There's no built-in api function to do this, but you can manually pull down mult
 Provided that each config can run standalone, and each config communicates with separate hardware, or can safely override shared fields, theres nothing preventing you from pulling down 3 configs and merging them.
 
 
+## Saving and Unmerging a Config
+It's possible to write back a config with updated values and have those values repropagate up the override hierachy.
+To do so, use `save_config_deep`.
+Doing so will walk up the override hierarchy and replace updated fields values with the values to save in the locations where the override took place.
+
+Let's work through a couple examples:
+
+#### Tune a rig; save back rig-specific values
+** TODO: example for this **
+
+#### Tune a rig; Make new values apply to all rigs 
+** TODO: example for this **
+
+#### Edge Cases: dynamically adding new fields.
+With _save_config_deep_, it's not possible to _add_ fields that were not present in any of the previous configs except in the highest-priority override level.
+** TODO: example **
+
+
 ### Scope Details for this Setup
 
 1. `defaults` layer - applied to all rigs
