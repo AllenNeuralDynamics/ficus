@@ -197,11 +197,6 @@ Provided that each config can run standalone, and each config communicates with 
     - ``subjects/{subject_id}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
     - ``subjects/{subject_id}/{namespace}/{filename}`` merges with above with deep update. 
 
-When looking for default files in either *defaults* or *computer_id* layer, it will check the following file extensions in this specific order, first one found will be the primary default file.
-Ideally, there should only be a single "default file" in each directory. This is enforced with the write endpoint.
-
-    .yml -> .yaml -> .json
-
 Below is the precedence of merging config files from lowest to highest. Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended. 
 
 - defaults/{namespace}/default.yml 
