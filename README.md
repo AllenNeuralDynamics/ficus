@@ -28,7 +28,7 @@ Doing so creates a clean _separation-of-concerns_ whereby configs manage structu
 
 ## Configuration Organization Structure
 
-Here's some key vocabulary this API uses:
+Here's some key vocabulary this project uses:
 
 - *scope*: a config override level. Ex: `hostname`.
 - *scope identifier*: identifier within a scope represented as a folder within a *scope*. Ex: `hostname=W10DTBURNO`.
