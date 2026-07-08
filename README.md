@@ -31,7 +31,7 @@ There are two main ways to use Ficus.
 
 ### Shared Ficus Setup
 <p align="center">
-  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="95%">
+  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="75%">
 </p>
 
 In this scenario, one Ficus instance is running and distributing configs to many consumers.
@@ -40,7 +40,7 @@ This works well when maintaining lots of configs across many programs by one tea
 
 ### Local Ficus Setup
 <p align="center">
-  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="95%">
+  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="75%">
 </p>
 
 In this scenario, Ficus runs as a python library pointing to a local folder to manage the merging/updating/saving of configs within this folder.
@@ -117,7 +117,7 @@ The *scope resolution order* generates a config based on a structured override p
 Overrides are applied via a recursive (aka: _deep_) update function.
 The result is that, for the same softare running on many computers, configs at the computer level are lean and contain only computer-specific overrides.
 
-#### Example 1: Default Config
+### Example 1: Default Config
 Here's an example request.
 ```python
 get_config(data_store=data_store,
@@ -127,7 +127,7 @@ The above request pulls down the default config for the `open_ephys` software.
 To construct this config, the following merges are applied.
 * Within `defaults/open_ephys`, we start with `default.yml` and thats it!
 
-#### Example 1: Default Config (Scenario 2)
+### Example 2: Rig-Specific Config
 Suppose the `open_ephys` software uses USB devices that have different COM Ports per computer, so we store them in a hostname-specific override.
 
 Here's the example request.
@@ -141,7 +141,7 @@ To construct this config, the following merges are applied.
 * Within `hostname/w10dtgawk/open_ephys`, we start with `default.yml` as our current config.
 * Within `defaults/open_ephys`, we fetch `default.yml`. Our current config overrides (aka: `deep_update`s against) this `default.yml`.
 
-#### Example 2: User-specific overrides for a specific machine
+### Example 3: User-specific overrides for a specific machine
 Suppose scientist Galen wants to use the `open_ephys` software with custom presets on one of the lab computers, so he stores them in a galen-specific config.
 
 Here's an example request.
@@ -158,7 +158,7 @@ To construct this config, the following merges are applied.
 * Within `defaults/open_ephys`, we fetch `galen.yml`. Our current config overrides this `galen.yml`.
 * Within `defaults/open_ephys`, we fetch `default.yml`. Our current config overrides this `default.yml`.
 
-#### Example 3: Input-specific overrides for a specific machine
+### Example 4: Input-specific overrides for a specific machine
 Suppose the inputs to the software have settings that alter the software config, and these settings persist each time we run the same input.
 For example, with the software `vr_foraging`, each mouse has different skull shape that affects the XYZ position of the lickspout stage.
 This offset can be recorded once, and it persists throughout the lifetime of that mouse, but it is part of the starting state of the `vr_foraging` software, so its values are passed in via config.
@@ -178,7 +178,7 @@ To construct this config, the following merges are applied.
 > [!NOTE]
 > The `scope_identifiers` dict is ordered and specifies the merge order.
 
-#### Example 4: Different Concurrent Hardware Configurations
+### Example 5: Different Concurrent Hardware Configurations
 Suppose the experimental software `prototome` running on pc W11XLTEST needs to be run in different states with different combinations of the hardware attached to the same computer.
 Here's how we would store these configs:
 
@@ -212,13 +212,13 @@ Doing so will walk up the override hierarchy and replace updated fields values w
 
 Let's work through a couple examples:
 
-#### Tune a rig; save back rig-specific values
+### Example 1: Tune a rig; save back rig-specific values
 ** TODO: example for this **
 
-#### Tune a rig; Make new values apply to all rigs 
+### Example 2: Tune a rig; Make new values apply to all rigs 
 ** TODO: example for this **
 
-#### Edge Cases: dynamically adding new fields.
+### Example 3: dynamically adding new fields.
 With _save_config_deep_, it's not possible to _add_ fields that were not present in any of the previous configs except in the highest-priority override level.
 ** TODO: example **
 
