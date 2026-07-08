@@ -26,7 +26,7 @@ Software "wiring" is another way to think of this.
 For running programs with verbose input that changes each time you run the software, we suggest adopting the convention of a separate _job_, _experiment_, or _session_ file.
 Doing so creates a clean _separation-of-concerns_ whereby configs manage structure-related information, and "job" files manage session or input-related information.
 
-## Settig up Ficus
+## Setting up Ficus
 There are two main ways to use Ficus.
 
 ### Shared Ficus Setup
