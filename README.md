@@ -9,8 +9,9 @@ It features:
   * highly flexible override setup enabling computer-specific or input-specific config overrides.
 * Store, update, and maintain multiple configs for many kinds of software in one place.
 * Configureable data store
+* Various usage patterns depending on scale
   * Pull down configs from a centralized location with a REST API and client (confierge) to handle concurrent connections
-  * OR run Ficus locally on a local folder to get all the benefits of hierarchical configs without needing to stand up a server.
+  * OR import ficus as a library and use its utility functions to manage config data distributed throughout multiple files.
 
 Use cases might include:
 * Maintain large configs for the same software across many rigs running that software with subtle difference between each rig.
@@ -50,10 +51,11 @@ This setup works well if you are managing many configs in a repository or combin
 
 Here's some key vocabulary this project uses:
 
+- *namespace*: abstract identifier to group config files across scopes. One convention is to make a namespace for the target software that will use the config. (Ex: vr-foraging, stagewidget, waterlog, open-ephys, etc).
 - *scope*: a config override level. Ex: `hostname`.
 - *scope identifier*: identifier within a scope represented as a folder within a *scope*. Ex: `hostname=W10DTBURNO`.
-- *namespace*: abstract identifier to group config files across scopes. One convention is to make a namespace for the target software that will use the config. (Ex: vr-foraging, stagewidget, waterlog, open-ephys, etc).
 - *scope resolution order*: the scope order in which configs are merged.
+- *mode*: An optional extra dimension of overrides within a *scope*. Ex: In the `default` scope, `default.yml` describes the default mode, and `high-frequency.yml` can specify another mode, with overrides to `default.yml`. Every scope can have *mode* files, but only one *mode* at a time can be specified.
 
 
 Here's how scopes and scope identifiers resolve as a folder structure:
@@ -74,13 +76,16 @@ Below is an example directory structure in which configs are stored using the fo
 **Namespaces**
 - `open_ephys`: the open ephys software for running electrophysiology experiments.
 - `vr_frg`: the vr-foraging software for running animal behavior experiments.
+- 
+**Modes**
+- `default`: Every software has a default mode with base configuration
+- `vr_frg/with_sniff_detector`: the vr-foraging software can also be run in a mode including a sniff detector
+- `open_ephys/galen`: A certain user has a special mode they like to run open_ephys with. Note the mode has overrides in multiple scopes.
 
 ```
 defaults/
 ├── open_ephys/
 │   ├── default.yml
-│   ├── default.json
-│   ├── config.yml
 │   └── galen.yml
 ├── vr_frg/
 │   ├── default.yml
@@ -90,12 +95,10 @@ defaults/
 hostname/
 ├── w10dtburno/
 │   └── vr_frg/
-│       ├── default.yaml
-│       └── task_specific_setting.yml
+│       ├── default.yml
 ├── w10dt123123/
 │   └── waterlog/
-│       ├── default.json
-│       └── config.yml
+│       ├── default.yml
 └── w10dtgawk/
     └── open_ephys/
         └── default.yml
@@ -115,7 +118,7 @@ You can create any scopes you need (beyond `defaults`) to better adjust to your 
 ## Fetching and Merging a Config
 The *scope resolution order* generates a config based on a structured override pattern.
 Overrides are applied via a recursive (aka: _deep_) update function.
-The result is that, for the same softare running on many computers, configs at the computer level are lean and contain only computer-specific overrides.
+The result is that, for the same software running on many computers, files at the computer scope level are lean and contain only computer-specific overrides.
 
 ### Example 1: Default Config
 Here's an example request.
@@ -151,7 +154,7 @@ get_config(data_store=data_store,
            scope_identifiers={"hostname": "w10dtgawk"},
            mode="galen")
 ```
-The above request pulls down a config for the `open_ephys` software on a computer with hostname: `w10dtgawk`. The config has a specific name called `galen.yml`.
+The above request pulls down a config for the `open_ephys` software on a computer with hostname: `w10dtgawk`. It also pulls overrides relevant to the `galen` mode.
 To construct this config, the following merges are applied.
 * Within `hostname/w10dtgawk/open_ephys`, we start with `galen.yml` as our current config.
 * Within `hostname/w10dtgawk/open_ephys`, we fetch `default.yml`. Our current config overrides this `default.yml`.
@@ -160,8 +163,8 @@ To construct this config, the following merges are applied.
 
 ### Example 4: Input-specific overrides for a specific machine
 Suppose the inputs to the software have settings that alter the software config, and these settings persist each time we run the same input.
-For example, with the software `vr_foraging`, each mouse has different skull shape that affects the XYZ position of the lickspout stage.
-This offset can be recorded once, and it persists throughout the lifetime of that mouse, but it is part of the starting state of the `vr_foraging` software, so its values are passed in via config.
+For example, with the software `vr_frg`, each mouse has different skull shape that affects the XYZ position of the lickspout stage.
+This offset can be recorded once, and it persists throughout the lifetime of that mouse, but it is part of the starting state of the `vr_frg` software, so its values are passed in via config.
 
 Here's an example request.
 ```python
@@ -180,7 +183,7 @@ To construct this config, the following merges are applied.
 
 ### Example 5: Different Concurrent Hardware Configurations
 Suppose the experimental software `prototome` running on pc W11XLTEST needs to be run in different states with different combinations of the hardware attached to the same computer.
-Here's how we would store these configs:
+Here's how we would store these configs, making use of *modes*:
 
 ```
 ├── defaults/
