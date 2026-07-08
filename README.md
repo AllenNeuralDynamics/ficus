@@ -1,4 +1,4 @@
-# FICUS
+# 🪴FICUS
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 
@@ -25,6 +25,26 @@ Software "wiring" is another way to think of this.
 
 For running programs with verbose input that changes each time you run the software, we suggest adopting the convention of a separate _job_, _experiment_, or _session_ file.
 Doing so creates a clean _separation-of-concerns_ whereby configs manage structure-related information, and "job" files manage session or input-related information.
+
+## Settig up Ficus
+There are two main ways to use Ficus.
+
+### Shared Ficus Setup
+<p align="center">
+  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="95%">
+</p>
+
+In this scenario, one Ficus instance is running and distributing configs to many consumers.
+The benefit here is that you can store all your configs in one place, making them easier to batch edit when you need to make major schema-related changes rather than needing to hunt down configs.
+This works well when maintaining lots of configs across many programs by one team.
+
+### Local Ficus Setup
+<p align="center">
+  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="95%">
+</p>
+
+In this scenario, Ficus runs as a python library pointing to a local folder to manage the merging/updating/saving of configs within this folder.
+This setup works well if you are managing many configs in a repository or combined with the project source files.
 
 ## Configuration Organization Structure
 
@@ -231,6 +251,7 @@ For example, the subject scope contains config values with properties intrinsic 
 
 Use *namespaces* to group scopes.
 We usually use software as our namespace.
+
 
 
 ## FAQs
