@@ -276,10 +276,39 @@ To date, this has been the case even in some quite strange use cases, so you if 
 Currently no. Validation is left up to the user.
 
 ### Does this system manage partial configs?
-Not necessarily.
-The idea with the conventions above is that, when pulling down a config and applying the merges needed to construct it, it is ready to run on the specified software.
-There's nothing against using this setup to manage partial configs, but it may not lend itself as easily to doing so.
+Not necessarily, but something like this is possible.
 
+Up to this point, we've focused on breaking up configuration into defaults and overrides, but the resultant config data after the merges is a complete object, able to fully configure the specified software. Instead, you may want to have your config break up into separate sections to be saved independently and simply combined (rather than deeply merged). A use case for this could be if your software is heavily modularized, with independent components. The "complete" config would look like:
+```yaml
+laser:
+    com_port: COM7
+    power: 5
+camera_1: 
+    com_port: COM8
+    frequency_hz: 60
+camera_2:
+    com_port: COM14
+    frequency_hz: 30
+```
+
+And you may want to break this up into multiple files, i.e.:
+- laser.yml
+- camera_1.yml
+- camera_2.yml
+
+The way to do this in ficus would be to set up your devices as members of the *namespace*, i.e.:
+```
+defaults/
+├── laser/
+│   ├── default.yml
+├── camera_1/
+│   ├── default.yml
+└── camera_2/
+    └── default.yml
+    └── high_frequency.yml
+```
+
+Then, from the client software, you'd have to perform three separate `get_config` fetches, and combine them client-side. Ficus doesn't have logic to support server-side config aggregation.
 
 ##  Developers Guide
 
