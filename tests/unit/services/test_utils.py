@@ -4,50 +4,132 @@ from ficus.core.exceptions import (
     ConfigSerializeError,
     ConfigDecodeError,
     UnsupportedFileTypeError,
+    InvalidScopeError,
+    InvalidNamespaceError,
+    InvalidScopeIdentifierError,
 )
 from ficus.services.configs import (
+    _validate_scopes,
     _ensure_paths,
+    _get_all_search_paths,
     _find_first_invalid_subpath,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
+    _get_parts_from_path,
 )
 from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
 from pathlib import Path, PurePath
 
-################################################################################
-#
-#  _ensure_paths()
-#
-################################################################################
-@pytest.mark.parametrize(
-    "namespace, scope_identifiers, resulting_subpaths",
-    [
-        pytest.param("", {"hostname": "w11dt000002"},
-            [Path("hostname/w11dt000002")],
-            id="no namespace (empty string)"),
-        pytest.param("new_namespace", {},
-            [Path("defaults/new_namespace")],
-            id="no scopes (empty dict)"),
-        pytest.param("new_namespace", None,
-            [Path("defaults/new_namespace")],
-            id="no scopes (None)"),
-        pytest.param(None, {"hostname": "w11dt000002"},
-            [Path("hostname/w11dt000002")],
-            id="no namespace (None)"),
-        pytest.param("new_namespace", {"hostname": "w11dt000002"},
-            [Path("defaults/new_namespace"),
-             Path("hostname/w11dt000002/new_namespace")],
-            id="new namespace"),
-    ],
-)
-def test_ensure_paths(namespace, scope_identifiers, resulting_subpaths, data_store):
-    resulting_paths = [data_store.rootdir / subpath for subpath in resulting_subpaths]
-    for path in resulting_paths:
-        assert not data_store.exists(path)
-    _ensure_paths(data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers)
-    for path in resulting_paths:
-        assert data_store.exists(path)
 
+################################################################################
+#
+#   ensure_paths()
+#
+################################################################################
+
+def test_ensure_paths_existing_namespace_and_scope_ids(data_store):
+    """Existing namespace and scope identifiers are left intact."""
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    paths = _get_all_search_paths(data_store, "software_a", scope_identifiers)
+    _ensure_paths(data_store, paths=paths)
+    assert data_store.exists(data_store.rootdir / "defaults/software_a")
+    assert data_store.exists(data_store.rootdir / "hostname/w11dt000001/software_a")
+    assert data_store.exists(data_store.rootdir / "subject_id/614173/software_a")
+
+
+@pytest.mark.parametrize("namespace, scope_identifiers, kwargs, created_path", [
+    ("new_namespace", None,
+     {"create_missing_namespace": True},
+     "defaults/new_namespace"),
+    ("software_a", {"hostname": "new_host"},
+     {"create_missing_scope_id": True},
+     "hostname/new_host/software_a"),
+    ("software_a", {"rig_id": "rig1"},
+     {"create_missing_scope": True, "create_missing_scope_id": True},
+     "rig_id/rig1/software_a"),
+    (None, {"hostname": "new_host"},
+     {"create_missing_scope_id": True},
+     "hostname/new_host"),
+])
+def test_ensure_paths_creates_missing(data_store, namespace, scope_identifiers,
+                                      kwargs, created_path):
+    """Missing namespaces, scopes and scope identifiers are created when the
+    corresponding create flags are enabled."""
+    path = data_store.rootdir / created_path
+    assert not data_store.exists(path)
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    _ensure_paths(data_store, paths=paths, **kwargs)
+    assert data_store.exists(path)
+
+
+@pytest.mark.parametrize("namespace, scope_identifiers, exception", [
+    ("does_not_exist", None, InvalidNamespaceError),
+    ("software_a", {"hostname": "new_host"}, InvalidScopeIdentifierError),
+    ("software_a", {"rig_id": "rig1"}, InvalidScopeError),
+])
+def test_ensure_paths_raises_when_creation_disabled(data_store, namespace,
+                                                    scope_identifiers, exception):
+    """Missing structure raises by default since the create flags are disabled."""
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    scopes = set(scope_identifiers.keys()) if scope_identifiers else set()
+    with pytest.raises(exception):
+        _ensure_paths(data_store, paths=paths, scope_ids_must_exist=scopes)
+
+
+def test_ensure_paths_all_none_is_noop(data_store):
+    """No namespace and no scope identifiers performs no work and does not raise."""
+    paths = _get_all_search_paths(data_store, None, None)
+    _ensure_paths(data_store, paths=paths)
+
+################################################################################
+#
+#   _get_all_search_paths()
+#
+################################################################################
+
+def test_get_all_search_paths_defaults_only(data_store):
+    """With no scope identifiers only the defaults namespace path is returned."""
+    paths = _get_all_search_paths(data_store, "software_a")
+    assert paths == [data_store.rootdir / "defaults/software_a"]
+
+
+def test_get_all_search_paths_preserves_scope_priority_order(data_store):
+    """Paths are returned in merge priority order: defaults first, then scopes
+    in the order given by scope_identifiers."""
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    paths = _get_all_search_paths(data_store, "software_a", scope_identifiers)
+    assert paths == [
+        data_store.rootdir / "defaults/software_a",
+        data_store.rootdir / "hostname/w11dt000001/software_a",
+        data_store.rootdir / "subject_id/614173/software_a",
+    ]
+
+
+def test_get_all_search_paths_none_scope_identifiers(data_store):
+    """Passing None for scope_identifiers behaves like an empty mapping."""
+    assert _get_all_search_paths(data_store, "software_a", None) == \
+        _get_all_search_paths(data_store, "software_a", {})
+
+
+def test_get_all_search_paths_none_namespace(data_store):
+    """Passing None for namespace behaves like an empty string or default namespace."""
+    assert _get_all_search_paths(data_store, None, None) == []
+
+
+################################################################################
+#
+#   validate_scopes()
+#
+################################################################################
+
+@pytest.mark.parametrize("scope_identifiers", [{"hostname": "something", "subject_id": "something_else"}, None])
+def test_validate_scopes(data_store, scope_identifiers):
+    _validate_scopes(data_store, scope_identifiers)
+
+def test_validate_scopes_error(data_store):
+    scope_identifiers = {"nopenopenope": "invalid"}
+    with pytest.raises(InvalidScopeError):
+        _validate_scopes(data_store, scope_identifiers)
 
 ################################################################################
 #
@@ -279,3 +361,19 @@ def test_find_first_invalid_subpath_invalid_root(data_store):
     """Test _find_first_invalid_subpath with wrong root"""
     path = Path("/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml") # different root
     assert _find_first_invalid_subpath(data_store=data_store, path=path) == Path("/")
+
+################################################################################
+#
+#   _get_parts_from_path()
+#
+################################################################################
+
+@pytest.mark.parametrize("path, expected_namespace, expected_scope_identifiers, expected_filename", [
+    (Path("defaults/software_a/config.yml"), "software_a", {}, "config.yml"),
+    (Path("hostname/w11dt000001/software_a/config.yml"), "software_a", {"hostname": "w11dt000001"}, "config.yml"),
+])
+def test_get_parts_from_path(data_store, path, expected_namespace, expected_scope_identifiers, expected_filename):
+    namespace, scope_identifier, filename = _get_parts_from_path(data_store=data_store, path=path)
+    assert namespace == expected_namespace
+    assert scope_identifier == expected_scope_identifiers
+    assert filename == expected_filename

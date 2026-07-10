@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from ficus.core.exceptions import InvalidScopeError
 
 class DataStore(ABC):
     """Base Class for interacting with generic storage: Folders, Database, etc.
@@ -10,7 +11,7 @@ class DataStore(ABC):
                  create_missing_scopes: bool = True):
         self.rootdir: Path = Path(rootdir)
         self.scopes: set = scopes
-        self._validate_scopes(scopes, create_missing=create_missing_scopes)
+        self.validate_scopes(scopes, create_missing=create_missing_scopes)
 
     def _sanitize(self, path: str | Path) -> Path:
         """Coax path into path that is relative to self.rootdir.
@@ -31,7 +32,7 @@ class DataStore(ABC):
         # Relative path cases.
         return self.rootdir / path
 
-    def _validate_scopes(self, scopes: set[str], create_missing: bool = True):
+    def validate_scopes(self, scopes: set[str], create_missing: bool = True):
         """ Ensures scopes exist in the store."""
         missing_scopes = set()
         for scope in scopes:
@@ -41,7 +42,7 @@ class DataStore(ABC):
                     self.create(scope_path, data=None)
                 missing_scopes.add(scope)
         if missing_scopes and not create_missing:
-                raise RuntimeError(f"The following scopes are missing from the "
+                raise InvalidScopeError(f"The following scopes are missing from the "
                                    f"data store: {missing_scopes}")
 
     # crud functions

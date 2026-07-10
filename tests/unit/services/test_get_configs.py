@@ -7,9 +7,7 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
 )
 from ficus.services.configs import (
-    list_all_filenames,
-    get_all_override_stacks,
-    get_file_override_stack,
+    get_override_stack,
     get_config,
 )
 from pathlib import Path
@@ -35,12 +33,11 @@ def test_get_config_return_defaults(data_store, merge):
 def test_get_config_with_identifier_name_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001"}
-    filename = None
     merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        merge=merge
     )
 
     assert len(result) == 2
@@ -57,12 +54,11 @@ def test_get_config_with_identifier_name_return_config(data_store):
 def test_get_config_with_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers= {"hostname": "w11dt000001", "subject_id": "614173"}
-    filename = None
     merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        merge=merge
     )
 
     assert len(result) == 2
@@ -78,15 +74,15 @@ def test_get_config_with_identifier_names_return_config(data_store):
     ]
 
 
-def test_get_config_with_filename_return_config(data_store):
+def test_get_config_with_mode_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {}
-    filename = "config.yml"
+    mode = "config"
     merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        mode=mode, merge=merge
     )
 
     assert len(result) == 2
@@ -102,15 +98,15 @@ def test_get_config_with_filename_return_config(data_store):
     ]
 
 
-def test_get_config_with_filename_and_identifier_names_return_config(data_store):
+def test_get_config_with_mode_and_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    filename = "config.yml"
+    mode = "config"
     merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        mode=mode, merge=merge
     )
 
     assert len(result) == 2
@@ -135,15 +131,15 @@ def test_get_config_with_filename_and_identifier_names_return_config(data_store)
     ]
 
 
-def test_get_config_no_merge_with_filename_return_config(data_store):
+def test_get_config_no_merge_with_mode_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {}
-    filename = "config.yml"
+    mode = "config"
     merge = False
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        mode=mode, merge=merge
     )
 
     assert len(result) == 2
@@ -158,12 +154,11 @@ def test_get_config_no_merge_with_filename_return_config(data_store):
 def test_get_config_no_merge_with_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    filename = None
     merge = False
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        merge=merge
     )
 
     assert len(result) == 2
@@ -176,12 +171,12 @@ def test_get_config_no_merge_with_identifier_names_return_config(data_store):
 def test_get_config_no_merge_with_filename_and_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    filename = "config.yml"
+    mode = "config"
     merge = False
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        filename=filename, merge=merge
+        mode=mode, merge=merge
     )
 
     assert len(result) == 2
@@ -202,49 +197,60 @@ def test_get_config_invalid_identifiers_return_invalid_scope_error(data_store):
 def test_get_config_invalid_namespace_returns_invalid_namespace_error(data_store):
     namespace = "badbadbad"
     scope_identifiers = {}
-    filename = "config.yml"
+    mode = "config"
     with pytest.raises(InvalidNamespaceError):
         get_config(
             data_store=data_store,
             namespace=namespace,
             scope_identifiers = scope_identifiers,
-            filename=filename,
+            mode=mode,
         )
 
 
-def test_get_config_invalid_filename_returns_config_not_found_error(data_store):
+def test_get_config_invalid_mode_returns_config_not_found_error(data_store):
     namespace = "software_a"
     scope_identifiers = {}
-    filename = "config_bad"
+    mode = "config_bad"
     with pytest.raises(ConfigNotFoundError):
         get_config(
             data_store=data_store,
             namespace=namespace,
             scope_identifiers = scope_identifiers,
-            filename=filename,
+            mode=mode,
         )
 
 
-def test_get_config_invalid_scope_identifier_returns_invalid_scope_identifier(data_store):
+def test_get_config_invalid_scope_identifier_raises_with_must_exist(data_store):
     namespace = "software_a"
     scope_identifiers = {"subject_id": "bad_subject_id"}
-    filename = "config.yml"
+    mode = "config"
     with pytest.raises(InvalidScopeIdentifierError):
         get_config(
             data_store=data_store,
             namespace=namespace,
             scope_identifiers = scope_identifiers,
-            filename=filename,
+            scope_ids_must_exist={"subject_id"},
+            mode=mode,
         )
+        
+def test_get_config_invalid_scope_identifier_is_fine(data_store):
+    namespace = "software_a"
+    scope_identifiers = {"subject_id": "bad_subject_id"}
+    mode = "config"
+    get_config(
+        data_store=data_store,
+        namespace=namespace,
+        scope_identifiers = scope_identifiers,
+        mode=mode,
+    )
 
-
-def test_get_config_filename_default_return_defaults(data_store):
+def test_get_config_mode_default_return_defaults(data_store):
     """
     Ensure default file is retrieved once.
     Since default gets pulled when merging, could accidentally pull default.yml twice.
     Config content would be the same, but path should only show default.yml once.
     """
-    result = get_config(data_store, "software_a", filename="default.yml")
+    result = get_config(data_store, "software_a", mode="default")
     assert len(result) == 2
     assert result[0] == {
         "default-default-value": "the one ring",
@@ -254,33 +260,33 @@ def test_get_config_filename_default_return_defaults(data_store):
 
 #################################################################################
 ##
-##   get_get_file_override_stack()
+##   get_get_override_stack()
 ##
 #################################################################################
 #
 #
-def test_get_override_stack_with_default_filename_return_stack(data_store):
+def test_get_override_stack_with_default_mode_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {}
-    filestem = "default"
+    mode = "default"
 
-    result = get_file_override_stack(
+    result = get_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filestem=filestem
+        scope_identifiers=scope_identifiers, mode=mode
     )
 
     assert result == [
         data_store.rootdir / Path("defaults/software_a/default.yml"),
     ]
 
-def test_get_override_stack_with_namespace_and_filename_return_stack(data_store):
+def test_get_override_stack_with_namespace_and_mode_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {}
-    filestem = "config"
+    mode = "config"
 
-    result = get_file_override_stack(
+    result = get_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filestem=filestem
+        scope_identifiers=scope_identifiers, mode=mode
     )
 
     assert result == [
@@ -288,14 +294,14 @@ def test_get_override_stack_with_namespace_and_filename_return_stack(data_store)
         data_store.rootdir / Path("defaults/software_a/config.yml")
     ]
 
-def test_get_override_stack_with_multi_scopes_and_filename_return_stack(data_store):
+def test_get_override_stack_with_multi_scopes_and_mode_return_stack(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    filestem = "config"
+    mode = "config"
 
-    result = get_file_override_stack(
+    result = get_override_stack(
         data_store=data_store, namespace=namespace,
-        scope_identifiers=scope_identifiers, filestem=filestem
+        scope_identifiers=scope_identifiers, mode=mode
     )
 
     assert result == [
@@ -311,86 +317,16 @@ def test_get_override_stack_with_multi_scopes_and_filename_return_stack(data_sto
 # TODO
 
 
-#################################################################################
-##
-##   get_all_override_stacks()
-##
-#################################################################################
-#
-#
-def test_get_all_override_stacks_default_scope_return_override_stacks(data_store):
-    result = get_all_override_stacks(data_store=data_store, namespace="software_a")
+# def test_get_all_files_with_identifier_names_and_filename_return_files(data_store):
+#     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
 
-    assert len(result) == 2
-    assert result == [
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-            data_store.rootdir / Path("defaults/software_a/config.yml"),
-        ],
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-        ]
-    ]
+#     result = list_all_filenames_in_lowest_scope(
+#         data_store=data_store,
+#         namespace="software_a",
+#         scope_identifiers=scope_identifiers
+#     )
 
-
-def test_get_all_override_stacks_with_hostname_return_override_stacks(data_store):
-    scope_identifiers = {"hostname": "w11dt000001"}
-
-    result = get_all_override_stacks(
-        data_store=data_store, namespace="software_a",
-        scope_identifiers=scope_identifiers)
-
-    assert len(result) == 2
-    assert result == [
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-            data_store.rootdir / Path("defaults/software_a/config.yml"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
-        ],
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
-        ]
-    ]
-
-
-def test_get_all_override_stacks_with_multi_identifier_names_return_override_stacks(data_store):
-    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-
-    result = get_all_override_stacks(
-        data_store=data_store,
-        namespace="software_a",
-        scope_identifiers=scope_identifiers)
-
-    assert len(result) == 2
-    assert result == [
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-            data_store.rootdir / Path("defaults/software_a/config.yml"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
-            data_store.rootdir / Path("subject_id/614173/software_a/default.json"),
-            data_store.rootdir / Path("subject_id/614173/software_a/config.yml")
-        ],
-        [
-            data_store.rootdir / Path("defaults/software_a/default.yml"),
-            data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
-            data_store.rootdir / Path("subject_id/614173/software_a/default.json")
-        ],
-    ]
-
-
-def test_get_all_files_with_identifier_names_and_filename_return_files(data_store):
-    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-
-    result = list_all_filenames(
-        data_store=data_store,
-        namespace="software_a",
-        scope_identifiers=scope_identifiers
-    )
-
-    assert result == ["config.yml", "default.json"]
+#     assert result == ["config.yml", "default.json"]
 
 
 #def test_get_all_files_with_identifier_names_and_partial_filename_return_files(zk_mock):
