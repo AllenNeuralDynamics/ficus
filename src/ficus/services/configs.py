@@ -12,7 +12,6 @@ from ficus.core.exceptions import (
     ConfigNotFoundError,
     ConfigSerializeError,
     InvalidNamespaceError,
-    InvalidScopeError,
     InvalidScopeIdentifierError,
     MultipleScopeIdentifiersError,
     NotEmptyError,
@@ -99,7 +98,9 @@ def _ensure_paths(
                     logger.debug(f"creating: {path}")
                     data_store.create(path=path, data=None)
                 elif scope_ids_must_exist and scope in scope_ids_must_exist:
-                    raise InvalidScopeIdentifierError(f"Scope identifier not found: {scope}/{identifier}")
+                    raise InvalidScopeIdentifierError(
+                        f"Scope identifier not found: {scope}/{identifier}"
+                    )
                 else:
                     # if it doesn't exist and it's okay not to, just remove it from paths
                     ensured_paths.remove(path)
@@ -272,8 +273,8 @@ def save_config(
     paths_to_delete = []
     if mode_in_scope:
         if not overwrite:
-            raise ConfigExistsError(f"Cannot overwrite config with mode '{mode}' in {target_folder} "
-                                    "without overwrite=True")
+            raise ConfigExistsError(f"Cannot overwrite config with mode '{mode}' in {target_folder}"
+                                    " without overwrite=True")
         
         if suffix is None: # use the suffix of the existing file
             suffix = mode_in_scope[0].suffix
@@ -343,7 +344,8 @@ def save_config_deep(
                                         create_missing_namespace=create_missing_namespace)
     if not override_stack:
         save_config(data_store=data_store, namespace=namespace, scope_identifier=None,
-                    mode=mode, suffix=suffix, data=data, create_missing_namespace=create_missing_namespace)
+                    mode=mode, suffix=suffix, data=data, 
+                    create_missing_namespace=create_missing_namespace)
         return
     # Convert all suffixes to the desired suffix.
     # (Flat save_config will convert the file format.)
@@ -441,23 +443,23 @@ def update_config(
 
     # FIXME: this is basically a save where the config must already exist.
 
-    filepath = PurePath(filename) # convert for suffix
-    scope, identifier = _validate_single_scope(scope_identifier)
-    current_config, _ = get_config(
-        data_store=data_store, namespace=namespace, mode=mode,
-        scope_identifiers=scope_identifier, merge=False
-    )
-    # Throw away value, only want to validate
-    _validate_and_convert_to_bytes(filepath.suffix, data=data)
-    raw_config = _deep_update(current_config, data)
-    return save_config(data_store=data_store,
-                       namespace=namespace,
-                       mode=mode,
-                       data=raw_config,
-                       scope_identifier=scope_identifier,
-                       override=True,
-                       create_missing_paths=False
-                       )
+    # filepath = PurePath(filename) # convert for suffix
+    # scope, identifier = _validate_single_scope(scope_identifier)
+    # current_config, _ = get_config(
+    #     data_store=data_store, namespace=namespace, mode=mode,
+    #     scope_identifiers=scope_identifier, merge=False
+    # )
+    # # Throw away value, only want to validate
+    # _validate_and_convert_to_bytes(filepath.suffix, data=data)
+    # raw_config = _deep_update(current_config, data)
+    # return save_config(data_store=data_store,
+    #                    namespace=namespace,
+    #                    mode=mode,
+    #                    data=raw_config,
+    #                    scope_identifier=scope_identifier,
+    #                    override=True,
+    #                    create_missing_paths=False
+    #                    )
 
 
 def delete_config(
