@@ -41,6 +41,22 @@ def _get_all_search_paths(
     with defaults and followed by scopes in scope priority order.
 
     Scope priority is specified by the order the input `scope_identifiers` dict.
+
+    No validation is performed that these paths are valid or exist.
+
+    Parameters
+    ----------
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    namespace: str | None
+        The namespace for which to get search paths. If None, only scope paths are returned.
+    scope_identifiers: dict[ScopeName, str] | None
+        A dictionary of scope names to their identifiers to include in the search paths. If None, only the default scope is considered.
+
+    Returns
+    -------
+    list[Path]
+        A list of folder paths for the specified namespace and scope identifiers, in merge priority order (highest to lowest).
     """
     if scope_identifiers is None:
         scope_identifiers = {}
@@ -54,17 +70,36 @@ def _get_all_search_paths(
 
 def _ensure_paths(
     data_store: DataStore,
-    # namespace: str | None,
-    # scope_identifiers: dict[ScopeName, str] | None,
     paths: list[Path],
     create_missing_namespace: bool = False,
     scope_ids_must_exist: set[ScopeName] | None = None,
     create_missing_scope_id: bool = False,
     create_missing_scope: bool = False,
-):
-    """Create underlying data store structure to guarantee that namespace and
-    scope identifiers exist.
-    
+) -> list[Path]:
+    """Create underlying data store structure to guarantee that the given
+    `paths` (namespace and scope identifier folders) exist, and return the
+    subset of paths that now exist. Call this function after _get_all_search_paths.
+
+    Parameters
+    ----------
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    paths: list[Path]
+        The list of paths (namespace and scope identifier folders) to ensure exist.
+    create_missing_namespace: bool
+        If True, create the namespace folder if it does not exist. Default is False.
+    scope_ids_must_exist: set[ScopeName] | None
+        Scopes whose identifier folders are required to exist. A missing identifier for one of these scopes raises InvalidScopeIdentifierError. Default is None.
+    create_missing_scope_id: bool
+        If True, create missing scope identifier folders. Default is False.
+    create_missing_scope: bool
+        If True, create missing scope folders. Default is False.
+
+    Returns
+    -------
+    ensured_paths: list[Path]
+        The subset of the input `paths` that now exist in the data store after ensuring the necessary structure.
+
     Raises
     ------
     InvalidNamespaceError
@@ -129,6 +164,7 @@ def _get_parts_from_path(data_store: DataStore, path: Path
 def _validate_single_scope(
     scope_identifiers: dict[ScopeName, str] | None = None,
 )-> tuple[ScopeName | None, str | None]:
+    """Ensure that the scope_identifiers dict contains at most one item"""
     scope, identifier = None, None
     if scope_identifiers and len(scope_identifiers) > 1:
         raise MultipleScopeIdentifiersError(
@@ -172,6 +208,12 @@ def get_config(
         filename: str | None
             The name of the configuration file (extension is ignored). If None,
             the default config file will be used.
+        mode: str
+            The configuration mode (matches files like <mode>.yml). Defaults to
+            "default".
+        scope_ids_must_exist: set[ScopeName] | None
+            Scopes whose identifier folders are required to exist. A missing
+            identifier for one of these scopes raises InvalidScopeIdentifierError.
         merge: bool
             Whether to merge config files found in each scope. If false, only the config file in
             the last scope from identifier names will be returned.
@@ -184,7 +226,13 @@ def get_config(
     Raises:
     -------
         ConfigNotFoundError
-            Raised if no configuration files are found for the given namespace and scope identifiers
+            if no configuration files are found for the given namespace and mode.
+        InvalidNamespaceError
+            if the namespace does not exist.
+        InvalidScopeError
+            if a scope does not exist.
+        InvalidScopeIdentifierError
+            if a required scope identifier does not exist.
     """
     config = {}
     try:
@@ -224,8 +272,9 @@ def save_config(
     and identifier. If the config does not already exist, create it. Throw an
     error if the file already exists if `override=False`.
 
-    If scope and/or identifier do not exist and `create_missing_paths=True`,
-    create them.
+    If scope and/or identifier do not exist, they are created according to the
+    `create_missing_namespace`, `create_missing_scope_id`, and
+    `create_missing_scope` flags. Otherwise a corresponding error is raised.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
@@ -233,25 +282,49 @@ def save_config(
 
     Data will be saved to a valid yaml or json based on suffix
 
-    Parameters: TODO: Update all docstrings
+    Parameters:
     -----------
-        namespace
+        data_store: DataStore
+            The data store instance where the configuration files are stored.
+        namespace: str
             The namespace for the configuration file.
-        mode
-            The name of the configuration file. Extension is optional. If specified,
-            save to the preferred extension. If unspecified, save in the default
-            format (yaml).
-        data
-            The configuration data to save.
-        scope_identifier
+        scope_identifier: dict[ScopeName, str]
             A dict, keyed by scope name, of identifiers per scope.
-        overwrite
+        data: dict
+            The configuration data to save.
+        mode: str
+            The name of the configuration file (extension excluded). Defaults to
+            "default".
+        suffix: Optional[VALID_EXTENSIONS_TYPE]
+            The file extension to save to (".yml", ".yaml", or ".json"). If None,
+            reuse the existing file's suffix when overwriting, otherwise default
+            to ".yml".
+        overwrite: bool
             Whether to overwrite the config file if it already exists (format agnostic).
             Error if file exists and `overwrite=False`
+        create_missing_namespace: bool
+            Create the namespace under defaults if it does not exist.
+        create_missing_scope_id: bool
+            Create the scope identifier folder if it does not exist.
+        create_missing_scope: bool
+            Create the scope if it does not exist.
     Returns:
     --------
         tuple[dict, Path]
             A tuple containing the configuration data and the path the config was saved to.
+
+    Raises:
+    -------
+        UnsupportedFileTypeError
+            if `suffix` is not a supported extension.
+        ConfigExistsError
+            if the config already exists and `overwrite=False`.
+        InvalidNamespaceError
+            if the namespace does not exist and `create_missing_namespace=False`.
+        InvalidScopeError
+            if a scope does not exist and `create_missing_scope=False`.
+        InvalidScopeIdentifierError
+            if a scope identifier does not exist and `create_missing_scope_id=False`.
     """
     if suffix is not None and suffix not in VALID_EXTENSIONS:
         raise UnsupportedFileTypeError(f"Cannot save {mode} to unknown format {suffix}.")
@@ -314,27 +387,42 @@ def save_config_deep(
 
     Parameters
     ----------
-    namespace:
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    namespace: str
         the config namespace.
-    mode:
-        The mode of the configuration file. Typically "default".
-    suffix:
-        The file extension/suffix for the configuration file. Defaults to '.yml'.
-    scope_identifiers:
+    scope_identifiers: dict[ScopeName, str]
         dict of scope identifiers sorted in lowest-override-priority to
         highest-override-priority.
-    overwrite_defaults:
+    data: dict
+        The configuration data to be saved.
+    mode: str
+        The mode of the configuration file. Typically "default".
+    suffix: VALID_EXTENSIONS_TYPE | None
+        The file extension/suffix for the configuration file. Defaults to '.yml'.
+    overwrite_defaults: bool
         If True allow writing to the defaults config of any scope.
         If False, put all fields that would be edited into the default file into
         a config named `<mode><suffix>` at the same scope. Create if missing.
-    append_new_fields_to_last_scope:
+    append_new_fields_to_last_scope: bool
         if new fields are created, append them at the lowest level scope.
         Error if new fields are created and this flag is set to False.
+    create_missing_namespace: bool
+        If True, create the namespace in the default scope of the data store if it 
+        does not already exist.
 
     Returns
     -------
-        dict
-            Leftover fields that were not saved into the config stack.
+    dict
+        Leftover fields that were not saved into the config stack.
+
+    Raises
+    ------
+    UnsupportedFileTypeError
+        Raised if the provided suffix is not in the list of valid extensions.
+    ConfigMutatedError
+        Raised if the configuration data has new fields and 
+        `append_new_fields_to_last_scope` is False.
     """
     if suffix is not None and suffix not in VALID_EXTENSIONS:
         raise UnsupportedFileTypeError(f"Cannot save {mode + suffix} to unknown format.")
@@ -396,7 +484,8 @@ def save_config_deep(
         else:
             raise ConfigMutatedError("Config to be saved has additional fields not "
                                      "previously found in the original config override "
-                                     f"stack. New fields: {data_cpy}")
+                                     f"stack, and append_new_fields_to_last_scope is False. "
+                                     f"New fields: {data_cpy}")
 
     for filepath, data in new_cfg_data.items():
         ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
@@ -433,7 +522,7 @@ def update_config(
 
     Returns:
     --------
-        tuple[dict, str]
+        tuple[dict, Path]
             A tuple containing the updated configuration data and the path the config was saved to.
     """
 
@@ -462,7 +551,7 @@ def update_config_deep(
     new_suffix: str = DEFAULT_SUFFIX,
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
-) -> str:
+) -> dict:
     """
     Deep update config file based on namespace, scope, and identifier; allows saving partial data.
 
@@ -520,7 +609,7 @@ def delete_config(
             The namespace for the configuration file.
         mode: str
             The mode of the configuration file (e.g., "default", "production").
-        scope_identifiers: dict[ScopeName, str]
+        scope_identifier: dict[ScopeName, str]
             A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
@@ -560,14 +649,16 @@ def delete_config_deep(
 
     Parameters
     ----------
-    namespace:
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    namespace: str
         the config namespace.
-    mode:
-        the config mode. Extension is ignored.
-    scope_identifiers:
+    scope_identifiers: dict[ScopeName, str]
         dict of scope identifiers sorted in lowest-override-priority to
         highest-override-priority.
-    delete_defaults:
+    mode: str
+        the config mode. Extension is ignored.
+    delete_defaults: bool
         If True, also delete the default config file for the given mode in each scope.
         If False, only delete the specified mode in the override stack, leaving the default config intact.
     """
@@ -594,7 +685,7 @@ def get_override_stack(
     must_exist_in_lowest_scope: bool = True,
     create_missing_namespace: bool = False,
 ) -> list[Path]:
-    """For a given namespace, scope_identifiers, and filename, return the full
+    """For a given namespace, scope_identifiers, and mode, return the full
     hierarchy of files that apply to this file in reverse override order i.e:
     val[-1] overrides val[-2] which overrides ... val[-N]
 
@@ -609,6 +700,15 @@ def get_override_stack(
             If None are provided, only include the default scope.
         mode: str
             The name of the configuration mode (will match files like <mode>.yml)
+        scope_ids_must_exist: set[ScopeName] | None
+            Scopes whose identifier folders are required to exist. A missing
+            identifier for one of these scopes raises InvalidScopeIdentifierError.
+        must_exist_in_any_scope: bool
+            If True, the mode must exist in at least one scope, otherwise a FileNotFoundError is raised.
+        must_exist_in_lowest_scope: bool
+            If True, the mode must exist in the lowest scope, otherwise a FileNotFoundError is raised.
+        create_missing_namespace: bool
+            If True, create the namespace folder if it does not exist.
 
     Returns:
     --------
