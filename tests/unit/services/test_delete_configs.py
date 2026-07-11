@@ -8,7 +8,7 @@ from ficus.core.exceptions import (
     InvalidScopeError,
     MultipleScopeIdentifiersError,
 )
-from ficus.services.configs import delete_config
+from ficus.services.configs import delete_config, delete_config_deep
 
 
 ################################################################################
@@ -99,3 +99,77 @@ def test_delete_config_path_is_directory_return_error(data_store):
     with pytest.raises(ConfigNotFoundError):
         delete_config(data_store=data_store, namespace=namespace, mode=mode,
                       scope_identifier=scope_identifier)
+
+
+################################################################################
+#
+#   delete_config_deep()
+#
+################################################################################
+
+
+def _software_a_config_paths(data_store):
+    return [
+        data_store.rootdir / Path("defaults/software_a/config.yml"),
+        data_store.rootdir / Path("hostname/w11dt000001/software_a/config.yml"),
+        data_store.rootdir / Path("subject_id/614173/software_a/config.yml"),
+    ]
+
+
+def _software_a_default_paths(data_store):
+    return [
+        data_store.rootdir / Path("defaults/software_a/default.yml"),
+        data_store.rootdir / Path("hostname/w11dt000001/software_a/default.json"),
+        data_store.rootdir / Path("subject_id/614173/software_a/default.json"),
+    ]
+
+
+def test_delete_config_deep_removes_mode_across_all_scopes(data_store):
+    """The mode config is deleted in every scope while default configs remain."""
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    config_paths = _software_a_config_paths(data_store)
+    default_paths = _software_a_default_paths(data_store)
+
+    delete_config_deep(data_store=data_store, namespace=namespace,
+                       scope_identifiers=scope_identifiers, mode="config")
+
+    for path in config_paths:
+        assert not data_store.exists(path)
+    for path in default_paths:
+        assert data_store.exists(path)
+
+
+def test_delete_config_deep_delete_defaults_removes_all(data_store):
+    """With delete_defaults=True both mode and default configs are removed."""
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    all_paths = _software_a_config_paths(data_store) + _software_a_default_paths(data_store)
+
+    delete_config_deep(data_store=data_store, namespace=namespace,
+                       scope_identifiers=scope_identifiers, mode="config",
+                       delete_defaults=True)
+
+    for path in all_paths:
+        assert not data_store.exists(path)
+
+
+def test_delete_config_deep_default_scope_only(data_store):
+    """With no scope identifiers only the default scope mode config is removed."""
+    namespace = "software_a"
+    config_path = data_store.rootdir / Path("defaults/software_a/config.yml")
+    default_path = data_store.rootdir / Path("defaults/software_a/default.yml")
+
+    delete_config_deep(data_store=data_store, namespace=namespace,
+                       scope_identifiers={}, mode="config")
+
+    assert not data_store.exists(config_path)
+    assert data_store.exists(default_path)
+
+
+def test_delete_config_deep_missing_mode_raises(data_store):
+    """A mode absent from the override stack raises FileNotFoundError."""
+    with pytest.raises(FileNotFoundError):
+        delete_config_deep(data_store=data_store, namespace="software_a",
+                           scope_identifiers={"hostname": "w11dt000001"},
+                           mode="config_new")

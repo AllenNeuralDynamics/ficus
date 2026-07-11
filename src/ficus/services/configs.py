@@ -330,6 +330,11 @@ def save_config_deep(
     append_new_fields_to_last_scope:
         if new fields are created, append them at the lowest level scope.
         Error if new fields are created and this flag is set to False.
+
+    Returns
+    -------
+        dict
+            Leftover fields that were not saved into the config stack.
     """
     if suffix is not None and suffix not in VALID_EXTENSIONS:
         raise UnsupportedFileTypeError(f"Cannot save {mode + suffix} to unknown format.")
@@ -458,6 +463,36 @@ def update_config_deep(
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
 ) -> str:
+    """
+    Deep update config file based on namespace, scope, and identifier; allows saving partial data.
+
+    This function will get the existing config (complete with merged overrides),
+     update it with the new data given, then deep save back to the override stack.
+
+    Parameters:
+    -----------
+        data_store: DataStore
+            The data store instance to interact with the underlying storage.
+        namespace: str
+            The namespace for the configuration file.
+        mode: str
+            The mode of the configuration file (e.g., "default", "production").
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
+        data: dict
+            The configuration data to update.
+        new_suffix: str
+            The suffix to use when saving the updated configuration file.
+        overwrite_defaults: bool
+            Whether to overwrite default configurations if they exist.
+        append_new_fields_to_last_scope: bool
+            Whether to append new fields to the last scope in the override stack.
+
+    Returns:
+    --------
+        dict
+            Leftover fields that were not merged into the existing configuration.
+    """
     
     config_data, _ = get_config(data_store=data_store, namespace=namespace, mode=mode, 
                              scope_identifiers=scope_identifiers)
@@ -518,7 +553,7 @@ def delete_config_deep(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str],
-    filename: str,
+    mode: str = DEFAULT_MODE,
     delete_defaults: bool = False,
 ):
     """Delete all configs with the specified name across all specified namespace and scopes.
@@ -527,29 +562,27 @@ def delete_config_deep(
     ----------
     namespace:
         the config namespace.
-    filename:
-        the config filename. Extension is ignored.
+    mode:
+        the config mode. Extension is ignored.
     scope_identifiers:
         dict of scope identifiers sorted in lowest-override-priority to
         highest-override-priority.
-    override_defaults:
-        If True allow writing to the defaults config of any scope.
-        If False, put all fields that would be edited into the default file into
-        a config named `filename` at the same scope. Create if missing.
+    delete_defaults:
+        If True, also delete the default config file for the given mode in each scope.
+        If False, only delete the specified mode in the override stack, leaving the default config intact.
     """
-    file_as_path = PurePath(filename)
     override_stack = get_override_stack(data_store=data_store,
                                               namespace=namespace,
                                               scope_identifiers=scope_identifiers,
-                                              filestem=file_as_path.stem)
-    stems_to_delete = {file_as_path.stem} | ({"default"} if delete_defaults else set())
+                                              mode=mode)
+    stems_to_delete = {mode} | ({"default"} if delete_defaults else set())
     # Walk up the override stack and delete
     for filepath in reversed(override_stack):
         if filepath.stem in stems_to_delete:
             ns, scope_id, filename = _get_parts_from_path(data_store=data_store,
                                                           path=filepath)
             delete_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
-                          filename=filename)
+                          mode=Path(filename).stem)
 
 def get_override_stack(
     data_store: DataStore,
