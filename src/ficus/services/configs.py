@@ -14,8 +14,6 @@ from ficus.core.exceptions import (
     InvalidNamespaceError,
     InvalidScopeIdentifierError,
     MultipleScopeIdentifiersError,
-    NotEmptyError,
-    PathIsDirectoryError,
     PathNotFoundError,
     UnsupportedFileTypeError,
 )
@@ -409,10 +407,10 @@ def update_config(
     mode: str,
     data: dict,
     scope_identifier: dict[ScopeName, str],
-    new_suffix: Optional[VALID_EXTENSIONS_TYPE] = None,
+    suffix: VALID_EXTENSIONS_TYPE | None = None,
 ):
     """
-    Update config file based on namespace, scope, and identifier.
+    Update config file based on namespace, scope, and identifier; allows saving partial data.
 
     This function will get the existing config and merge it with the data given. Afterwards it will
     override the existing config file (thus having same behavior/validations as the save and get functions)
@@ -421,11 +419,11 @@ def update_config(
     -----------
         namespace: str
             The namespace for the configuration file.
-        filename: str
-            The name of the configuration file, including extension.
+        mode: str
+            The mode of the configuration file (e.g., "default", "production").
         data: dict
             The configuration data to update.
-        scope_identifiers: dict[ScopeName, str]
+        scope_identifier: dict[ScopeName, str]
             A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
@@ -434,36 +432,44 @@ def update_config(
             A tuple containing the updated configuration data and the path the config was saved to.
     """
 
-    raise NotImplementedError()
+    _validate_single_scope(scope_identifier)
+    current_config, _ = get_config(
+        data_store=data_store, namespace=namespace, mode=mode,
+        scope_identifiers=scope_identifier, merge=False
+    )
+    raw_config = _deep_update(current_config, data)
+    return save_config(data_store=data_store,
+                       namespace=namespace,
+                       mode=mode,
+                       suffix=suffix,
+                       data=raw_config,
+                       scope_identifier=scope_identifier,
+                       overwrite=True,
+                       create_missing_scope_id=False,
+                       )
 
-    config_data = get_config(...)
-    config_data.update(data)
-    save_config_deep(config_data)
-
-
-    # FIXME: this is basically a save where the config must already exist.
-
-    # filepath = PurePath(filename) # convert for suffix
-    # scope, identifier = _validate_single_scope(scope_identifier)
-    # current_config, _ = get_config(
-    #     data_store=data_store, namespace=namespace, mode=mode,
-    #     scope_identifiers=scope_identifier, merge=False
-    # )
-    # # Throw away value, only want to validate
-    # _validate_and_convert_to_bytes(filepath.suffix, data=data)
-    # raw_config = _deep_update(current_config, data)
-    # return save_config(data_store=data_store,
-    #                    namespace=namespace,
-    #                    mode=mode,
-    #                    data=raw_config,
-    #                    scope_identifier=scope_identifier,
-    #                    override=True,
-    #                    create_missing_paths=False
-    #                    )
+def update_config_deep(
+    data_store: DataStore,
+    namespace: str,
+    mode: str = DEFAULT_MODE,
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    data: dict | None = None,
+    new_suffix: str = DEFAULT_SUFFIX,
+    overwrite_defaults: bool = False,
+    append_new_fields_to_last_scope: bool = False,
+) -> str:
+    
+    config_data, _ = get_config(data_store=data_store, namespace=namespace, mode=mode, 
+                             scope_identifiers=scope_identifiers)
+    updated_data = _deep_update(config_data, data)
+    return save_config_deep(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
+                     scope_identifiers=scope_identifiers, suffix=new_suffix,
+                     overwrite_defaults=overwrite_defaults,
+                     append_new_fields_to_last_scope=append_new_fields_to_last_scope)
 
 
 def delete_config(
-    data_store: DataStore, namespace: str, filename: str,
+    data_store: DataStore, namespace: str, mode: str = DEFAULT_MODE,
     scope_identifier: dict[ScopeName, str] | None = None
 ) -> str:
     """
@@ -477,8 +483,8 @@ def delete_config(
     -----------
         namespace: str
             The namespace for the configuration file.
-        filename: str
-            The name of the configuration file, including extension.
+        mode: str
+            The mode of the configuration file (e.g., "default", "production").
         scope_identifiers: dict[ScopeName, str]
             A dict, keyed by scope name, of identifiers per scope.
 
@@ -488,16 +494,19 @@ def delete_config(
             The path of the deleted config file.
     """
 
+    scope, _ = _validate_single_scope(scope_identifier)
     paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
                                   scope_identifiers=scope_identifier)
-    if len(paths) > 2:  # Should be at most default scope path and scoped path.
-        raise MultipleScopeIdentifiersError()
-    path = paths[-1] / filename
+    paths = _ensure_paths(data_store, paths, scope_ids_must_exist={scope})
+    lowest_path = paths[-1]
+    files = [f for f in data_store.list_files(lowest_path) if PurePath(f).stem == mode]
+    if not files:
+        raise ConfigNotFoundError(f"Config file not found for mode '{mode}' in path: {lowest_path}")
+    filename = files[0]
+    path = lowest_path / filename
     try:
         data_store.delete(path)
         return str(path)
-    except NotEmptyError:
-        raise PathIsDirectoryError(f"Path is a directory and cannot be deleted: {path}")
     except PathNotFoundError:
         invalid_subpath = _find_first_invalid_subpath(data_store, path)
         if invalid_subpath:

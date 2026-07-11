@@ -9,7 +9,6 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
 )
 from ficus.services.configs import (
-    _validate_scopes,
     _ensure_paths,
     _get_all_search_paths,
     _find_first_invalid_subpath,
@@ -115,21 +114,6 @@ def test_get_all_search_paths_none_namespace(data_store):
     """Passing None for namespace behaves like an empty string or default namespace."""
     assert _get_all_search_paths(data_store, None, None) == []
 
-
-################################################################################
-#
-#   validate_scopes()
-#
-################################################################################
-
-@pytest.mark.parametrize("scope_identifiers", [{"hostname": "something", "subject_id": "something_else"}, None])
-def test_validate_scopes(data_store, scope_identifiers):
-    _validate_scopes(data_store, scope_identifiers)
-
-def test_validate_scopes_error(data_store):
-    scope_identifiers = {"nopenopenope": "invalid"}
-    with pytest.raises(InvalidScopeError):
-        _validate_scopes(data_store, scope_identifiers)
 
 ################################################################################
 #
