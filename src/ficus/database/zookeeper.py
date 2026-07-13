@@ -6,7 +6,7 @@ from kazoo.client import KazooClient
 from kazoo.handlers.threading import KazooTimeoutError
 from kazoo.exceptions import NotEmptyError as ZKNotEmptyError
 from kazoo.exceptions import BadVersionError as ZKBadVersionError
-from ficus.core.exceptions import NotEmptyError, BadVersionError, PathNotFoundError
+from ficus.core.exceptions import PathIsDirectoryError, BadVersionError, PathNotFoundError
 from kazoo.recipe.watchers import NoNodeError
 from loguru import logger
 from pathlib import Path
@@ -69,7 +69,7 @@ class ZKStore(DataStore):
         path = self._sanitize(path)
         with ZKClientContextManager(self.hosts) as zk:
             if self.exists(path) and self.is_file(path):
-                raise NotEmptyError(f"Path {path} already exists.")
+                raise FileExistsError(f"Path {path} already exists.")
             if data is None:  # assume path is folder.
                 zk.ensure_path(path.as_posix())
                 return
@@ -104,7 +104,7 @@ class ZKStore(DataStore):
             try:
                 zk.delete(path.as_posix(), recursive=recursive)
             except ZKNotEmptyError:
-                raise NotEmptyError(f"Failed to delete. Node contains children: {path}")
+                raise PathIsDirectoryError(f"Failed to delete. Node contains children: {path}")
             except NoNodeError:
                 raise PathNotFoundError(f"Failed to delete. Path {path} is invalid.")
 
@@ -130,7 +130,8 @@ class ZKStore(DataStore):
             if self.is_file(path):
                 raise ValueError(f"Cannot list files on a file: {path}")
             children: list = zk.get_children(path.as_posix())
-            return children
+            files = [child for child in children if self.is_file(path / child)]
+            return files
 
 
 

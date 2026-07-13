@@ -39,8 +39,8 @@ class InvalidNamespaceError(Exception):
 class MultipleScopeIdentifiersError(Exception):
     pass
 
-class NotEmptyError(Exception):
-    pass
+# class NotEmptyError(Exception):
+#     pass
 
 class BadVersionError(Exception):
     pass
