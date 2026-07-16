@@ -9,7 +9,8 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
     UnsupportedFileTypeError,
 )
-from ficus.services.configs import VALID_EXTENSIONS, get_config, save_config, save_config_deep
+from ficus.services.file_crud import read_file_data
+from ficus.services.configs import VALID_EXTENSIONS, get_config, _save_one_config_override, save_config
 from pathlib import Path
 
 
@@ -33,7 +34,7 @@ from pathlib import Path
         ),
     ],
 )
-def test_save_config_valid_return_data_and_path(
+def test_save_one_config_override_valid_return_data_and_path(
     data_store, namespace, scope_identifiers, mode, suffix, overwrite
 ):
     filename = f"{mode}{suffix}"
@@ -43,7 +44,7 @@ def test_save_config_valid_return_data_and_path(
         path = data_store.rootdir / Path(f"hostname/{scope_identifiers['hostname']}/{namespace}/{filename}")
     data = {"testing": "ni-haody"}
 
-    result_data, result_path = save_config(
+    result_data, result_path = _save_one_config_override(
         data_store=data_store,
         namespace=namespace,
         scope_identifier=scope_identifiers,
@@ -58,11 +59,11 @@ def test_save_config_valid_return_data_and_path(
 
 
 
-def test_save_config_invalid_identifier_names_return_invalid_scope_error(data_store):
+def test_save_one_config_override_invalid_identifier_names_return_invalid_scope_error(data_store):
     scope_identifiers = {"hostname-typo": "w11dt000001"}
 
     with pytest.raises(InvalidScopeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             mode="config",
@@ -71,9 +72,9 @@ def test_save_config_invalid_identifier_names_return_invalid_scope_error(data_st
         )
 
 
-def test_save_config_invalid_data_return_error(data_store):
+def test_save_one_config_override_invalid_data_return_error(data_store):
     with pytest.raises(ConfigSerializeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             mode="config_new",
@@ -82,9 +83,9 @@ def test_save_config_invalid_data_return_error(data_store):
         )
 
 
-def test_save_config_invalid_file_type_return_error(data_store):
+def test_save_one_config_override_invalid_file_type_return_error(data_store):
     with pytest.raises(UnsupportedFileTypeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             scope_identifier={},
@@ -94,7 +95,7 @@ def test_save_config_invalid_file_type_return_error(data_store):
         )
 
 
-def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace(
+def test_save_one_config_override_overwrite_existing_wrong_namespace_return_invalid_namespace(
     data_store
 ):
     namespace = "new namespace"
@@ -104,7 +105,7 @@ def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace
     create_missing_namespace = False
 
     with pytest.raises(InvalidNamespaceError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             scope_identifier=scope_identifiers,
@@ -122,7 +123,7 @@ def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace
         pytest.param("default", id="namespace-missing"),
     ],
 )
-def test_save_config_file_exists_return_exist_error(data_store, mode):
+def test_save_one_config_override_file_exists_return_exist_error(data_store, mode):
     """
     Config exist errors only occur when config already exists and override is false.
 
@@ -132,7 +133,7 @@ def test_save_config_file_exists_return_exist_error(data_store, mode):
     namespace = "software_a"
 
     with pytest.raises(ConfigExistsError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -140,7 +141,7 @@ def test_save_config_file_exists_return_exist_error(data_store, mode):
             data={},
         )
 
-def test_save_config_change_suffix(data_store):
+def test_save_one_config_override_change_suffix(data_store):
     ... # TODO:
 
 ################################################################################
@@ -170,13 +171,13 @@ def test_save_config_change_suffix(data_store):
         ),
     ],
 )
-def test_save_config_missing_path_flags_raise(
+def test_save_one_config_override_missing_path_flags_raise(
     data_store, namespace, scope_identifier, kwargs, exception
 ):
     """Disabling a create_missing_* flag raises when the corresponding path is
     missing from the data store."""
     with pytest.raises(exception):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             scope_identifier=scope_identifier,
@@ -186,7 +187,7 @@ def test_save_config_missing_path_flags_raise(
         )
 
 
-def test_save_config_create_missing_scope(data_store):
+def test_save_one_config_override_create_missing_scope(data_store):
     """A brand new scope is created and the config saved when
     create_missing_scope is True."""
     namespace = "software_a"
@@ -195,7 +196,7 @@ def test_save_config_create_missing_scope(data_store):
     expected_path = data_store.rootdir / Path("rig_id/rig1/software_a/config.yml")
     assert not data_store.exists(expected_path)
 
-    result_data, result_path = save_config(
+    result_data, result_path = _save_one_config_override(
         data_store=data_store,
         namespace=namespace,
         scope_identifier=scope_identifier,
@@ -216,17 +217,17 @@ def test_deep_save_multiple_scopes_no_changes(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "newnewnew", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
     # overwrite_defaults=False, but not changes were made to default.yml.
     # override stack will include default.yml, but since no changes were made at
     # this scope, default.yml should be unchanged.
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
-        data=config,
+        data=config.data,
     )
 
 def test_deep_save_new_namespace(data_store):
@@ -236,7 +237,7 @@ def test_deep_save_new_namespace(data_store):
     # config, _ = get_config(data_store=data_store, namespace=namespace,
     #                        scope_identifiers=scope_identifiers, mode=mode)
     config = {"testing": "ni-haody"}
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -253,7 +254,7 @@ def test_deep_save_new_namespace_raises(data_store):
     # config, _ = get_config(data_store=data_store, namespace=namespace,
     config = {"testing": "ni-haody"}
     with pytest.raises(InvalidNamespaceError):
-        save_config_deep(
+        save_config(
             data_store=data_store,
             namespace=namespace,
             scope_identifiers=scope_identifiers,
@@ -266,15 +267,15 @@ def test_deep_save_restrict_adding_new_field(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    config.update({"testing": "ni-haody"})
+    config.data.update({"testing": "ni-haody"})
     with pytest.raises(ConfigMutatedError):
-        save_config_deep(
+        save_config(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
-            data=config,
+            data=config.data,
             scope_identifiers=scope_identifiers,
             append_new_fields_to_last_scope=False  # default value
         )
@@ -284,151 +285,148 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    config.update({"testing": "ni-haody"})
-    save_config_deep(
+    config.data.update({"testing": "ni-haody"})
+    save_config(
         data_store=data_store,
         namespace=namespace,
         mode=mode,
-        data=config,
+        data=config.data,
         scope_identifiers=scope_identifiers,
         append_new_fields_to_last_scope=True
     )
-    # Fetch config.yml from default scope. It should have new fields not present
+    # Fetch config.yml from lowest scope. It should have new fields not present
     # in the original.
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers=scope_identifiers, mode=mode,
-                           merge=False)
-    assert "testing" in config and config["testing"] == "ni-haody"
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          mode=mode,
+                          scope="subject_id", scope_identifier="614173")
+    assert "testing" in data and data["testing"] == "ni-haody"
 
 
 def test_deep_save_multiple_scopes_restrict_overriding_defaults(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
     # This value comes from default.yml in scope=default.
-    config["default-default-value"] = "the one ring to rule them all"
-    save_config_deep(
+    config.data["default-default-value"] = "the one ring to rule them all"
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
-        data=config,
+        data=config.data,
     )
     # Fetch default.yml from default scope. It should be unchanged.
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode="default", merge=False)
-    assert config == {"default-default-value": "the one ring"}
+    data = read_file_data(data_store=data_store, namespace=namespace, mode="default")
+    assert data == {"default-default-value": "the one ring"}
     # Fetch config.yml from default scope. It should have values that came
     # from default.yml
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode=mode, merge=False)
-    assert config == {"default-default-value": "the one ring to rule them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace, mode=mode)
+    assert data == {"default-default-value": "the one ring to rule them all"}
 
 
 def test_deep_save_multiple_scopes_enable_overriding_defaults(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    config["default-default-value"] = "the one ring to rule them all"
-    save_config_deep(
+    config.data["default-default-value"] = "the one ring to rule them all"
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
-        data=config,
+        data=config.data,
         overwrite_defaults=True
     )
     # Fetch default.yml from default scope. It should have new values.
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode="default", merge=False)
-    assert config == {"default-default-value": "the one ring to rule them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace, mode="default")
+    assert data == {"default-default-value": "the one ring to rule them all"}
 
 
 def test_deep_save_multiple_scopes_no_changes_check_all_cfgs(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
-        data=config,
+        data=config.data,
     )
     # Fetch all unmerged configs.
     # Fetch default.yml from default scope. It should have new values.
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode="default", merge=False)
-    assert config == {"default-default-value": "the one ring"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode=mode, merge=False)
-    assert config == {"name": "config", "scope": "default", "default-layer-value": "beep beep"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"hostname": "w11dt000001"},
-                           mode="default", merge=False)
-    assert config == {"computer-default-value": "to rule them all"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"hostname": "w11dt000001"},
-                           mode=mode, merge=False)
-    assert config == {"computer-layer-value": "boop boop"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"subject_id": "614173"},
-                           mode="default", merge=False)
-    assert config == {"subject-default-value": "one config to bring them all"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"subject_id": "614173"},
-                           mode=mode, merge=False)
-    assert config == {"subject-layer-value": "bap bap", "scope": "614173",
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          mode="default")
+    assert data == {"default-default-value": "the one ring"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          mode=mode)
+    assert data == {"name": "config", "scope": "default", "default-layer-value": "beep beep"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          scope="hostname", scope_identifier="w11dt000001",
+                          mode="default")
+    assert data == {"computer-default-value": "to rule them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          scope="hostname", scope_identifier="w11dt000001",
+                          mode=mode)
+    assert data == {"computer-layer-value": "boop boop"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          scope="subject_id", scope_identifier="614173",
+                           mode="default")
+    assert data == {"subject-default-value": "one config to bring them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                          scope="subject_id", scope_identifier="614173",
+                           mode=mode)
+    assert data == {"subject-layer-value": "bap bap", "scope": "614173",
                       "The Cure": "show me how you do that trick"}
 
 def test_deep_save_multiple_scopes_many_changes_check_all_cfgs(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode="config"
-    config, _ = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    config["name"] = "my config"
-    config["computer-layer-value"] = "to grill them all"
-    config["subject-layer-value"] = "bebop"
-    save_config_deep(
+    config.data["name"] = "my config"
+    config.data["computer-layer-value"] = "to grill them all"
+    config.data["subject-layer-value"] = "bebop"
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
-        data=config,
+        data=config.data,
     )
     # Fetch all unmerged configs.
     # Fetch default.yml from default scope. It should have new values.
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode="default", merge=False)
-    assert config == {"default-default-value": "the one ring"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           mode=mode, merge=False)
-    assert config == {"name": "my config", "scope": "default", "default-layer-value": "beep beep"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"hostname": "w11dt000001"},
-                           mode="default", merge=False)
-    assert config == {"computer-default-value": "to rule them all"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"hostname": "w11dt000001"},
-                           mode=mode, merge=False)
-    assert config == {"computer-layer-value": "to grill them all"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"subject_id": "614173"},
-                           mode="default", merge=False)
-    assert config == {"subject-default-value": "one config to bring them all"}
-    config, _ = get_config(data_store=data_store, namespace=namespace,
-                           scope_identifiers={"subject_id": "614173"},
-                           mode=mode, merge=False)
-    assert config == {"subject-layer-value": "bebop", "scope": "614173",
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           mode="default")
+    assert data == {"default-default-value": "the one ring"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           mode=mode)
+    assert data == {"name": "my config", "scope": "default", "default-layer-value": "beep beep"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           scope="hostname", scope_identifier="w11dt000001",
+                           mode="default")
+    assert data == {"computer-default-value": "to rule them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           scope="hostname", scope_identifier="w11dt000001",
+                           mode=mode)
+    assert data == {"computer-layer-value": "to grill them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           scope="subject_id", scope_identifier="614173",
+                           mode="default")
+    assert data == {"subject-default-value": "one config to bring them all"}
+    data = read_file_data(data_store=data_store, namespace=namespace,
+                           scope="subject_id", scope_identifier="614173",
+                           mode=mode)
+    assert data == {"subject-layer-value": "bebop", "scope": "614173",
                       "The Cure": "show me how you do that trick"}
 
 @pytest.mark.parametrize("new_suffix", VALID_EXTENSIONS)
@@ -436,24 +434,24 @@ def test_deep_save_changing_suffix(data_store, new_suffix):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode = "config"
-    config, old_paths = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    config["name"] = "my config"
-    config["computer-layer-value"] = "to grill them all"
-    config["subject-layer-value"] = "bebop"
-    save_config_deep(
+    config.data["name"] = "my config"
+    config.data["computer-layer-value"] = "to grill them all"
+    config.data["subject-layer-value"] = "bebop"
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
         suffix=new_suffix,
-        data=config,
+        data=config.data,
     )
 
-    config, paths = get_config(data_store=data_store, namespace=namespace,
+    new_config = get_config(data_store=data_store, namespace=namespace,
                                scope_identifiers=scope_identifiers, mode=mode)
     
-    for old_path, new_path in zip(old_paths, paths):
+    for old_path, new_path in zip(config.override_stack, new_config.override_stack):
         tmp_mode = old_path.stem
         if tmp_mode == mode:
             assert old_path.with_suffix(new_suffix) == new_path
@@ -465,21 +463,22 @@ def test_deep_save_changing_suffix_no_changes(data_store, new_suffix):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode = "config"
-    config, old_paths = get_config(data_store=data_store, namespace=namespace,
+    config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    save_config_deep(
+    old_paths = config.override_stack
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
         mode=mode,
         suffix=new_suffix,
-        data=config,
+        data=config.data,
     )
 
-    config, paths = get_config(data_store=data_store, namespace=namespace,
+    new_config = get_config(data_store=data_store, namespace=namespace,
                                scope_identifiers=scope_identifiers, mode=mode)
-    
-    for old_path, new_path in zip(old_paths, paths):
+    new_paths = new_config.override_stack
+    for old_path, new_path in zip(old_paths, new_paths):
         tmp_mode = old_path.stem
         if tmp_mode == mode:
             assert old_path.with_suffix(new_suffix) == new_path

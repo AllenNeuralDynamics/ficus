@@ -6,6 +6,7 @@ from ficus.core.exceptions import (
     InvalidScopeError,
     InvalidScopeIdentifierError,
 )
+from ficus.schemas.configs import ConfigObject
 from ficus.services.configs import (
     get_override_stack,
     get_config,
@@ -20,32 +21,30 @@ from pathlib import Path
 ################################################################################
 
 
-@pytest.mark.parametrize("merge", [False, True])
-def test_get_config_return_defaults(data_store, merge):
-    result = get_config(data_store=data_store, namespace="software_a", merge=merge)
-    assert len(result) == 2
-    assert result[0] == {
+# @pytest.mark.parametrize("merge", [False, True])
+def test_get_config_return_defaults(data_store):
+    result = get_config(data_store=data_store, namespace="software_a")
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
     }
-    assert result[1] == [data_store.rootdir / Path("defaults/software_a/default.yml")]
+    assert result.override_stack == [data_store.rootdir / Path("defaults/software_a/default.yml")]
 
 
 def test_get_config_with_identifier_name_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001"}
-    merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        merge=merge
     )
 
-    assert len(result) == 2
-    assert result[0] == {
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
         "computer-default-value": "to rule them all",
     }
-    assert result[1] == [
+    assert result.override_stack == [
         data_store.rootdir / "defaults/software_a/default.yml",
         data_store.rootdir / "hostname/w11dt000001/software_a/default.json",
     ]
@@ -54,20 +53,18 @@ def test_get_config_with_identifier_name_return_config(data_store):
 def test_get_config_with_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers= {"hostname": "w11dt000001", "subject_id": "614173"}
-    merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        merge=merge
     )
 
-    assert len(result) == 2
-    assert result[0] == {
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
         "computer-default-value": "to rule them all",
         "subject-default-value": "one config to bring them all",
     }
-    assert result[1] == [
+    assert result.override_stack == [
         data_store.rootdir / "defaults/software_a/default.yml",
         data_store.rootdir / "hostname/w11dt000001/software_a/default.json",
         data_store.rootdir / "subject_id/614173/software_a/default.json",
@@ -78,21 +75,20 @@ def test_get_config_with_mode_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {}
     mode = "config"
-    merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        mode=mode, merge=merge
+        mode=mode
     )
 
-    assert len(result) == 2
-    assert result[0] == {
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
         "name": "config",
         "scope": "default",
         "default-layer-value": "beep beep",
     }
-    assert result[1] == [
+    assert result.override_stack == [
         data_store.rootdir / "defaults/software_a/default.yml",
         data_store.rootdir / "defaults/software_a/config.yml",
     ]
@@ -102,15 +98,14 @@ def test_get_config_with_mode_and_identifier_names_return_config(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
     mode = "config"
-    merge = True
 
     result = get_config(
         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        mode=mode, merge=merge
+        mode=mode
     )
 
-    assert len(result) == 2
-    assert result[0] == {
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
         "computer-default-value": "to rule them all",
         "subject-default-value": "one config to bring them all",
@@ -121,7 +116,7 @@ def test_get_config_with_mode_and_identifier_names_return_config(data_store):
         "scope": "614173",
         "The Cure": "show me how you do that trick",
     }
-    assert result[1] == [
+    assert result.override_stack == [
         data_store.rootdir / "defaults/software_a/default.yml",
         data_store.rootdir / "defaults/software_a/config.yml",
         data_store.rootdir / "hostname/w11dt000001/software_a/default.json",
@@ -131,61 +126,61 @@ def test_get_config_with_mode_and_identifier_names_return_config(data_store):
     ]
 
 
-def test_get_config_no_merge_with_mode_return_config(data_store):
-    namespace = "software_a"
-    scope_identifiers = {}
-    mode = "config"
-    merge = False
+# def test_get_config_no_merge_with_mode_return_config(data_store):
+#     namespace = "software_a"
+#     scope_identifiers = {}
+#     mode = "config"
+#     merge = False
 
-    result = get_config(
-        data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        mode=mode, merge=merge
-    )
+#     result = get_config(
+#         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
+#         mode=mode, merge=merge
+#     )
 
-    assert len(result) == 2
-    assert result[0] == {
-        "name": "config",
-        "scope": "default",
-        "default-layer-value": "beep beep",
-    }
-    assert result[1] == [data_store.rootdir / "defaults/software_a/config.yml"]
-
-
-def test_get_config_no_merge_with_identifier_names_return_config(data_store):
-    namespace = "software_a"
-    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    merge = False
-
-    result = get_config(
-        data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        merge=merge
-    )
-
-    assert len(result) == 2
-    assert result[0] == {
-        "subject-default-value": "one config to bring them all",
-    }
-    assert result[1] == [data_store.rootdir / "subject_id/614173/software_a/default.json"]
+#     assert isinstance(result, ConfigObject)
+#     assert result.data == {
+#         "name": "config",
+#         "scope": "default",
+#         "default-layer-value": "beep beep",
+#     }
+#     assert result.override_stack == [data_store.rootdir / "defaults/software_a/config.yml"]
 
 
-def test_get_config_no_merge_with_filename_and_identifier_names_return_config(data_store):
-    namespace = "software_a"
-    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
-    mode = "config"
-    merge = False
+# def test_get_config_no_merge_with_identifier_names_return_config(data_store):
+#     namespace = "software_a"
+#     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+#     merge = False
 
-    result = get_config(
-        data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
-        mode=mode, merge=merge
-    )
+#     result = get_config(
+#         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
+#         merge=merge
+#     )
 
-    assert len(result) == 2
-    assert result[0] == {
-        "scope": "614173",
-        "subject-layer-value": "bap bap",
-        "The Cure": "show me how you do that trick",
-    }
-    assert result[1] == [data_store.rootdir / "subject_id/614173/software_a/config.yml"]
+#     assert len(result) == 2
+#     assert result[0] == {
+#         "subject-default-value": "one config to bring them all",
+#     }
+#     assert result[1] == [data_store.rootdir / "subject_id/614173/software_a/default.json"]
+
+
+# def test_get_config_no_merge_with_filename_and_identifier_names_return_config(data_store):
+#     namespace = "software_a"
+#     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+#     mode = "config"
+#     merge = False
+
+#     result = get_config(
+#         data_store=data_store, namespace=namespace, scope_identifiers=scope_identifiers,
+#         mode=mode, merge=merge
+#     )
+
+#     assert len(result) == 2
+#     assert result[0] == {
+#         "scope": "614173",
+#         "subject-layer-value": "bap bap",
+#         "The Cure": "show me how you do that trick",
+#     }
+#     assert result[1] == [data_store.rootdir / "subject_id/614173/software_a/config.yml"]
 
 
 def test_get_config_invalid_identifiers_return_invalid_scope_error(data_store):
@@ -251,11 +246,11 @@ def test_get_config_mode_default_return_defaults(data_store):
     Config content would be the same, but path should only show default.yml once.
     """
     result = get_config(data_store, "software_a", mode="default")
-    assert len(result) == 2
-    assert result[0] == {
+    assert isinstance(result, ConfigObject)
+    assert result.data == {
         "default-default-value": "the one ring",
     }
-    assert result[1] == [data_store.rootdir / "defaults/software_a/default.yml"]
+    assert result.override_stack == [data_store.rootdir / "defaults/software_a/default.yml"]
 
 
 #################################################################################

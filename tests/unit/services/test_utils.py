@@ -8,7 +8,7 @@ from ficus.core.exceptions import (
     InvalidNamespaceError,
     InvalidScopeIdentifierError,
 )
-from ficus.services.configs import (
+from ficus.services.utils import (
     _ensure_paths,
     _get_all_search_paths,
     _find_first_invalid_subpath,

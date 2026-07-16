@@ -126,6 +126,8 @@ class ZKStore(DataStore):
 
     def list_files(self, path: Path | str) -> list[str]:
         path = self._sanitize(path)
+        if not self.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist.")
         with ZKClientContextManager(self.hosts) as zk:
             if self.is_file(path):
                 raise ValueError(f"Cannot list files on a file: {path}")

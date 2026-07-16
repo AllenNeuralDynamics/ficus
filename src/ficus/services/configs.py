@@ -1,180 +1,35 @@
 import copy
-import json
-from typing import Literal, Optional
+from typing import Optional
 from loguru import logger
 from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
-import yaml
+
 
 from ficus.core.exceptions import (
     ConfigExistsError,
-    ConfigDecodeError,
     ConfigMutatedError,
     ConfigNotFoundError,
-    ConfigSerializeError,
-    InvalidNamespaceError,
-    InvalidScopeIdentifierError,
-    MultipleScopeIdentifiersError,
     PathNotFoundError,
     UnsupportedFileTypeError,
 )
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigData
+from ficus.schemas.configs import ConfigObject
 from pathlib import Path, PurePath
+from ficus.services.utils import (
+    DEFAULT_MODE,
+    VALID_EXTENSIONS_TYPE,
+    VALID_EXTENSIONS,
+    DEFAULT_SUFFIX,
+    ScopeName,
+    _ensure_paths,
+    _find_first_invalid_subpath,
+    _get_all_search_paths,
+    _get_parts_from_path,
+    _validate_and_convert_to_bytes,
+    _validate_and_convert_to_dict,
+    _validate_single_scope,
+)
 
-DEFAULT_MODE = "default"
-DEFAULT_FILES = {"default.yml", "default.yaml", "default.json"}
-VALID_EXTENSIONS_TYPE = Literal[".yaml", ".yml", ".json"]
-VALID_EXTENSIONS = {".yaml", ".yml", ".json"}
-DEFAULT_SUFFIX = ".yml"
-
-
-ScopeName = str
-
-
-def _get_all_search_paths(
-    data_store: DataStore,
-    namespace: str | None = None,
-    scope_identifiers: dict[ScopeName, str] | None = None) -> list[Path]:
-    """Get all folder paths for the specified namespace and scope idenfitiers.
-
-    Return path order is in merge priority order (highest to lowest) starting
-    with defaults and followed by scopes in scope priority order.
-
-    Scope priority is specified by the order the input `scope_identifiers` dict.
-
-    No validation is performed that these paths are valid or exist.
-
-    Parameters
-    ----------
-    data_store: DataStore
-        The data store instance where the configuration files are stored.
-    namespace: str | None
-        The namespace for which to get search paths. If None, only scope paths are returned.
-    scope_identifiers: dict[ScopeName, str] | None
-        A dictionary of scope names to their identifiers to include in the search paths. If None, only the default scope is considered.
-
-    Returns
-    -------
-    list[Path]
-        A list of folder paths for the specified namespace and scope identifiers, in merge priority order (highest to lowest).
-    """
-    if scope_identifiers is None:
-        scope_identifiers = {}
-    paths = []
-    if namespace is not None:
-        paths.append(data_store.rootdir / Path(f"defaults/{namespace}"))
-    for scope, identifier in scope_identifiers.items():
-        paths.append(data_store.rootdir / Path(f"{scope}/{identifier}/{namespace}"))
-    return paths
-
-
-def _ensure_paths(
-    data_store: DataStore,
-    paths: list[Path],
-    create_missing_namespace: bool = False,
-    scope_ids_must_exist: set[ScopeName] | None = None,
-    create_missing_scope_id: bool = False,
-    create_missing_scope: bool = False,
-) -> list[Path]:
-    """Create underlying data store structure to guarantee that the given
-    `paths` (namespace and scope identifier folders) exist, and return the
-    subset of paths that now exist. Call this function after _get_all_search_paths.
-
-    Parameters
-    ----------
-    data_store: DataStore
-        The data store instance where the configuration files are stored.
-    paths: list[Path]
-        The list of paths (namespace and scope identifier folders) to ensure exist.
-    create_missing_namespace: bool
-        If True, create the namespace folder if it does not exist. Default is False.
-    scope_ids_must_exist: set[ScopeName] | None
-        Scopes whose identifier folders are required to exist. A missing identifier for one of these scopes raises InvalidScopeIdentifierError. Default is None.
-    create_missing_scope_id: bool
-        If True, create missing scope identifier folders. Default is False.
-    create_missing_scope: bool
-        If True, create missing scope folders. Default is False.
-
-    Returns
-    -------
-    ensured_paths: list[Path]
-        The subset of the input `paths` that now exist in the data store after ensuring the necessary structure.
-
-    Raises
-    ------
-    InvalidNamespaceError
-        if the namespace does not exist and create_missing_namespace is False.
-    InvalidScopeError
-        if a scope does not exist and create_missing_scope is False.
-    InvalidScopeIdentifierError
-        if a scope identifier does not exist and create_missing_scope_id is False.
-    """
-    ensured_paths = copy.deepcopy(paths)
-    for path in paths:
-        namespace, scope_identifier, filename = _get_parts_from_path(data_store, path)
-        if not scope_identifier: # in the default scope
-            if namespace and not data_store.exists(path):
-                if create_missing_namespace:
-                    data_store.create(path=path, data=None)
-                    logger.debug(f"creating: {path}")
-                else:
-                    raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
-
-        else:
-            scope, identifier = _validate_single_scope(scope_identifier)
-            # Validate that scope exists in the datastore
-            data_store.validate_scopes(scopes={scope},
-                                        create_missing=create_missing_scope)
-
-            if not data_store.exists(path):
-                if create_missing_scope_id:
-                    logger.debug(f"creating: {path}")
-                    data_store.create(path=path, data=None)
-                elif scope_ids_must_exist and scope in scope_ids_must_exist:
-                    raise InvalidScopeIdentifierError(
-                        f"Scope identifier not found: {scope}/{identifier}"
-                    )
-                else:
-                    # if it doesn't exist and it's okay not to, just remove it from paths
-                    ensured_paths.remove(path)
-
-    return ensured_paths
-
-
-def _get_parts_from_path(data_store: DataStore, path: Path
-) -> tuple[str, dict[ScopeName, str], str | None]:
-    """Given a path, parse it for namespace, scope identifier, filename"""
-    namespace = ""
-    scope_identifier = {}
-    filename = None
-    subpath_from_root = data_store._sanitize(path).relative_to(data_store.rootdir)
-    path_parts = list(subpath_from_root.parts)
-    if path_parts[0] == "defaults":  # default scope case.
-        namespace = path_parts[1]
-        path_parts = path_parts[2:]
-    else:  # named scope case
-        scope_identifier[path_parts[0]] = path_parts[1]
-        namespace = path_parts[2]
-        path_parts = path_parts[3:]
-    if len(path_parts): # path_parts has been modified to remove everything except filename
-        filename = path_parts[0]
-    return namespace, scope_identifier, filename
-
-
-def _validate_single_scope(
-    scope_identifiers: dict[ScopeName, str] | None = None,
-)-> tuple[ScopeName | None, str | None]:
-    """Ensure that the scope_identifiers dict contains at most one item"""
-    scope, identifier = None, None
-    if scope_identifiers and len(scope_identifiers) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(scope_identifiers.keys())}. "
-            "Only one is allowed."
-        )
-    if scope_identifiers:
-        (scope, identifier), = scope_identifiers.items()
-    return scope, identifier
-
+## Config CRUD methods
 
 def get_config(
     data_store: DataStore,
@@ -182,8 +37,7 @@ def get_config(
     scope_identifiers: dict[ScopeName, str] | None = None,
     mode: str = "default",
     scope_ids_must_exist: set[ScopeName] | None = None,
-    merge: bool = True,
-) -> tuple[ConfigData, list[Path]]:
+) -> ConfigObject:
     """
     Get config data from store based on namespace and scopes.
 
@@ -220,8 +74,8 @@ def get_config(
 
     Returns:
     --------
-        tuple[ConfigData, list[Path]]
-            A tuple containing the configuration data and a list of paths the config was made from.
+        ConfigObject
+            An object with data and metadata from a config
 
     Raises:
     -------
@@ -234,7 +88,6 @@ def get_config(
         InvalidScopeIdentifierError
             if a required scope identifier does not exist.
     """
-    config = {}
     try:
         file_override_paths = get_override_stack(data_store=data_store,
                                                       namespace=namespace,
@@ -245,17 +98,23 @@ def get_config(
         raise ConfigNotFoundError()
     if not file_override_paths:
         raise ConfigNotFoundError()
+    config = ConfigObject(
+        data = {},
+        namespace = namespace,
+        mode = mode,
+        scope_identifiers = scope_identifiers or {},
+        override_stack = file_override_paths
+    )
     # Iterate backwards so we can return immediately if not merging.
     for filepath in reversed(file_override_paths):
-        override_config_bytes = data_store.read(filepath)
-        override_config = _validate_and_convert_to_dict(filepath.suffix, override_config_bytes)
-        config = _deep_update(override_config, config)
-        if not merge:
-            return config, [file_override_paths[-1]]
-    return config, file_override_paths
+        override_data_bytes = data_store.read(filepath)
+        override_data = _validate_and_convert_to_dict(filepath.suffix, override_data_bytes)
+        config.data = _deep_update(override_data, config.data)
+    
+    return config
 
 
-def save_config(
+def _save_one_config_override( #TODO: refactor to use file_crud methods
     data_store: DataStore,
     namespace: str,
     scope_identifier: dict[ScopeName, str],
@@ -370,7 +229,7 @@ def save_config(
     return data, filepath
 
 
-def save_config_deep(
+def save_config(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str],
@@ -434,12 +293,12 @@ def save_config_deep(
                                         must_exist_in_lowest_scope=False,
                                         create_missing_namespace=create_missing_namespace)
     if not override_stack:
-        save_config(data_store=data_store, namespace=namespace, scope_identifier=None,
+        _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
                     mode=mode, suffix=suffix, data=data, 
                     create_missing_namespace=create_missing_namespace)
         return
     # Convert all suffixes to the desired suffix.
-    # (Flat save_config will convert the file format.)
+    # (Flat _save_one_config_override will convert the file format.)
     override_stack_new_suffix = copy.deepcopy(override_stack)
     for idx, filepath in enumerate(override_stack_new_suffix):
         if filepath.stem == mode:
@@ -490,59 +349,12 @@ def save_config_deep(
     for filepath, data in new_cfg_data.items():
         ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
         tmp_mode, tmp_suffix = PurePath(filename).stem, PurePath(filename).suffix
-        save_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+        _save_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                     mode=tmp_mode, suffix=tmp_suffix, data=data, overwrite=True)
     return data_cpy
 
 
 def update_config(
-    data_store: DataStore,
-    namespace: str,
-    mode: str,
-    data: dict,
-    scope_identifier: dict[ScopeName, str],
-    suffix: VALID_EXTENSIONS_TYPE | None = None,
-):
-    """
-    Update config file based on namespace, scope, and identifier; allows saving partial data.
-
-    This function will get the existing config and merge it with the data given. Afterwards it will
-    override the existing config file (thus having same behavior/validations as the save and get functions)
-
-    Parameters:
-    -----------
-        namespace: str
-            The namespace for the configuration file.
-        mode: str
-            The mode of the configuration file (e.g., "default", "production").
-        data: dict
-            The configuration data to update.
-        scope_identifier: dict[ScopeName, str]
-            A dict, keyed by scope name, of identifiers per scope.
-
-    Returns:
-    --------
-        tuple[dict, Path]
-            A tuple containing the updated configuration data and the path the config was saved to.
-    """
-
-    _validate_single_scope(scope_identifier)
-    current_config, _ = get_config(
-        data_store=data_store, namespace=namespace, mode=mode,
-        scope_identifiers=scope_identifier, merge=False
-    )
-    raw_config = _deep_update(current_config, data)
-    return save_config(data_store=data_store,
-                       namespace=namespace,
-                       mode=mode,
-                       suffix=suffix,
-                       data=raw_config,
-                       scope_identifier=scope_identifier,
-                       overwrite=True,
-                       create_missing_scope_id=False,
-                       )
-
-def update_config_deep(
     data_store: DataStore,
     namespace: str,
     mode: str = DEFAULT_MODE,
@@ -583,16 +395,16 @@ def update_config_deep(
             Leftover fields that were not merged into the existing configuration.
     """
     
-    config_data, _ = get_config(data_store=data_store, namespace=namespace, mode=mode, 
+    config = get_config(data_store=data_store, namespace=namespace, mode=mode, 
                              scope_identifiers=scope_identifiers)
-    updated_data = _deep_update(config_data, data)
-    return save_config_deep(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
+    updated_data = _deep_update(config.data, data)
+    return save_config(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
                      scope_identifiers=scope_identifiers, suffix=new_suffix,
                      overwrite_defaults=overwrite_defaults,
                      append_new_fields_to_last_scope=append_new_fields_to_last_scope)
 
 
-def delete_config(
+def _delete_one_config_override( # TODO: refactor to use file_crud methods
     data_store: DataStore, namespace: str, mode: str = DEFAULT_MODE,
     scope_identifier: dict[ScopeName, str] | None = None
 ) -> str:
@@ -638,7 +450,7 @@ def delete_config(
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def delete_config_deep(
+def delete_config(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str],
@@ -672,7 +484,7 @@ def delete_config_deep(
         if filepath.stem in stems_to_delete:
             ns, scope_id, filename = _get_parts_from_path(data_store=data_store,
                                                           path=filepath)
-            delete_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+            _delete_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                           mode=Path(filename).stem)
 
 def get_override_stack(
@@ -761,69 +573,3 @@ def get_override_stack(
             raise FileNotFoundError()
     return override_stack
 
-
-################################################################################
-#
-#   Utility
-#
-################################################################################
-
-def _find_first_invalid_subpath(
-    data_store: DataStore,
-    path: Path | str,
-) -> Path | None:
-    """
-    Given a path, finds the first "directory" or zk node that does not exists.
-
-    Returns:
-    -------
-        str | None
-            subpath if one does not exists, or None if path is valid
-    """
-    path = Path(path)
-    try:
-        # might raise ValueError if path is not relative to data_store.rootdir
-        subpath_from_root = path.relative_to(data_store.rootdir)
-        for parent in reversed(subpath_from_root.parents):
-            if not data_store.exists(parent):
-                return data_store.rootdir / parent  # reattach root
-    except ValueError:
-        return path.parents[-1]
-    return None
-
-
-def _validate_and_convert_to_bytes(suffix: str, data: dict) -> bytes:
-    """
-    Validates filename based on extension and converts data into bytes.
-    Only attempts to validate/convert json and yaml files.
-    """
-    try:
-        if suffix == ".json":
-            data_as_bytes = json.dumps(data).encode("utf-8")
-        elif suffix in [".yml", ".yaml"]:
-            data_as_bytes = yaml.safe_dump(data).encode("utf-8")
-        else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {suffix}")
-        return data_as_bytes
-    except (TypeError, yaml.YAMLError):
-        raise ConfigSerializeError(f"Failed to serialize data for {suffix}")
-
-
-def _validate_and_convert_to_dict(suffix: str, data: bytes) -> dict:
-    """
-    Validates filename based on extension and converts data into dictionary.
-    Only attempts to validate/convert json and yaml files.
-    """
-    try:
-        if suffix == ".json":
-            data_as_dict = json.loads(data)  # Throw away - decoding for validation only
-        elif suffix in [".yml", ".yaml"]:
-            data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
-            if data_as_dict is None:
-                # yaml.safe_load returns None for empty files, convert to empty dict
-                data_as_dict = {}
-        else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {suffix}")
-        return data_as_dict
-    except (json.JSONDecodeError, yaml.YAMLError):
-        raise ConfigDecodeError(f"Failed to decode data for {suffix}")
