@@ -89,8 +89,8 @@ def create_file_from_data(
     scope_identifier: str | None = None,
     mode: str = DEFAULT_MODE,
     overwrite: bool = False,
-)-> str:
-    return create_file(
+) -> dict:
+    new_content = create_file(
         data_store=data_store,
         namespace=namespace,
         suffix=suffix,
@@ -100,6 +100,7 @@ def create_file_from_data(
         content=_validate_and_convert_to_bytes(suffix, data).decode(),
         overwrite=overwrite,
     )
+    return _validate_and_convert_to_dict(suffix, new_content.encode())
 
 def update_file_data(
     data_store: DataStore,
@@ -112,7 +113,7 @@ def update_file_data(
     content, suffix = read_file(data_store, namespace, scope, scope_identifier, mode)
     current_data = _validate_and_convert_to_dict(suffix, content.encode())
     updated_data = _deep_update(current_data, data)
-    updated_content = create_file_from_data(
+    result_data = create_file_from_data(
         data_store=data_store,
         namespace=namespace,
         data=updated_data,
@@ -122,7 +123,7 @@ def update_file_data(
         mode=mode,
         overwrite=True,
     )
-    return _validate_and_convert_to_dict(suffix, updated_content.encode())
+    return result_data
 
 def delete_file(
     data_store: DataStore,

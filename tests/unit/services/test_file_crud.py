@@ -291,7 +291,7 @@ def test_create_file_from_data_already_exists_raises_file_exists_error(data_stor
 
 def test_create_file_from_data_overwrite_data_is_readable(data_store):
     data = {"overwritten": True}
-    create_file_from_data(
+    new_data = create_file_from_data(
         data_store,
         namespace="software_a",
         data=data,
@@ -301,6 +301,7 @@ def test_create_file_from_data_overwrite_data_is_readable(data_store):
     )
     result = read_file_data(data_store, namespace="software_a", mode="default")
     assert result == data
+    assert new_data == data
 
 
 ################################################################################
