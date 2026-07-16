@@ -1,3 +1,6 @@
+from copy import deepcopy
+
+
 def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
     """
     Merge two dictionaries together, with values from the updating_mapping taking precedence over
@@ -14,7 +17,7 @@ def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
         dict
             The merged dictionary.
     """
-    updated_mapping = mapping.copy()
+    updated_mapping = deepcopy(mapping)
     for updating_mapping in updating_mappings:
         for k, v in updating_mapping.items():
             if (
