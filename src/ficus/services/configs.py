@@ -114,7 +114,7 @@ def get_config(
     return config
 
 
-def save_config(
+def _save_one_config_override( #TODO: refactor to use file_crud methods
     data_store: DataStore,
     namespace: str,
     scope_identifier: dict[ScopeName, str],
@@ -229,7 +229,7 @@ def save_config(
     return data, filepath
 
 
-def save_config_deep(
+def save_config(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str],
@@ -293,12 +293,12 @@ def save_config_deep(
                                         must_exist_in_lowest_scope=False,
                                         create_missing_namespace=create_missing_namespace)
     if not override_stack:
-        save_config(data_store=data_store, namespace=namespace, scope_identifier=None,
+        _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
                     mode=mode, suffix=suffix, data=data, 
                     create_missing_namespace=create_missing_namespace)
         return
     # Convert all suffixes to the desired suffix.
-    # (Flat save_config will convert the file format.)
+    # (Flat _save_one_config_override will convert the file format.)
     override_stack_new_suffix = copy.deepcopy(override_stack)
     for idx, filepath in enumerate(override_stack_new_suffix):
         if filepath.stem == mode:
@@ -349,12 +349,12 @@ def save_config_deep(
     for filepath, data in new_cfg_data.items():
         ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
         tmp_mode, tmp_suffix = PurePath(filename).stem, PurePath(filename).suffix
-        save_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+        _save_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                     mode=tmp_mode, suffix=tmp_suffix, data=data, overwrite=True)
     return data_cpy
 
 
-def update_config_deep(
+def update_config(
     data_store: DataStore,
     namespace: str,
     mode: str = DEFAULT_MODE,
@@ -398,13 +398,13 @@ def update_config_deep(
     config = get_config(data_store=data_store, namespace=namespace, mode=mode, 
                              scope_identifiers=scope_identifiers)
     updated_data = _deep_update(config.data, data)
-    return save_config_deep(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
+    return save_config(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
                      scope_identifiers=scope_identifiers, suffix=new_suffix,
                      overwrite_defaults=overwrite_defaults,
                      append_new_fields_to_last_scope=append_new_fields_to_last_scope)
 
 
-def delete_config(
+def _delete_one_config_override( # TODO: refactor to use file_crud methods
     data_store: DataStore, namespace: str, mode: str = DEFAULT_MODE,
     scope_identifier: dict[ScopeName, str] | None = None
 ) -> str:
@@ -450,7 +450,7 @@ def delete_config(
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def delete_config_deep(
+def delete_config(
     data_store: DataStore,
     namespace: str,
     scope_identifiers: dict[ScopeName, str],
@@ -484,7 +484,7 @@ def delete_config_deep(
         if filepath.stem in stems_to_delete:
             ns, scope_id, filename = _get_parts_from_path(data_store=data_store,
                                                           path=filepath)
-            delete_config(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+            _delete_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                           mode=Path(filename).stem)
 
 def get_override_stack(

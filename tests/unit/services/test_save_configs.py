@@ -9,7 +9,8 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
     UnsupportedFileTypeError,
 )
-from ficus.services.configs import VALID_EXTENSIONS, get_config, read_file, read_file_data, save_config, save_config_deep
+from ficus.services.file_crud import read_file_data
+from ficus.services.configs import VALID_EXTENSIONS, get_config, _save_one_config_override, save_config
 from pathlib import Path
 
 
@@ -33,7 +34,7 @@ from pathlib import Path
         ),
     ],
 )
-def test_save_config_valid_return_data_and_path(
+def test_save_one_config_override_valid_return_data_and_path(
     data_store, namespace, scope_identifiers, mode, suffix, overwrite
 ):
     filename = f"{mode}{suffix}"
@@ -43,7 +44,7 @@ def test_save_config_valid_return_data_and_path(
         path = data_store.rootdir / Path(f"hostname/{scope_identifiers['hostname']}/{namespace}/{filename}")
     data = {"testing": "ni-haody"}
 
-    result_data, result_path = save_config(
+    result_data, result_path = _save_one_config_override(
         data_store=data_store,
         namespace=namespace,
         scope_identifier=scope_identifiers,
@@ -58,11 +59,11 @@ def test_save_config_valid_return_data_and_path(
 
 
 
-def test_save_config_invalid_identifier_names_return_invalid_scope_error(data_store):
+def test_save_one_config_override_invalid_identifier_names_return_invalid_scope_error(data_store):
     scope_identifiers = {"hostname-typo": "w11dt000001"}
 
     with pytest.raises(InvalidScopeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             mode="config",
@@ -71,9 +72,9 @@ def test_save_config_invalid_identifier_names_return_invalid_scope_error(data_st
         )
 
 
-def test_save_config_invalid_data_return_error(data_store):
+def test_save_one_config_override_invalid_data_return_error(data_store):
     with pytest.raises(ConfigSerializeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             mode="config_new",
@@ -82,9 +83,9 @@ def test_save_config_invalid_data_return_error(data_store):
         )
 
 
-def test_save_config_invalid_file_type_return_error(data_store):
+def test_save_one_config_override_invalid_file_type_return_error(data_store):
     with pytest.raises(UnsupportedFileTypeError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace="software_a",
             scope_identifier={},
@@ -94,7 +95,7 @@ def test_save_config_invalid_file_type_return_error(data_store):
         )
 
 
-def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace(
+def test_save_one_config_override_overwrite_existing_wrong_namespace_return_invalid_namespace(
     data_store
 ):
     namespace = "new namespace"
@@ -104,7 +105,7 @@ def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace
     create_missing_namespace = False
 
     with pytest.raises(InvalidNamespaceError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             scope_identifier=scope_identifiers,
@@ -122,7 +123,7 @@ def test_save_config_overwrite_existing_wrong_namespace_return_invalid_namespace
         pytest.param("default", id="namespace-missing"),
     ],
 )
-def test_save_config_file_exists_return_exist_error(data_store, mode):
+def test_save_one_config_override_file_exists_return_exist_error(data_store, mode):
     """
     Config exist errors only occur when config already exists and override is false.
 
@@ -132,7 +133,7 @@ def test_save_config_file_exists_return_exist_error(data_store, mode):
     namespace = "software_a"
 
     with pytest.raises(ConfigExistsError):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -140,7 +141,7 @@ def test_save_config_file_exists_return_exist_error(data_store, mode):
             data={},
         )
 
-def test_save_config_change_suffix(data_store):
+def test_save_one_config_override_change_suffix(data_store):
     ... # TODO:
 
 ################################################################################
@@ -170,13 +171,13 @@ def test_save_config_change_suffix(data_store):
         ),
     ],
 )
-def test_save_config_missing_path_flags_raise(
+def test_save_one_config_override_missing_path_flags_raise(
     data_store, namespace, scope_identifier, kwargs, exception
 ):
     """Disabling a create_missing_* flag raises when the corresponding path is
     missing from the data store."""
     with pytest.raises(exception):
-        save_config(
+        _save_one_config_override(
             data_store=data_store,
             namespace=namespace,
             scope_identifier=scope_identifier,
@@ -186,7 +187,7 @@ def test_save_config_missing_path_flags_raise(
         )
 
 
-def test_save_config_create_missing_scope(data_store):
+def test_save_one_config_override_create_missing_scope(data_store):
     """A brand new scope is created and the config saved when
     create_missing_scope is True."""
     namespace = "software_a"
@@ -195,7 +196,7 @@ def test_save_config_create_missing_scope(data_store):
     expected_path = data_store.rootdir / Path("rig_id/rig1/software_a/config.yml")
     assert not data_store.exists(expected_path)
 
-    result_data, result_path = save_config(
+    result_data, result_path = _save_one_config_override(
         data_store=data_store,
         namespace=namespace,
         scope_identifier=scope_identifier,
@@ -221,7 +222,7 @@ def test_deep_save_multiple_scopes_no_changes(data_store):
     # overwrite_defaults=False, but not changes were made to default.yml.
     # override stack will include default.yml, but since no changes were made at
     # this scope, default.yml should be unchanged.
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -236,7 +237,7 @@ def test_deep_save_new_namespace(data_store):
     # config, _ = get_config(data_store=data_store, namespace=namespace,
     #                        scope_identifiers=scope_identifiers, mode=mode)
     config = {"testing": "ni-haody"}
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -253,7 +254,7 @@ def test_deep_save_new_namespace_raises(data_store):
     # config, _ = get_config(data_store=data_store, namespace=namespace,
     config = {"testing": "ni-haody"}
     with pytest.raises(InvalidNamespaceError):
-        save_config_deep(
+        save_config(
             data_store=data_store,
             namespace=namespace,
             scope_identifiers=scope_identifiers,
@@ -270,7 +271,7 @@ def test_deep_save_restrict_adding_new_field(data_store):
                            scope_identifiers=scope_identifiers, mode=mode)
     config.data.update({"testing": "ni-haody"})
     with pytest.raises(ConfigMutatedError):
-        save_config_deep(
+        save_config(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -287,7 +288,7 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
     config.data.update({"testing": "ni-haody"})
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         mode=mode,
@@ -311,7 +312,7 @@ def test_deep_save_multiple_scopes_restrict_overriding_defaults(data_store):
                            scope_identifiers=scope_identifiers, mode=mode)
     # This value comes from default.yml in scope=default.
     config.data["default-default-value"] = "the one ring to rule them all"
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -334,7 +335,7 @@ def test_deep_save_multiple_scopes_enable_overriding_defaults(data_store):
     config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
     config.data["default-default-value"] = "the one ring to rule them all"
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -353,7 +354,7 @@ def test_deep_save_multiple_scopes_no_changes_check_all_cfgs(data_store):
     mode="config"
     config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -395,7 +396,7 @@ def test_deep_save_multiple_scopes_many_changes_check_all_cfgs(data_store):
     config.data["name"] = "my config"
     config.data["computer-layer-value"] = "to grill them all"
     config.data["subject-layer-value"] = "bebop"
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -438,7 +439,7 @@ def test_deep_save_changing_suffix(data_store, new_suffix):
     config.data["name"] = "my config"
     config.data["computer-layer-value"] = "to grill them all"
     config.data["subject-layer-value"] = "bebop"
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
@@ -465,7 +466,7 @@ def test_deep_save_changing_suffix_no_changes(data_store, new_suffix):
     config = get_config(data_store=data_store, namespace=namespace,
                            scope_identifiers=scope_identifiers, mode=mode)
     old_paths = config.override_stack
-    save_config_deep(
+    save_config(
         data_store=data_store,
         namespace=namespace,
         scope_identifiers=scope_identifiers,
