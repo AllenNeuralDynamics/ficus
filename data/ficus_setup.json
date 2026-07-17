@@ -1,6 +1,6 @@
 {
   "host": "eng-logtools:2181",
   "root_dir": "scratch",
-  "store": "ZKStore"
+  "store": "zookeeper",
   "scopes": ["hostname", "subject_id"]
 }

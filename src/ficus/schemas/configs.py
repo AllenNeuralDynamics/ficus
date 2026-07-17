@@ -6,11 +6,10 @@ from pydantic import BaseModel
 
 class ConfigResponse(BaseModel):
     message: str
-    details: dict
 
 
 class ConfigDataResponse(ConfigResponse):
-    data: dict | list
+    config: "ConfigObject"
 
 
 ConfigData: TypeAlias = dict[str, Any]
