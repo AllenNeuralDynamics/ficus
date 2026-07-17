@@ -9,7 +9,7 @@ from ficus.core.exceptions import (
     InvalidScopeIdentifierError,
     UnsupportedFileTypeError,
 )
-from ficus.services.file_crud import read_file_data
+from ficus.services.leafs import read_leaf_data
 from ficus.services.configs import VALID_EXTENSIONS, get_config, _save_one_config_override, save_config
 from pathlib import Path
 
@@ -298,7 +298,7 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     )
     # Fetch config.yml from lowest scope. It should have new fields not present
     # in the original.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           mode=mode,
                           scope="subject_id", scope_identifier="614173")
     assert "testing" in data and data["testing"] == "ni-haody"
@@ -320,11 +320,11 @@ def test_deep_save_multiple_scopes_restrict_overriding_defaults(data_store):
         data=config.data,
     )
     # Fetch default.yml from default scope. It should be unchanged.
-    data = read_file_data(data_store=data_store, namespace=namespace, mode="default")
+    data = read_leaf_data(data_store=data_store, namespace=namespace, mode="default")
     assert data == {"default-default-value": "the one ring"}
     # Fetch config.yml from default scope. It should have values that came
     # from default.yml
-    data = read_file_data(data_store=data_store, namespace=namespace, mode=mode)
+    data = read_leaf_data(data_store=data_store, namespace=namespace, mode=mode)
     assert data == {"default-default-value": "the one ring to rule them all"}
 
 
@@ -344,7 +344,7 @@ def test_deep_save_multiple_scopes_enable_overriding_defaults(data_store):
         overwrite_defaults=True
     )
     # Fetch default.yml from default scope. It should have new values.
-    data = read_file_data(data_store=data_store, namespace=namespace, mode="default")
+    data = read_leaf_data(data_store=data_store, namespace=namespace, mode="default")
     assert data == {"default-default-value": "the one ring to rule them all"}
 
 
@@ -363,25 +363,25 @@ def test_deep_save_multiple_scopes_no_changes_check_all_cfgs(data_store):
     )
     # Fetch all unmerged configs.
     # Fetch default.yml from default scope. It should have new values.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           mode="default")
     assert data == {"default-default-value": "the one ring"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           mode=mode)
     assert data == {"name": "config", "scope": "default", "default-layer-value": "beep beep"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           scope="hostname", scope_identifier="w11dt000001",
                           mode="default")
     assert data == {"computer-default-value": "to rule them all"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           scope="hostname", scope_identifier="w11dt000001",
                           mode=mode)
     assert data == {"computer-layer-value": "boop boop"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           scope="subject_id", scope_identifier="614173",
                            mode="default")
     assert data == {"subject-default-value": "one config to bring them all"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                           scope="subject_id", scope_identifier="614173",
                            mode=mode)
     assert data == {"subject-layer-value": "bap bap", "scope": "614173",
@@ -405,25 +405,25 @@ def test_deep_save_multiple_scopes_many_changes_check_all_cfgs(data_store):
     )
     # Fetch all unmerged configs.
     # Fetch default.yml from default scope. It should have new values.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            mode="default")
     assert data == {"default-default-value": "the one ring"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            mode=mode)
     assert data == {"name": "my config", "scope": "default", "default-layer-value": "beep beep"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="hostname", scope_identifier="w11dt000001",
                            mode="default")
     assert data == {"computer-default-value": "to rule them all"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="hostname", scope_identifier="w11dt000001",
                            mode=mode)
     assert data == {"computer-layer-value": "to grill them all"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="subject_id", scope_identifier="614173",
                            mode="default")
     assert data == {"subject-default-value": "one config to bring them all"}
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="subject_id", scope_identifier="614173",
                            mode=mode)
     assert data == {"subject-layer-value": "bebop", "scope": "614173",

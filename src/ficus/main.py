@@ -19,7 +19,6 @@ from ficus.core.config import settings
 async def lifespan(app: FastAPI):
     logger.info("Starting Ficus API...")
     logger.info("Connecting to DataStore")
-    # FIXME: create the store specified in settings.store.
     app.state.settings = settings
     if settings.store == 'zookeeper':
         app.state.data_store = ZKStore(hosts=[settings.host],

@@ -2,28 +2,28 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigData
-from ficus.services.file_crud import (
+from ficus.services.leafs import (
     DEFAULT_MODE,
     SUFFIX_STR_TYPE,
-    create_file_from_data,
-    read_file,
-    create_file,
-    delete_file,
-    read_file_data,
-    update_file_data,
+    create_leaf_from_data,
+    read_leaf,
+    create_leaf,
+    delete_leaf,
+    read_leaf_data,
+    update_leaf_data,
 )
 
 from .utils import data_store
 
 # Create the router instance
-router = APIRouter(prefix="/file_crud")
+router = APIRouter(prefix="/leafs")
 
 @router.get("/scopes")
 def get_scopes(data_store: DataStore = Depends(data_store)):
     return data_store.scopes
 
-@router.get("/file")
-def get_file(
+@router.get("/leaf")
+def get_leaf(
     namespace: str,
     scope: str | None = None,
     scope_identifier: str | None = None,
@@ -31,13 +31,13 @@ def get_file(
     data_store: DataStore = Depends(data_store),
 ) -> dict:
     try:
-        content, suffix = read_file(data_store, namespace, scope, scope_identifier, mode)
+        content, suffix = read_leaf(data_store, namespace, scope, scope_identifier, mode)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
     return {"content": content, "suffix": suffix}
 
-@router.get("/file_data")
-def get_file_data(
+@router.get("/leaf_data")
+def get_leaf_data(
     namespace: str,
     scope: str | None = None,
     scope_identifier: str | None = None,
@@ -45,14 +45,14 @@ def get_file_data(
     data_store: DataStore = Depends(data_store),
 ) -> dict:
     try:
-        data = read_file_data(data_store, namespace, scope, scope_identifier, mode)
+        data = read_leaf_data(data_store, namespace, scope, scope_identifier, mode)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
     return data
 
 
-@router.post("/file")
-def post_file(
+@router.post("/leaf")
+def post_leaf(
     namespace: str,
     suffix: SUFFIX_STR_TYPE,
     scope: str | None = None,
@@ -63,7 +63,7 @@ def post_file(
     data_store: DataStore = Depends(data_store),
 ):
     try:
-        content = create_file(
+        content = create_leaf(
             data_store,
             namespace,
             suffix,
@@ -77,8 +77,8 @@ def post_file(
         raise HTTPException(status_code=400, detail="File already exists")
     return {"content": content}
 
-@router.post("/file_data")
-def post_file_data(
+@router.post("/leaf_data")
+def post_leaf_data(
     namespace: str,
     data: ConfigData,
     suffix: SUFFIX_STR_TYPE,
@@ -89,7 +89,7 @@ def post_file_data(
     data_store: DataStore = Depends(data_store),
 ):
     try:
-        data = create_file_from_data(
+        data = create_leaf_from_data(
             data_store,
             namespace,
             suffix=suffix,
@@ -103,8 +103,8 @@ def post_file_data(
         raise HTTPException(status_code=400, detail="File already exists")
     return data
 
-@router.patch("/file_data")
-def patch_file_data(
+@router.patch("/leaf_data")
+def patch_leaf_data(
     namespace: str,
     data: ConfigData,
     scope: str | None = None,
@@ -113,7 +113,7 @@ def patch_file_data(
     data_store: DataStore = Depends(data_store),
 ):
     try:
-        updated_data = update_file_data(
+        updated_data = update_leaf_data(
             data_store,
             namespace,
             data=data,
@@ -126,8 +126,8 @@ def patch_file_data(
     return updated_data
 
 
-@router.delete("/file")
-def delete_file_endpoint(
+@router.delete("/leaf")
+def delete_leaf_endpoint(
     namespace: str,
     scope: str | None = None,
     scope_identifier: str | None = None,
@@ -135,7 +135,7 @@ def delete_file_endpoint(
     data_store: DataStore = Depends(data_store),
 ):
     try:
-        file_path = delete_file(data_store, namespace, scope, scope_identifier, mode)
+        leaf_path = delete_leaf(data_store, namespace, scope, scope_identifier, mode)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
-    return {"file_path": str(file_path)}
+    return {"leaf_path": str(leaf_path)}

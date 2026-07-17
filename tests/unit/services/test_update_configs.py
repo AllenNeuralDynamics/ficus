@@ -5,7 +5,7 @@ from ficus.core.exceptions import (
 )
 from ficus.services.configs import update_config
 
-from ficus.services.file_crud import read_file_data
+from ficus.services.leafs import read_leaf_data
 
 
 ################################################################################
@@ -28,13 +28,13 @@ def test_update_config_modifies_field_at_its_source_scope(data_store):
         data={"computer-layer-value": "to grill them all"},
     )
     # The hostname config.yml owns computer-layer-value and is rewritten.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="hostname",
                            scope_identifier="w11dt000001",
                            mode=mode)
     assert data == {"computer-layer-value": "to grill them all"}
     # The default scope default.yml is untouched.
-    default_data = read_file_data(data_store=data_store, namespace=namespace,
+    default_data = read_leaf_data(data_store=data_store, namespace=namespace,
                                   mode="default")
     assert default_data == {"default-default-value": "the one ring"}
 
@@ -70,7 +70,7 @@ def test_update_config_new_field_appended_to_lowest_scope(data_store):
         data={"brand_new_field": "ni-haody"},
         append_new_fields_to_last_scope=True,
     )
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            scope="subject_id", scope_identifier="614173",
                            mode=mode)
     assert data.get("brand_new_field") == "ni-haody"
@@ -90,11 +90,11 @@ def test_update_config_restrict_overriding_defaults(data_store):
         data={"default-default-value": "the one ring to rule them all"},
     )
     # default.yml at the default scope is unchanged.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            mode="default")
     assert data == {"default-default-value": "the one ring"}
     # The value is redirected to config.yml at the default scope.
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            mode=mode)
     assert data == {"default-default-value": "the one ring to rule them all"}
 
@@ -112,7 +112,7 @@ def test_update_config_enable_overriding_defaults(data_store):
         data={"default-default-value": "the one ring to rule them all"},
         overwrite_defaults=True,
     )
-    data = read_file_data(data_store=data_store, namespace=namespace,
+    data = read_leaf_data(data_store=data_store, namespace=namespace,
                            mode="default")
     assert data == {"default-default-value": "the one ring to rule them all"}
 

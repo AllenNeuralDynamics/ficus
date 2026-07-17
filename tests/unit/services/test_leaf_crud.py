@@ -1,31 +1,31 @@
 import pytest
 
 from ficus.core.exceptions import ConfigSerializeError
-from ficus.services.file_crud import create_file, create_file_from_data, delete_file, read_file, read_file_data, update_file_data
+from ficus.services.leafs import create_leaf, create_leaf_from_data, delete_leaf, read_leaf, read_leaf_data, update_leaf_data
 from ficus.services.utils import _file_path_from_parts
 
 
 ################################################################################
 #
-#   read_file()
+#   read_leaf()
 #
 ################################################################################
 
 
-def test_read_file_default_scope_returns_content_and_suffix(data_store):
-    content, suffix = read_file(data_store, namespace="software_a")
+def test_read_leaf_default_scope_returns_content_and_suffix(data_store):
+    content, suffix = read_leaf(data_store, namespace="software_a")
     assert isinstance(content, str)
     assert suffix == ".yml"
 
 
-def test_read_file_with_mode_returns_content_and_suffix(data_store):
-    content, suffix = read_file(data_store, namespace="software_a", mode="config")
+def test_read_leaf_with_mode_returns_content_and_suffix(data_store):
+    content, suffix = read_leaf(data_store, namespace="software_a", mode="config")
     assert isinstance(content, str)
     assert suffix == ".yml"
 
 
-def test_read_file_named_scope_returns_content_and_json_suffix(data_store):
-    content, suffix = read_file(
+def test_read_leaf_named_scope_returns_content_and_json_suffix(data_store):
+    content, suffix = read_leaf(
         data_store,
         namespace="software_a",
         scope="hostname",
@@ -35,19 +35,19 @@ def test_read_file_named_scope_returns_content_and_json_suffix(data_store):
     assert suffix == ".json"
 
 
-def test_read_file_nonexistent_mode_raises_file_not_found_error(data_store):
+def test_read_leaf_nonexistent_mode_raises_leaf_not_found_error(data_store):
     with pytest.raises(FileNotFoundError):
-        read_file(data_store, namespace="software_a", mode="nonexistent_mode")
+        read_leaf(data_store, namespace="software_a", mode="nonexistent_mode")
 
 
-def test_read_file_nonexistent_namespace_raises_error(data_store):
+def test_read_leaf_nonexistent_namespace_raises_error(data_store):
     with pytest.raises(Exception):
-        read_file(data_store, namespace="nonexistent_namespace")
+        read_leaf(data_store, namespace="nonexistent_namespace")
 
 
 ################################################################################
 #
-#   create_file()
+#   create_leaf()
 #
 ################################################################################
 
@@ -57,7 +57,7 @@ def test_read_file_nonexistent_namespace_raises_error(data_store):
     ("software_a", "new_mode", "hostname", "w11new", ".yml"),
     ("new_namespace", "default", None, None, ".yml"),
 ])
-def test_create_file_uses_right_path(data_store, namespace, mode, scope, scope_identifier, suffix):
+def test_create_leaf_uses_right_path(data_store, namespace, mode, scope, scope_identifier, suffix):
     with pytest.raises(FileNotFoundError):
         _file_path_from_parts(
             data_store,
@@ -67,7 +67,7 @@ def test_create_file_uses_right_path(data_store, namespace, mode, scope, scope_i
             scope_identifier=scope_identifier,
         )
     content = "new_key: new_value\n"
-    result = create_file(
+    result = create_leaf(
         data_store,
         namespace=namespace,
         suffix=suffix,
@@ -76,7 +76,7 @@ def test_create_file_uses_right_path(data_store, namespace, mode, scope, scope_i
         scope=scope,
         scope_identifier=scope_identifier,
     )
-    new_file = _file_path_from_parts(
+    new_leaf = _file_path_from_parts(
         data_store,
         namespace=namespace,
         mode=mode,
@@ -84,12 +84,12 @@ def test_create_file_uses_right_path(data_store, namespace, mode, scope, scope_i
         scope_identifier=scope_identifier,
     )
     assert result == content
-    assert data_store.exists(new_file) and new_file.suffix == suffix
+    assert data_store.exists(new_leaf) and new_leaf.suffix == suffix
 
 
-def test_create_file_new_mode_in_existing_namespace_returns_content(data_store):
+def test_create_leaf_new_mode_in_existing_namespace_returns_content(data_store):
     content = "new_key: new_value\n"
-    result = create_file(
+    result = create_leaf(
         data_store,
         namespace="software_a",
         suffix=".yml",
@@ -99,9 +99,9 @@ def test_create_file_new_mode_in_existing_namespace_returns_content(data_store):
     assert result == content
 
 
-def test_create_file_new_namespace_returns_content(data_store):
+def test_create_leaf_new_namespace_returns_content(data_store):
     content = "key: value\n"
-    result = create_file(
+    result = create_leaf(
         data_store,
         namespace="new_namespace",
         suffix=".yml",
@@ -111,9 +111,9 @@ def test_create_file_new_namespace_returns_content(data_store):
     assert result == content
 
 
-def test_create_file_named_scope_returns_content(data_store):
+def test_create_leaf_named_scope_returns_content(data_store):
     content = "host_key: host_value\n"
-    result = create_file(
+    result = create_leaf(
         data_store,
         namespace="software_a",
         suffix=".yml",
@@ -125,9 +125,9 @@ def test_create_file_named_scope_returns_content(data_store):
     assert result == content
 
 
-def test_create_file_already_exists_raises_file_exists_error(data_store):
+def test_create_leaf_already_exists_raises_leaf_exists_error(data_store):
     with pytest.raises(FileExistsError):
-        create_file(
+        create_leaf(
             data_store,
             namespace="software_a",
             suffix=".yml",
@@ -135,9 +135,9 @@ def test_create_file_already_exists_raises_file_exists_error(data_store):
         )
 
 
-def test_create_file_overwrite_existing_returns_new_content(data_store):
+def test_create_leaf_overwrite_existing_returns_new_content(data_store):
     content = "overwritten: true\n"
-    result = create_file(
+    result = create_leaf(
         data_store,
         namespace="software_a",
         suffix=".yml",
@@ -150,19 +150,19 @@ def test_create_file_overwrite_existing_returns_new_content(data_store):
 
 ################################################################################
 #
-#   delete_file()
+#   delete_leaf()
 #
 ################################################################################
 
 
-def test_delete_file_default_scope_removes_file(data_store):
-    delete_file(data_store, namespace="software_a", mode="config")
+def test_delete_leaf_default_scope_removes_leaf(data_store):
+    delete_leaf(data_store, namespace="software_a", mode="config")
     with pytest.raises(FileNotFoundError):
-        read_file(data_store, namespace="software_a", mode="config")
+        read_leaf(data_store, namespace="software_a", mode="config")
 
 
-def test_delete_file_named_scope_removes_file(data_store):
-    delete_file(
+def test_delete_leaf_named_scope_removes_leaf(data_store):
+    delete_leaf(
         data_store,
         namespace="software_a",
         scope="hostname",
@@ -170,7 +170,7 @@ def test_delete_file_named_scope_removes_file(data_store):
         mode="config",
     )
     with pytest.raises(FileNotFoundError):
-        read_file(
+        read_leaf(
             data_store,
             namespace="software_a",
             scope="hostname",
@@ -179,32 +179,32 @@ def test_delete_file_named_scope_removes_file(data_store):
         )
 
 
-def test_delete_file_nonexistent_mode_raises_file_not_found_error(data_store):
+def test_delete_leaf_nonexistent_mode_raises_leaf_not_found_error(data_store):
     with pytest.raises(FileNotFoundError):
-        delete_file(data_store, namespace="software_a", mode="nonexistent_mode")
+        delete_leaf(data_store, namespace="software_a", mode="nonexistent_mode")
 
 
 ################################################################################
 #
-#   read_file_data()
+#   read_leaf_data()
 #
 ################################################################################
 
 
-def test_read_file_data_default_scope_returns_dict(data_store):
-    result = read_file_data(data_store, namespace="software_a")
+def test_read_leaf_data_default_scope_returns_dict(data_store):
+    result = read_leaf_data(data_store, namespace="software_a")
     assert isinstance(result, dict)
     assert "default-default-value" in result
 
 
-def test_read_file_data_with_mode_returns_expected_dict(data_store):
-    result = read_file_data(data_store, namespace="software_a", mode="config")
+def test_read_leaf_data_with_mode_returns_expected_dict(data_store):
+    result = read_leaf_data(data_store, namespace="software_a", mode="config")
     assert isinstance(result, dict)
     assert result["name"] == "config"
 
 
-def test_read_file_data_named_scope_returns_dict(data_store):
-    result = read_file_data(
+def test_read_leaf_data_named_scope_returns_dict(data_store):
+    result = read_leaf_data(
         data_store,
         namespace="software_a",
         scope="hostname",
@@ -214,52 +214,52 @@ def test_read_file_data_named_scope_returns_dict(data_store):
     assert "computer-default-value" in result
 
 
-def test_read_file_data_nonexistent_mode_raises_file_not_found_error(data_store):
+def test_read_leaf_data_nonexistent_mode_raises_leaf_not_found_error(data_store):
     with pytest.raises(FileNotFoundError):
-        read_file_data(data_store, namespace="software_a", mode="nonexistent_mode")
+        read_leaf_data(data_store, namespace="software_a", mode="nonexistent_mode")
 
 
-def test_read_file_data_nonexistent_namespace_raises_error(data_store):
+def test_read_leaf_data_nonexistent_namespace_raises_error(data_store):
     with pytest.raises(Exception):
-        read_file_data(data_store, namespace="nonexistent_namespace")
+        read_leaf_data(data_store, namespace="nonexistent_namespace")
 
 
 ################################################################################
 #
-#   create_file_from_data()
+#   create_leaf_from_data()
 #
 ################################################################################
 
 
-def test_create_file_from_data_new_mode_data_is_readable(data_store):
+def test_create_leaf_from_data_new_mode_data_is_readable(data_store):
     data = {"new_key": "new_value"}
-    create_file_from_data(
+    create_leaf_from_data(
         data_store,
         namespace="software_a",
         data=data,
         suffix=".yml",
         mode="new_mode",
     )
-    result = read_file_data(data_store, namespace="software_a", mode="new_mode")
+    result = read_leaf_data(data_store, namespace="software_a", mode="new_mode")
     assert result == data
 
 
-def test_create_file_from_data_json_suffix_data_is_readable(data_store):
+def test_create_leaf_from_data_json_suffix_data_is_readable(data_store):
     data = {"json_key": "json_value"}
-    create_file_from_data(
+    create_leaf_from_data(
         data_store,
         namespace="software_a",
         data=data,
         suffix=".json",
         mode="new_json_mode",
     )
-    result = read_file_data(data_store, namespace="software_a", mode="new_json_mode")
+    result = read_leaf_data(data_store, namespace="software_a", mode="new_json_mode")
     assert result == data
 
 
-def test_create_file_from_data_named_scope_data_is_readable(data_store):
+def test_create_leaf_from_data_named_scope_data_is_readable(data_store):
     data = {"host_key": "host_value"}
-    create_file_from_data(
+    create_leaf_from_data(
         data_store,
         namespace="software_a",
         data=data,
@@ -268,7 +268,7 @@ def test_create_file_from_data_named_scope_data_is_readable(data_store):
         scope_identifier="w11new",
         mode="default",
     )
-    result = read_file_data(
+    result = read_leaf_data(
         data_store,
         namespace="software_a",
         scope="hostname",
@@ -278,9 +278,9 @@ def test_create_file_from_data_named_scope_data_is_readable(data_store):
     assert result == data
 
 
-def test_create_file_from_data_already_exists_raises_file_exists_error(data_store):
+def test_create_leaf_from_data_already_exists_raises_leaf_exists_error(data_store):
     with pytest.raises(FileExistsError):
-        create_file_from_data(
+        create_leaf_from_data(
             data_store,
             namespace="software_a",
             data={"key": "value"},
@@ -289,9 +289,9 @@ def test_create_file_from_data_already_exists_raises_file_exists_error(data_stor
         )
 
 
-def test_create_file_from_data_overwrite_data_is_readable(data_store):
+def test_create_leaf_from_data_overwrite_data_is_readable(data_store):
     data = {"overwritten": True}
-    new_data = create_file_from_data(
+    new_data = create_leaf_from_data(
         data_store,
         namespace="software_a",
         data=data,
@@ -299,7 +299,7 @@ def test_create_file_from_data_overwrite_data_is_readable(data_store):
         mode="default",
         overwrite=True,
     )
-    result = read_file_data(data_store, namespace="software_a", mode="default")
+    result = read_leaf_data(data_store, namespace="software_a", mode="default")
     assert result == data
     assert new_data == data
 
@@ -317,7 +317,7 @@ def test_update_config_no_identifier_names_return_data_and_path(data_store):
     mode = "config"
 
     update_data = {"name": "new name", "testing": "ni-haody"}
-    result_data = update_file_data(
+    result_data = update_leaf_data(
         data_store=data_store,
         namespace=namespace,
         mode=mode,
@@ -337,7 +337,7 @@ def test_update_config_with_identifier_names_return_data_and_path(data_store):
     namespace = "software_a"
     mode = "config"
     update_data = {"scope": "w11dt000001new", "testing": "ni-haody"}
-    result_data = update_file_data(
+    result_data = update_leaf_data(
         data_store=data_store,
         namespace=namespace,
         mode=mode,
@@ -358,7 +358,7 @@ def test_update_config_invalid_identifiers_return_invalid_scope_error(data_store
     update_data = {"scope": "w11dt000001new", "testing": "ni-haody"}
 
     with pytest.raises(FileNotFoundError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -372,7 +372,7 @@ def test_update_config_missing_namespace_return_invalid_namespace_error(data_sto
     namespace = "new_namespace"
     mode = "config"
     with pytest.raises(FileNotFoundError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -384,7 +384,7 @@ def test_update_config_invalid_scope_id_return_invalid_scope_identifier_error(da
     namespace = "software_a"
     mode = "config"
     with pytest.raises(FileNotFoundError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -394,11 +394,11 @@ def test_update_config_invalid_scope_id_return_invalid_scope_identifier_error(da
         )
 
 
-def test_update_config_missing_file_return_config_not_found_error(data_store):
+def test_update_config_missing_leaf_return_config_not_found_error(data_store):
     namespace = "software_a"
     mode = "config_new"
     with pytest.raises(FileNotFoundError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -412,7 +412,7 @@ def test_update_config_invalid_data_yaml_return_config_serialize_error(data_stor
     update_data = {"testing": object()}  # not YAML serializable
 
     with pytest.raises(ConfigSerializeError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
@@ -426,7 +426,7 @@ def test_update_config_invalid_data_json_return_config_serialize_error(data_stor
     update_data = {"testing": object()}  # not JSON serializable
 
     with pytest.raises(ConfigSerializeError):
-        update_file_data(
+        update_leaf_data(
             data_store=data_store,
             namespace=namespace,
             mode=mode,
