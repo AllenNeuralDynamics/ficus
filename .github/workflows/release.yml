@@ -1,0 +1,14 @@
+name: Tag and Publish
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+jobs:
+  tag-and-publish:
+    uses: AllenNeuralDynamics/.github/.github/workflows/tag-release-sipe.yml@feature/add-good-sipe-workflows # TODO: change to main when this merges
+    with:
+      build_docs: false
