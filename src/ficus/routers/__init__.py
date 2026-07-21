@@ -1,13 +1,17 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from ficus.routers.confierge import router as confierge_router
-from ficus.routers.leafs import router as file_crud_router
+from ficus.database.data_store import DataStore
+from ficus.routers.configs import router as configs_router
+from ficus.routers.leaves import router as leaves_router
+from ficus.routers.utils import data_store
 
-# from ficus.routers.configs import router as config_router
-
-# router = APIRouter(prefix="/v1")
-
-# router.include_router(config_router)
 router = APIRouter(prefix="/v1")
-router.include_router(confierge_router)
-router.include_router(file_crud_router)
+
+
+@router.get("/scopes")
+def get_scopes(data_store: DataStore = Depends(data_store)):
+    return data_store.scopes
+
+
+router.include_router(configs_router)
+router.include_router(leaves_router)

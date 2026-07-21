@@ -1,18 +1,20 @@
 import os
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
 from typing import Any, Dict
 
+from ficus.database.data_store import DataStore
 from ficus.database.zookeeper import kazoo_timeout_handler
 from ficus.routers import router
 
 from ficus.database.zookeeper import ZKStore
 from ficus.database.filesys import FileSysStore
 
-from ficus.core.config import settings
+from ficus.core.config import settings, Settings as FicusSettings
+from ficus.routers.utils import data_store
 
 
 @asynccontextmanager
@@ -47,3 +49,11 @@ app.add_exception_handler(KazooTimeoutError, kazoo_timeout_handler)
 def health_check() -> Dict[str, Any]:
     """Health check."""
     return {"message": "Hello"}
+
+@app.get("/scopes")
+def get_scopes(data_store: DataStore = Depends(data_store)) -> set[str]:
+    return data_store.scopes
+
+@app.get("/settings")
+def get_settings(request: Request) -> FicusSettings:
+        return request.app.state.settings

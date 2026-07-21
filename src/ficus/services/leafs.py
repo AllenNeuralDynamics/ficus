@@ -1,6 +1,7 @@
 from ficus.database.data_store import DataStore
 from ficus.services.utils import (
     DEFAULT_MODE,
+    DEFAULT_SUFFIX,
     SUFFIX_STR_TYPE,
     _file_path_from_parts,
     _get_all_search_paths,
@@ -84,7 +85,7 @@ def create_leaf_from_data(
     data_store: DataStore,
     namespace: str,
     data: dict,
-    suffix: SUFFIX_STR_TYPE,
+    suffix: SUFFIX_STR_TYPE = DEFAULT_SUFFIX,
     scope: str | None = None,
     scope_identifier: str | None = None,
     mode: str = DEFAULT_MODE,

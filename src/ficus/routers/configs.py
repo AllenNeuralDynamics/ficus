@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigDataResponse, ConfigResponse
@@ -10,25 +10,37 @@ from ficus.services.configs import (
     update_config,
     delete_config,
 )
-from ficus.core.config import settings
 from .utils import data_store
 
-# Create the router instance
-router = APIRouter(prefix="/confierge")
+router = APIRouter(prefix="/configs")
 
 
-# TODO: make it clearer how to pass scope identifiers in the request
+def _parse_scope_identifiers(
+    scope_identifiers: list[str] = Query(default=[]),
+) -> dict[str, str]:
+    """Parse repeated ``scope_identifiers=key:value`` query params into a dict.
+
+    Example: ``?scope_identifiers=env:prod&scope_identifiers=region:us-east``
+    """
+    result = {}
+    for item in scope_identifiers:
+        if ":" not in item:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid scope_identifier '{item}': expected format 'key:value'",
+            )
+        k, v = item.split(":", 1)
+        result[k] = v
+    return result
+
+
 @router.get("/{namespace}")
 def get_config_endpoint(
     namespace: str,
-    request: Request,
     mode: str = DEFAULT_MODE,
+    scope_identifiers: dict[str, str] = Depends(_parse_scope_identifiers),
     data_store: DataStore = Depends(data_store),
 ) -> ConfigDataResponse:
-    # Convert query parameters to a standard Python dictionary
-    scope_identifiers = {
-        k: v for k, v in dict(request.query_params).items() if k in settings.scopes
-    }
     try:
         config = get_config(
             data_store,
@@ -36,7 +48,6 @@ def get_config_endpoint(
             mode=mode,
             scope_identifiers=scope_identifiers,
         )
-
         return ConfigDataResponse(
             message="Successfully retrieved configuration",
             config=config,
@@ -49,18 +60,14 @@ def get_config_endpoint(
 def save_config_endpoint(
     data: dict,
     namespace: str,
-    request: Request,
     mode: str = DEFAULT_MODE,
     suffix: VALID_EXTENSIONS_TYPE | None = None,
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
     create_missing_namespace: bool = True,
+    scope_identifiers: dict[str, str] = Depends(_parse_scope_identifiers),
     data_store: DataStore = Depends(data_store),
 ) -> ConfigResponse:
-    # Convert query parameters to a standard Python dictionary
-    scope_identifiers = {
-        k: v for k, v in dict(request.query_params).items() if k in settings.scopes
-    }
     try:
         save_config(
             data_store,
@@ -73,7 +80,6 @@ def save_config_endpoint(
             append_new_fields_to_last_scope=append_new_fields_to_last_scope,
             create_missing_namespace=create_missing_namespace,
         )
-
         return ConfigResponse(
             message="Successfully saved configuration file",
         )
@@ -85,17 +91,13 @@ def save_config_endpoint(
 def update_config_endpoint(
     data: dict,
     namespace: str,
-    request: Request,
     mode: str = DEFAULT_MODE,
     suffix: VALID_EXTENSIONS_TYPE | None = None,
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
+    scope_identifiers: dict[str, str] = Depends(_parse_scope_identifiers),
     data_store: DataStore = Depends(data_store),
 ) -> ConfigResponse:
-    # Convert query parameters to a standard Python dictionary
-    scope_identifiers = {
-        k: v for k, v in dict(request.query_params).items() if k in settings.scopes
-    }
     try:
         update_config(
             data_store,
@@ -107,7 +109,6 @@ def update_config_endpoint(
             overwrite_defaults=overwrite_defaults,
             append_new_fields_to_last_scope=append_new_fields_to_last_scope,
         )
-
         return ConfigResponse(
             message="Successfully updated configuration file",
         )
@@ -118,20 +119,15 @@ def update_config_endpoint(
 @router.delete("/{namespace}")
 def delete_config_endpoint(
     namespace: str,
-    request: Request,
+    scope_identifiers: dict[str, str] = Depends(_parse_scope_identifiers),
     data_store: DataStore = Depends(data_store),
 ) -> ConfigResponse:
-    # Convert query parameters to a standard Python dictionary
-    scope_identifiers = {
-        k: v for k, v in dict(request.query_params).items() if k in settings.scopes
-    }
     try:
         delete_config(
             data_store,
             namespace,
             scope_identifiers=scope_identifiers,
         )
-
         return ConfigResponse(
             message="Successfully deleted configuration file",
         )
