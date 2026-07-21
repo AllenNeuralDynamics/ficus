@@ -49,11 +49,3 @@ app.add_exception_handler(KazooTimeoutError, kazoo_timeout_handler)
 def health_check() -> Dict[str, Any]:
     """Health check."""
     return {"message": "Hello"}
-
-@app.get("/scopes")
-def get_scopes(data_store: DataStore = Depends(data_store)) -> set[str]:
-    return data_store.scopes
-
-@app.get("/settings")
-def get_settings(request: Request) -> FicusSettings:
-        return request.app.state.settings
