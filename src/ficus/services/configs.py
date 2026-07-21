@@ -1,242 +1,415 @@
-import json
-import re
-import yaml
+import copy
+from typing import Optional
+from loguru import logger
+from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
 
-from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ficus.core.exceptions import (
     ConfigExistsError,
-    ConfigDecodeError,
+    ConfigMutatedError,
     ConfigNotFoundError,
-    ConfigSerializeError,
-    InvalidScopeIdentifierError,
-    MultipleScopeIdentifiersError,
-    PathIsDirectoryError,
+    PathNotFoundError,
     UnsupportedFileTypeError,
 )
-from ficus.core.config import settings
-from ficus.crud.zookeeper import get_node, add_node, delete_node
-from ficus.database.zookeeper import get_zk_client
-from ficus.schemas.configs import ConfigData
+from ficus.database.data_store import DataStore
+from ficus.schemas.configs import ConfigObject
+from pathlib import Path, PurePath
+from ficus.services.utils import (
+    DEFAULT_MODE,
+    VALID_EXTENSIONS_TYPE,
+    VALID_EXTENSIONS,
+    DEFAULT_SUFFIX,
+    ScopeName,
+    _ensure_paths,
+    _find_first_invalid_subpath,
+    _get_all_search_paths,
+    _get_parts_from_path,
+    _validate_and_convert_to_bytes,
+    _validate_and_convert_to_dict,
+    _validate_single_scope,
+)
 
-
-DEFAULT_FILES = ["default.yml", "default.yaml", "default.json"]
-PATH_PREFIX = f"/{settings.zk_root_node}"
-
-
-IdentifierName = str
-ScopeName = str
-
+## Config CRUD methods
 
 def get_config(
+    data_store: DataStore,
     namespace: str,
-    identifier_names: dict[IdentifierName, str] = {},
-    filename: str | None = None,
-    merge: bool = True,
-) -> tuple[ConfigData, list[str]]:
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    mode: str = "default",
+    scope_ids_must_exist: set[ScopeName] | None = None,
+) -> ConfigObject:
     """
-    Get config file from zookeeper based on namespace, scope, and identifier.
+    Get config data from store based on namespace and scopes.
 
-    If filename is not given, function will search for the default config file. The default config
-    files are default.yml, default.yaml, and default.json.
+    If mode is given, ficus will find the mode overrides (<mode>.yml) within each scope, and use 
+    those values to override the default mode (default.yml) in each scope. If mode is None, just 
+    default.yml will be used from each scope.
 
     If merge is true, function will merge config files found in each scope. The merge is done in
-    order of scopes given by the dictionary of identifier names. Later configs will override
+    order of scopes given by the dictionary of scope identifiers. Later configs will override
     previous configs.
 
     Parameters:
     -----------
         namespace: str
             The namespace for the configuration file.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        scope_identifiers: dict[ScopeName, str]
+            A dictionary of scope identifier names. Scope *resolution order* is
+            determined by dict order. aka: Overrides are applied from back to front.
+            (i.e: for dict: `{"subject_id": "mouse_0", "hostname": "W10BRUNO"}`,
+            values from the hostname: W10BRUNO override values in subject_id: mouse_0,
+            which override any defaults.)
         filename: str | None
-            The name of the configuration file, including extension. If None, the default config
-            file will be used.
+            The name of the configuration file (extension is ignored). If None,
+            the default config file will be used.
+        mode: str
+            The configuration mode (matches files like <mode>.yml). Defaults to
+            "default".
+        scope_ids_must_exist: set[ScopeName] | None
+            Scopes whose identifier folders are required to exist. A missing
+            identifier for one of these scopes raises InvalidScopeIdentifierError.
         merge: bool
             Whether to merge config files found in each scope. If false, only the config file in
             the last scope from identifier names will be returned.
 
     Returns:
     --------
-        tuple[ConfigData, list[str]]
-            A tuple containing the configuration data and a list of paths the config was made from.
+        ConfigObject
+            An object with data and metadata from a config
+
+    Raises:
+    -------
+        ConfigNotFoundError
+            if no configuration files are found for the given namespace and mode.
+        InvalidNamespaceError
+            if the namespace does not exist.
+        InvalidScopeError
+            if a scope does not exist.
+        InvalidScopeIdentifierError
+            if a required scope identifier does not exist.
     """
-    # Order of identifier_names determines order of scopes to merge
-    scopes = _get_scope_from_identifier_names(identifier_names)
-    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
-    for scope, identifier in scopes.items():
-        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
+    try:
+        file_override_paths = get_override_stack(data_store=data_store,
+                                                      namespace=namespace,
+                                                      scope_identifiers=scope_identifiers,
+                                                      mode=mode,
+                                                      scope_ids_must_exist=scope_ids_must_exist)
+    except FileNotFoundError:
+        raise ConfigNotFoundError()
+    if not file_override_paths:
+        raise ConfigNotFoundError()
+    config = ConfigObject(
+        data = {},
+        namespace = namespace,
+        mode = mode,
+        scope_identifiers = scope_identifiers or {},
+        override_stack = file_override_paths
+    )
+    # Iterate backwards so we can return immediately if not merging.
+    for filepath in reversed(file_override_paths):
+        override_data_bytes = data_store.read(filepath)
+        override_data = _validate_and_convert_to_dict(filepath.suffix, override_data_bytes)
+        config.data = _deep_update(override_data, config.data)
+    
+    return config
 
-    valid_paths = []
-    config: dict = {}
 
-    with get_zk_client() as client:
+def _save_one_config_override( #TODO: refactor to use file_crud methods
+    data_store: DataStore,
+    namespace: str,
+    scope_identifier: dict[ScopeName, str],
+    data: dict,
+    mode: str = "default",
+    suffix: Optional[VALID_EXTENSIONS_TYPE] = None,
+    overwrite: bool = False,
+    create_missing_namespace: bool = True,
+    create_missing_scope_id: bool = True,
+    create_missing_scope: bool = False,
+) -> tuple[dict, Path]:
+    """
+    Save input data to a single file in the data store based on namespace, scope,
+    and identifier. If the config does not already exist, create it. Throw an
+    error if the file already exists if `override=False`.
 
-        def get_data_and_append_path(
-            path: str, is_default: bool = False, ignore_error: bool = False
-        ) -> dict:
-            try:
-                if is_default:
-                    data, data_path = _get_default_config(client, path)
-                    valid_paths.append(data_path)
-                else:
-                    data = _get_config(client, path)
-                    valid_paths.append(path)
-                return data
-            except ConfigNotFoundError as e:
-                if ignore_error:
-                    return {}
-                else:
-                    raise e
+    If scope and/or identifier do not exist, they are created according to the
+    `create_missing_namespace`, `create_missing_scope_id`, and
+    `create_missing_scope` flags. Otherwise a corresponding error is raised.
 
-        if merge:
-            for path in paths:
-                if filename:
-                    config = _deep_update(
-                        config, get_data_and_append_path(path, is_default=True, ignore_error=True)
-                    )
-                    # Checks if file was already retrieved (if user asks for default)
-                    if f"{path}/{filename}" not in valid_paths:
-                        config = _deep_update(
-                            config, get_data_and_append_path(f"{path}/{filename}")
-                        )
-                else:
-                    config = _deep_update(config, get_data_and_append_path(path, is_default=True))
-        else:
-            config = (
-                get_data_and_append_path(f"{paths[-1]}/{filename}")
-                if filename
-                else get_data_and_append_path(paths[-1], is_default=True)
-            )
+    Identifier names are expected to correspond to a scope (auto-validates this). The function will
+    also expect to be given a single identifier name since a config file can only be saved to one
+    scope.
 
-    return config, valid_paths
+    Data will be saved to a valid yaml or json based on suffix
+
+    Parameters:
+    -----------
+        data_store: DataStore
+            The data store instance where the configuration files are stored.
+        namespace: str
+            The namespace for the configuration file.
+        scope_identifier: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
+        data: dict
+            The configuration data to save.
+        mode: str
+            The name of the configuration file (extension excluded). Defaults to
+            "default".
+        suffix: Optional[VALID_EXTENSIONS_TYPE]
+            The file extension to save to (".yml", ".yaml", or ".json"). If None,
+            reuse the existing file's suffix when overwriting, otherwise default
+            to ".yml".
+        overwrite: bool
+            Whether to overwrite the config file if it already exists (format agnostic).
+            Error if file exists and `overwrite=False`
+        create_missing_namespace: bool
+            Create the namespace under defaults if it does not exist.
+        create_missing_scope_id: bool
+            Create the scope identifier folder if it does not exist.
+        create_missing_scope: bool
+            Create the scope if it does not exist.
+    Returns:
+    --------
+        tuple[dict, Path]
+            A tuple containing the configuration data and the path the config was saved to.
+
+    Raises:
+    -------
+        UnsupportedFileTypeError
+            if `suffix` is not a supported extension.
+        ConfigExistsError
+            if the config already exists and `overwrite=False`.
+        InvalidNamespaceError
+            if the namespace does not exist and `create_missing_namespace=False`.
+        InvalidScopeError
+            if a scope does not exist and `create_missing_scope=False`.
+        InvalidScopeIdentifierError
+            if a scope identifier does not exist and `create_missing_scope_id=False`.
+    """
+    if suffix is not None and suffix not in VALID_EXTENSIONS:
+        raise UnsupportedFileTypeError(f"Cannot save {mode} to unknown format {suffix}.")
+
+    scope, scope_id = _validate_single_scope(scope_identifier)
+    paths = _get_all_search_paths(data_store, namespace, scope_identifier)
+    _ensure_paths(data_store=data_store, paths=paths,
+                  create_missing_namespace=create_missing_namespace,
+                  scope_ids_must_exist={scope} if scope else None,
+                  create_missing_scope_id=create_missing_scope_id,
+                  create_missing_scope=create_missing_scope)
+
+    target_folder = paths[-1]
+    sibling_files = data_store.list_files(target_folder)
+    mode_in_scope = [PurePath(f) for f in sibling_files if PurePath(f).stem == mode]
+
+    paths_to_delete = []
+    if mode_in_scope:
+        if not overwrite:
+            raise ConfigExistsError(f"Cannot overwrite config with mode '{mode}' in {target_folder}"
+                                    " without overwrite=True")
+        
+        if suffix is None: # use the suffix of the existing file
+            suffix = mode_in_scope[0].suffix
+        elif suffix != mode_in_scope[0].suffix:
+            logger.info(f"Changing file extension for config with mode '{mode}' in {target_folder}."
+                           f"Previous format: {mode_in_scope[0].suffix}, new format: {suffix}.")
+            paths_to_delete.extend([target_folder / f for f in mode_in_scope])
+    elif suffix is None:
+        suffix = DEFAULT_SUFFIX
+
+    filepath = target_folder / Path(f"{mode}{suffix}")
+    data_as_bytes = _validate_and_convert_to_bytes(suffix, data)
+    if data_store.exists(filepath):
+        data_store.update(filepath, data_as_bytes, force=True)
+    else:
+        data_store.create(filepath, data_as_bytes)
+
+    # clean up the old version of the file with the old suffix, if it exists
+    for path in paths_to_delete:
+        data_store.delete(path)
+
+    return data, filepath
 
 
 def save_config(
+    data_store: DataStore,
     namespace: str,
-    filename: str,
+    scope_identifiers: dict[ScopeName, str],
     data: dict,
-    identifier_names: dict[IdentifierName, str],
-    override: bool = False,
-    create_if_missing: bool = True,
-) -> tuple[dict, str]:
+    mode: str = DEFAULT_MODE,
+    suffix: VALID_EXTENSIONS_TYPE | None = None,
+    overwrite_defaults: bool = False,
+    append_new_fields_to_last_scope: bool = False,
+    create_missing_namespace: bool = True,
+) -> dict:
+    """Deep save config file by walking up the override hierarchy specified in
+    scope_identifiers and saving fields back to the location where they were
+    inserted.
+
+    Parameters
+    ----------
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    namespace: str
+        the config namespace.
+    scope_identifiers: dict[ScopeName, str]
+        dict of scope identifiers sorted in lowest-override-priority to
+        highest-override-priority.
+    data: dict
+        The configuration data to be saved.
+    mode: str
+        The mode of the configuration file. Typically "default".
+    suffix: VALID_EXTENSIONS_TYPE | None
+        The file extension/suffix for the configuration file. Defaults to '.yml'.
+    overwrite_defaults: bool
+        If True allow writing to the defaults config of any scope.
+        If False, put all fields that would be edited into the default file into
+        a config named `<mode><suffix>` at the same scope. Create if missing.
+    append_new_fields_to_last_scope: bool
+        if new fields are created, append them at the lowest level scope.
+        Error if new fields are created and this flag is set to False.
+    create_missing_namespace: bool
+        If True, create the namespace in the default scope of the data store if it 
+        does not already exist.
+
+    Returns
+    -------
+    dict
+        Leftover fields that were not saved into the config stack.
+
+    Raises
+    ------
+    UnsupportedFileTypeError
+        Raised if the provided suffix is not in the list of valid extensions.
+    ConfigMutatedError
+        Raised if the configuration data has new fields and 
+        `append_new_fields_to_last_scope` is False.
     """
-    Save config file to zookeeper based on namespace, scope, and identifier.
+    if suffix is not None and suffix not in VALID_EXTENSIONS:
+        raise UnsupportedFileTypeError(f"Cannot save {mode + suffix} to unknown format.")
+    override_stack = get_override_stack(data_store=data_store,
+                                        namespace=namespace,
+                                        scope_identifiers=scope_identifiers,
+                                        mode=mode,
+                                        must_exist_in_any_scope=False,
+                                        must_exist_in_lowest_scope=False,
+                                        create_missing_namespace=create_missing_namespace)
+    if not override_stack:
+        _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
+                    mode=mode, suffix=suffix, data=data, 
+                    create_missing_namespace=create_missing_namespace)
+        return
+    # Convert all suffixes to the desired suffix.
+    # (Flat _save_one_config_override will convert the file format.)
+    override_stack_new_suffix = copy.deepcopy(override_stack)
+    for idx, filepath in enumerate(override_stack_new_suffix):
+        if filepath.stem == mode:
+            if suffix is None:
+                suffix = filepath.suffix
+            override_stack_new_suffix[idx] = filepath.with_suffix(suffix)
+    if suffix is None:
+        suffix = DEFAULT_SUFFIX
+    # Cache new config values before writing to each file.
+    new_cfg_data: dict[Path, dict] = {}
+    # Walk up the override stack and save new field values to the respective
+    # place they came from. Do this locally first to check if we have leftover data.
+    data_cpy = copy.deepcopy(data)
+    for idx, filepath in reversed(list(enumerate(override_stack_new_suffix))):
+        filepath_old_suffix = override_stack[idx]
+        old_level_cfg = _validate_and_convert_to_dict(filepath_old_suffix.suffix, 
+                                                      data_store.read(filepath_old_suffix))
+        level_cfg = copy.deepcopy(old_level_cfg)
+        _deep_update_existing_destructive(level_cfg, data_cpy)
+        # Nothing to save back if nothing actually changed.
+        if old_level_cfg == level_cfg and filepath_old_suffix.suffix == filepath.suffix:
+            continue
+        # IF the data came from default.*, get a local copy of default.*,
+        # save to filename at the same scope.
+        if filepath.stem.lower() == DEFAULT_MODE and not overwrite_defaults:
+            filepath = filepath.parent / (mode + suffix)
+        # Respect override hierarchy if filename already exists at the scope that
+        # defaults would go.
+        if filepath in new_cfg_data:
+            priority_cfg = new_cfg_data[filepath]
+            level_cfg.update(priority_cfg)
+        # Track new config to be written back in batch after-the-fact.
+        new_cfg_data[filepath] = level_cfg
+    # Do the writes in batch after checking if extra fields exist.
+    # Put any new fields at the lowest level scope.
+    if data_cpy: # data_cpy should be empty if all fields were found in the override stack.
+        if append_new_fields_to_last_scope:
+            if override_stack[-1] in new_cfg_data:
+                new_cfg_data[override_stack[-1]].update(data_cpy)
+            else:
+                new_cfg_data[override_stack[-1]] = data_cpy
+        else:
+            raise ConfigMutatedError("Config to be saved has additional fields not "
+                                     "previously found in the original config override "
+                                     f"stack, and append_new_fields_to_last_scope is False. "
+                                     f"New fields: {data_cpy}")
 
-    Identifier names are expected to correspond to a scope (auto-validates this). The function will
-    also expect to be given a single identifier name since a config file can only be saved to one
-    scope.
-
-    Data will also be expected to be a valid yaml or json based on filename extension, and will be
-    validated and converted to bytes before saving to zookeeper.
-
-    Parameters:
-    -----------
-        namespace: str
-            The namespace for the configuration file.
-        filename: str
-            The name of the configuration file, including extension.
-        data: dict
-            The configuration data to save.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
-        override: bool
-            Whether to override the config file if it already exists. If false and file exists,
-            error will be raised.
-        create_if_missing: bool
-            Whether to create the config file if it does not exist when overriding. If false and
-            file does not exist when overriding, error will be raised.
-    Returns:
-    --------
-        tuple[dict, str]
-            A tuple containing the configuration data and the path the config was saved to.
-    """
-    if identifier_names and len(identifier_names) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {list(identifier_names.keys())}. "
-            "Only one is allowed."
-        )
-
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
-
-    # Convert data to bytes and save to zookeeper using helper function
-    data_as_bytes = _validate_and_convert_to_bytes(filename, data)
-    return _save_config(
-        namespace=namespace,
-        filename=filename,
-        data=data_as_bytes,
-        scope=scope,
-        identifier=identifier,
-        override=override,
-        create_if_missing=create_if_missing,
-    )
+    for filepath, data in new_cfg_data.items():
+        ns, scope_id, filename = _get_parts_from_path(data_store=data_store, path=filepath)
+        tmp_mode, tmp_suffix = PurePath(filename).stem, PurePath(filename).suffix
+        _save_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+                    mode=tmp_mode, suffix=tmp_suffix, data=data, overwrite=True)
+    return data_cpy
 
 
 def update_config(
-    namespace: str, filename: str, data: dict, identifier_names: dict[IdentifierName, str]
-):
+    data_store: DataStore,
+    namespace: str,
+    mode: str = DEFAULT_MODE,
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    data: dict | None = None,
+    new_suffix: str = DEFAULT_SUFFIX,
+    overwrite_defaults: bool = False,
+    append_new_fields_to_last_scope: bool = False,
+) -> dict:
     """
-    Update config file in zookeeper based on namespace, scope, and identifier.
+    Deep update config file based on namespace, scope, and identifier; allows saving partial data.
 
-    This function will get the existing config and merge it with the data given. Afterwards it will
-    treat this merged config as a new config and save it to zookeeper, overriding the existing
-    config file (thus having same behavior/validations as the save and get functions)
+    This function will get the existing config (complete with merged overrides),
+     update it with the new data given, then deep save back to the override stack.
 
     Parameters:
     -----------
+        data_store: DataStore
+            The data store instance to interact with the underlying storage.
         namespace: str
             The namespace for the configuration file.
-        filename: str
-            The name of the configuration file, including extension.
+        mode: str
+            The mode of the configuration file (e.g., "default", "production").
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
         data: dict
             The configuration data to update.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        new_suffix: str
+            The suffix to use when saving the updated configuration file.
+        overwrite_defaults: bool
+            Whether to overwrite default configurations if they exist.
+        append_new_fields_to_last_scope: bool
+            Whether to append new fields to the last scope in the override stack.
 
     Returns:
     --------
-        tuple[dict, str]
-            A tuple containing the updated configuration data and the path the config was saved to.
+        dict
+            Leftover fields that were not merged into the existing configuration.
     """
-    if len(identifier_names) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
-        )
-
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
-
-    current_config, _ = get_config(
-        namespace=namespace, filename=filename, identifier_names=identifier_names, merge=False
-    )
-    _validate_and_convert_to_bytes(
-        filename=f"{filename}", data=data
-    )  # Throw away value, only want to validate
-    raw_config = _deep_update(current_config, data)
-    config = _validate_and_convert_to_bytes(filename, raw_config)
-    return _save_config(
-        namespace=namespace,
-        filename=filename,
-        data=config,
-        scope=scope,
-        identifier=identifier,
-        override=True,
-        create_if_missing=False,
-    )
+    
+    config = get_config(data_store=data_store, namespace=namespace, mode=mode, 
+                             scope_identifiers=scope_identifiers)
+    updated_data = _deep_update(config.data, data)
+    return save_config(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
+                     scope_identifiers=scope_identifiers, suffix=new_suffix,
+                     overwrite_defaults=overwrite_defaults,
+                     append_new_fields_to_last_scope=append_new_fields_to_last_scope)
 
 
-def delete_config(
-    namespace: str, filename: str, identifier_names: dict[IdentifierName, str]
+def _delete_one_config_override( # TODO: refactor to use file_crud methods
+    data_store: DataStore, namespace: str, mode: str = DEFAULT_MODE,
+    scope_identifier: dict[ScopeName, str] | None = None
 ) -> str:
     """
-    Delete config file in zookeeper based on namespace, scope, and identifier.
+    Delete config file based on namespace, scope, and identifier.
 
     Identifier names are expected to correspond to a scope (auto-validates this). The function will
     also expect to be given a single identifier name since a config file can only be saved to one
@@ -246,320 +419,157 @@ def delete_config(
     -----------
         namespace: str
             The namespace for the configuration file.
-        filename: str
-            The name of the configuration file, including extension.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
+        mode: str
+            The mode of the configuration file (e.g., "default", "production").
+        scope_identifier: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope.
 
     Returns:
     --------
         str
             The path of the deleted config file.
     """
-    if len(identifier_names) > 1:
-        raise MultipleScopeIdentifiersError(
-            f"Multiple identifier names provided: {(identifier_names.keys())}. Only one is allowed."
-        )
 
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    scope = None if not identifier_names else list(scopes.keys())[0]
-    identifier = None if not identifier_names or not scope else scopes[scope]
-
-    if scope and identifier:
-        path = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}/{filename}"
-    else:
-        path = f"{PATH_PREFIX}/defaults/{namespace}/{filename}"
-
-    with get_zk_client() as client:
-        try:
-            delete_node(client, path)
-            return path
-        except NotEmptyError:
-            raise PathIsDirectoryError(f"Path is a directory and cannot be deleted: {path}")
-        except NoNodeError:
-            invalid_subpath = _find_first_invalid_subpath(client, path)
-            if invalid_subpath:
-                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
-            raise ConfigNotFoundError(f"Config file not found at path: {path}")
-
-
-def get_all_files(
-    namespace: str, identifier_names: dict[IdentifierName, str] = {}, filename: str | None = None
-) -> list[str]:
-    """
-    Get all config files in zookeeper based on namespace, scope, and identifier.
-
-    If filename is given, function will filter files by the filename (case-insensitive).
-    If no identifiers are given, function will only check the defaults scope.
-    If multiple scopes, the order of files is returned as the same order as how they would be merged
-    (e.g. defaults (default file, config file) > scope 1 (default file, config file) > ... )
-
-
-    Parameters:
-    -----------
-        namespace: str
-            The namespace for the configuration files.
-        identifier_names: dict[IdentifierName, str]
-            A dictionary of identifier names for different scopes.
-        filename: str | None
-            The name of the configuration file to filter by, including extension. If None, all files
-              are returned.
-
-    Returns:
-    --------
-        list[str]
-            A list of full paths of the config files.
-    """
-    scopes = _get_scope_from_identifier_names(identifier_names)
-
-    paths = [f"/{settings.zk_root_node}/defaults/{namespace}"]
-    for scope, identifier in scopes.items():
-        paths.append(f"/{settings.zk_root_node}/{scope}/{identifier}/{namespace}")
-
-    all_files = []
-    with get_zk_client() as client:
-
-        def collect_files(subpath: str):
-            if client.exists(subpath):
-                for file in get_node(client, subpath)[1]:
-                    if filename is None or re.search(filename, file, re.IGNORECASE):
-                        all_files.append(f"{subpath}/{file}")
-            else:
-                invalid_subpath = _find_first_invalid_subpath(client, subpath)
-                if invalid_subpath:
-                    raise ConfigNotFoundError(
-                        f"Subpath '{invalid_subpath}' not found in path: {subpath}"
-                    )
-                raise ConfigNotFoundError(f"Path not found: {subpath}")
-
-        for path in paths:
-            collect_files(path)
-
-    return all_files
-
-
-################################################################################
-#
-#   Utility
-#
-################################################################################
-
-
-def _deep_update(mapping: dict, *updating_mappings: dict) -> dict:
-    """
-    Merge two dictionaries together, with values from the updating_mapping taking precedence over
-    mapping. Merges deeply (nested dictionaries will also merge) and handles overriding types.
-
-    Parameters:
-    -----------
-        mapping: dict
-            The main dictionary to merge into.
-        updating_mappings: dict
-            Dictionary with overrides to merge into the main dictionary.
-    Returns:
-    --------
-        dict
-            The merged dictionary.
-    """
-    updated_mapping = mapping.copy()
-    for updating_mapping in updating_mappings:
-        for k, v in updating_mapping.items():
-            if (
-                k in updated_mapping
-                and isinstance(updated_mapping[k], dict)
-                and isinstance(v, dict)
-            ):
-                updated_mapping[k] = _deep_update(updated_mapping[k], v)
-            else:
-                updated_mapping[k] = v
-    return updated_mapping
-
-
-def _get_default_config(client: KazooClient, path: str) -> tuple[dict, str]:
-    """
-    Helper function to get default config file from zookeeper and handle errors.
-    Checks all default file options (default.yml, default.yaml, default.json) and returns the first
-    one it finds, in that order. The write/save function will stop from saving a default file if one
-    already exists.
-    """
-    for defaults in DEFAULT_FILES:
-        try:
-            default_data = _get_config(client, f"{path}/{defaults}")
-            if default_data is None:
-                default_data = {}
-            return default_data, f"{path}/{defaults}"
-        except ConfigNotFoundError:
-            pass  # Ignore file not found, default could have different extension
-    raise ConfigNotFoundError(f"Default file not found at path: {path}/default.[yml/yaml/json]")
-
-
-def _get_config(client: KazooClient, path: str) -> dict:
-    """
-    Helper function to get config file from zookeeper and handle errors.
-    Function will check each subpath incrementally and return the first subpath that failed if file
-    is not found.
-    """
+    scope, _ = _validate_single_scope(scope_identifier)
+    paths = _get_all_search_paths(data_store=data_store, namespace=namespace,
+                                  scope_identifiers=scope_identifier)
+    paths = _ensure_paths(data_store, paths, scope_ids_must_exist={scope})
+    lowest_path = paths[-1]
+    files = [f for f in data_store.list_files(lowest_path) if PurePath(f).stem == mode]
+    if not files:
+        raise ConfigNotFoundError(f"Config file not found for mode '{mode}' in path: {lowest_path}")
+    filename = files[0]
+    path = lowest_path / filename
     try:
-        data, _ = get_node(client, path)
-        return data
-    except NoNodeError:
-        invalid_subpath = _find_first_invalid_subpath(client, path)
+        data_store.delete(path)
+        return str(path)
+    except PathNotFoundError:
+        invalid_subpath = _find_first_invalid_subpath(data_store, path)
         if invalid_subpath:
             raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
         raise ConfigNotFoundError(f"Config file not found at path: {path}")
 
 
-def _find_first_invalid_subpath(client: KazooClient, path: str, is_file: bool = True) -> str | None:
-    """
-    Given a path, finds the first "directory" or zk node that does not exists.
-
-    Returns:
-    -------
-        str | None
-            subpath if one does not exists, or None if path is valid
-    """
-    subpaths = path.split("/")
-    for i in range(1, len(subpaths) + (-1 if is_file else 0)):
-        subpath = "/".join(subpaths[: i + 1])
-        if not client.exists(subpath):
-            return subpath
-    return None
-
-
-def _save_config(
+def delete_config(
+    data_store: DataStore,
     namespace: str,
-    filename: str,
-    data: bytes,
-    scope: str | None = None,
-    identifier: str | None = None,
-    override: bool = False,
-    create_if_missing: bool = True,
-) -> tuple[dict, str]:
-    """Helper function to save config file to zookeeper.
+    scope_identifiers: dict[ScopeName, str],
+    mode: str = DEFAULT_MODE,
+    delete_defaults: bool = False,
+):
+    """Delete all configs with the specified name across all specified namespace and scopes.
 
-    Throws an error if a default file (default.[yml/yaml/json]) already exists and trying to save a
-    new default file, unless overriding.
+    Parameters
+    ----------
+    data_store: DataStore
+        The data store instance where the configuration files are stored.
+    namespace: str
+        the config namespace.
+    scope_identifiers: dict[ScopeName, str]
+        dict of scope identifiers sorted in lowest-override-priority to
+        highest-override-priority.
+    mode: str
+        the config mode. Extension is ignored.
+    delete_defaults: bool
+        If True, also delete the default config file for the given mode in each scope.
+        If False, only delete the specified mode in the override stack, leaving the default config intact.
+    """
+    override_stack = get_override_stack(data_store=data_store,
+                                              namespace=namespace,
+                                              scope_identifiers=scope_identifiers,
+                                              mode=mode)
+    stems_to_delete = {mode} | ({"default"} if delete_defaults else set())
+    # Walk up the override stack and delete
+    for filepath in reversed(override_stack):
+        if filepath.stem in stems_to_delete:
+            ns, scope_id, filename = _get_parts_from_path(data_store=data_store,
+                                                          path=filepath)
+            _delete_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
+                          mode=Path(filename).stem)
+
+def get_override_stack(
+    data_store: DataStore,
+    namespace: str,
+    mode: str = "default",
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    scope_ids_must_exist: set[ScopeName] | None = None,
+    must_exist_in_any_scope: bool = True,
+    must_exist_in_lowest_scope: bool = True,
+    create_missing_namespace: bool = False,
+) -> list[Path]:
+    """For a given namespace, scope_identifiers, and mode, return the full
+    hierarchy of files that apply to this file in reverse override order i.e:
+    val[-1] overrides val[-2] which overrides ... val[-N]
 
     Parameters:
     -----------
+        data_store: DataStore
+            storage location to search.
         namespace: str
-            The namespace for the configuration file.
-        filename: str
-            The name of the configuration file.
-        data: bytes
-            The data to be saved in the configuration file.
-        scope: str | None, optional
-            The scope of the configuration file.
-        identifier: str | None, optional
-            The identifier for the configuration file.
-        override: bool, optional
-            Whether to override the existing configuration file.
-        create_if_missing: bool, optional
-            Whether to create the configuration file if it does not exist.
+            The namespace for the configuration files.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope to filter by.
+            If None are provided, only include the default scope.
+        mode: str
+            The name of the configuration mode (will match files like <mode>.yml)
+        scope_ids_must_exist: set[ScopeName] | None
+            Scopes whose identifier folders are required to exist. A missing
+            identifier for one of these scopes raises InvalidScopeIdentifierError.
+        must_exist_in_any_scope: bool
+            If True, the mode must exist in at least one scope, otherwise a FileNotFoundError is raised.
+        must_exist_in_lowest_scope: bool
+            If True, the mode must exist in the lowest scope, otherwise a FileNotFoundError is raised.
+        create_missing_namespace: bool
+            If True, create the namespace folder if it does not exist.
 
     Returns:
     --------
-        tuple[dict, str]
-            A tuple containing the configuration data and the path the config was saved to.
+        override_paths: list[Path]
+            A list of paths to the files that apply to this config in reverse
+            For example:
+                [./defaults/software_a/default.yml, ./hostname/w11dt000001/software_a/default.yml]
+                or, if mode is provided (not default):
+                [./defaults/software_a/default.yml, 
+                 ./defaults/software_a/mode.yml, 
+                 ./hostname/w11dt000001/software_a/default.yml, 
+                 ./hostname/w11dt000001/software_a/mode.yml]
+            
+    Raises:
+    -------
+        FileNotFoundError
+            Raised if the must_exist_in_any_scope=True and mode is not found anywhere or
+             if must_exist_in_lowest_scope=True and mode is not found in lowest scope.
+        InvalidNamespaceError
+            if the namespace does not exist.
+        InvalidScopeError
+            if a scope does not exist.
+        InvalidScopeIdentifierError
+            if a scope identifier does not exist.
     """
+    # Warning: we don't check to see if multiple defaults are present.
+    override_stack = []
+    valid_filestems = {"default", mode}
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    # Make sure that paths exist in the data store
+    paths = _ensure_paths(data_store=data_store, paths=paths,
+                  create_missing_namespace=create_missing_namespace,
+                  scope_ids_must_exist=scope_ids_must_exist)
+    # Get defaults, followed by config name in each namespace.
+    for folder_path in paths:
+        # Sort alphabetized with defaults first.
+        for found_file in sorted(data_store.list_files(folder_path),
+                           key=lambda x: "" if Path(x).stem == DEFAULT_MODE else x.lower()):
+            fp = Path(found_file)
+            # Append default if it exists.
+            if fp.stem in valid_filestems and ((not fp.suffix)
+                                               or fp.suffix.lower() in VALID_EXTENSIONS):
+                override_stack.append(folder_path / found_file)
+    if must_exist_in_any_scope:
+        found_filenames = [f.stem for f in override_stack]
+        if mode not in found_filenames:
+            raise FileNotFoundError()
+    if must_exist_in_lowest_scope:
+        if override_stack[-1].stem != mode:
+            raise FileNotFoundError()
+    return override_stack
 
-    if scope and identifier:
-        CONFIG_PATH = f"{PATH_PREFIX}/{scope}/{identifier}/{namespace}"
-    else:
-        CONFIG_PATH = f"{PATH_PREFIX}/defaults/{namespace}"
-    with get_zk_client() as client:
-        if not override:
-            # Not overriding, check default file doesn't already exist (if saving default)
-            if filename in DEFAULT_FILES:
-                for df in DEFAULT_FILES:
-                    if client.exists(f"{CONFIG_PATH}/{df}"):
-                        raise ConfigExistsError(f"Default File already exists: {CONFIG_PATH}/{df}")
-
-            # Not overriding, check normal file doesn't already exist
-            if client.exists(f"{CONFIG_PATH}/{filename}"):
-                raise ConfigExistsError(f"File already exists: {CONFIG_PATH}/{filename}")
-
-        # Overriding, if create_if_missing is false, check file exists before overriding
-        if not client.exists(f"{CONFIG_PATH}/{filename}") and not create_if_missing:
-            path = f"{CONFIG_PATH}/{filename}"
-            invalid_subpath = _find_first_invalid_subpath(client, path)
-            if invalid_subpath:
-                raise ConfigNotFoundError(f"Subpath '{invalid_subpath}' not found in path: {path}")
-            raise ConfigNotFoundError(f"Config file not found at path: {path}")
-
-        # Overriding & creating if missing
-        add_node(client, f"{CONFIG_PATH}/{filename}", data)
-
-    return _validate_and_convert_to_dict(filename, data), f"{CONFIG_PATH}/{filename}"
-
-
-def _validate_and_convert_to_bytes(filename: str, data: dict) -> bytes:
-    """
-    Validates filename based on extension and converts data into bytes.
-    Only attempts to validate/convert json and yaml files.
-    """
-    try:
-        if filename.endswith((".json")):
-            data_as_bytes = json.dumps(data).encode("utf-8")
-        elif filename.endswith((".yml", ".yaml")):
-            data_as_bytes = yaml.safe_dump(data).encode("utf-8")
-        else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
-        return data_as_bytes
-    except (TypeError, yaml.YAMLError):
-        raise ConfigSerializeError(f"Failed to serialize data for {filename}")
-
-
-def _validate_and_convert_to_dict(filename: str, data: bytes) -> dict:
-    """
-    Validates filename based on extension and converts data into dictionary.
-    Only attempts to validate/convert json and yaml files.
-    """
-    try:
-        if filename.endswith((".json")):
-            data_as_dict = json.loads(data)  # Throw away - decoding for validation only
-        elif filename.endswith((".yml", ".yaml")):
-            data_as_dict = yaml.safe_load(data)  # Throw away - decoding for validation only
-            if data_as_dict is None:
-                # yaml.safe_load returns None for empty files, convert to empty dict
-                data_as_dict = {}
-        else:
-            raise UnsupportedFileTypeError(f"Unsupported file type: {filename}")
-        return data_as_dict
-    except (json.JSONDecodeError, yaml.YAMLError):
-        raise ConfigDecodeError(f"Failed to decode data for {filename}")
-
-
-def _get_scope_from_identifier_names(
-    identifier_names: dict[IdentifierName, str],
-) -> dict[ScopeName, str]:
-    """
-    Given a dictionary of identifier names, validates that they correspond to actual scopes and
-    returns a dictionary mapping scope names to identifier values.
-
-    The scope to identifier name mapping is determined by the settings file (ficus_setup.json)
-
-    Parameters:
-    -----------
-    identifier_names: dict[IdentifierName, str]
-        A dictionary of identifier names for different scopes, where keys are scope identifier
-        names and values are the corresponding identifier values.
-
-    Returns:
-    --------
-        dict[ScopeName, str]
-            A dictionary mapping scope names to identifier values.
-    """
-    id_name_to_scope_name_mapping = {scope.identifier_name: scope for scope in settings.scopes}
-    scopes = {}
-    for id_name in identifier_names:
-        # Validates id_name maps to a scope
-        if id_name not in id_name_to_scope_name_mapping:
-            raise InvalidScopeIdentifierError(
-                f"Invalid scope identifier name: {id_name}. "
-                f"Valid options are: {list(id_name_to_scope_name_mapping.keys())}"
-            )
-        scope = id_name_to_scope_name_mapping[id_name]
-        scopes[scope.name] = identifier_names[id_name]  # identifier value
-    return scopes

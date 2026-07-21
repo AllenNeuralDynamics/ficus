@@ -1,65 +1,242 @@
-# FICUS
+# 🪴FICUS
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 
-Ficus: REST API to handle configuration management to SIPE's internal configuration storage (zookeeper). 
+Ficus is a collection of convenience functions to manage configs in prototyping and production environments.
+It features:
+* Utility functions to merge configs based on a user-specifiable override hierarchy.
+  * deep merge, deep save, deep delete capabilities with the option of overriding/not-overriding defaults.
+  * highly flexible override setup enabling computer-specific or input-specific config overrides.
+* Store, update, and maintain multiple configs for many kinds of software in one place.
+* Configureable data store
+* Various usage patterns depending on scale
+  * Pull down configs from a centralized location with a REST API and client (confierge) to handle concurrent connections
+  * OR import ficus as a library and use its utility functions to manage config data distributed throughout multiple files.
+
+Use cases might include:
+* Maintain large configs for the same software across many rigs running that software with subtle difference between each rig.
+* Manage an experimental setup on one rig with many different hardware configurations that would affect what get's launched on startup.
+
+## Conventions
+First things first, what should we be storing in a config file?
+
+Loosely, we think of configs as managing the _starting state of the software, without any input_.
+The config contains information related to the persistent structure of the software, ie: which drivers, what com ports, URLs, endpoints, hardware settings, etc.
+Software "wiring" is another way to think of this.
+
+For running programs with verbose input that changes each time you run the software, we suggest adopting the convention of a separate _job_, _experiment_, or _session_ file.
+Doing so creates a clean _separation-of-concerns_ whereby configs manage structure-related information, and "job" files manage session or input-related information.
+
+## Setting up Ficus
+There are two main ways to use Ficus.
+
+### Shared Ficus Setup
+<p align="center">
+  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="75%">
+</p>
+
+In this scenario, one Ficus instance is running and distributing configs to many consumers.
+The benefit here is that you can store all your configs in one place, making them easier to batch edit when you need to make major schema-related changes rather than needing to hunt down configs.
+This works well when maintaining lots of configs across many programs by one team.
+
+### Local Ficus Setup
+<p align="center">
+  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="75%">
+</p>
+
+In this scenario, Ficus runs as a python library pointing to a local folder to manage the merging/updating/saving of configs within this folder.
+This setup works well if you are managing many configs in a repository or combined with the project source files.
 
 ## Configuration Organization Structure
 
-Here are some key vocabulary this API uses:
+Here's some key vocabulary this project uses:
 
-- namespace: abstract identifier to group configuration files with (ex. stagewidget, waterlog, open-ephys, etc) 
-- hostnames: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
-- subject_id: identifier for a specific subject (ex. 614173, etc)
+- *namespace*: abstract identifier to group config files across scopes. One convention is to make a namespace for the target software that will use the config. (Ex: vr-foraging, stagewidget, waterlog, open-ephys, etc).
+- *scope*: a config override level. Ex: `hostname`.
+- *scope identifier*: identifier within a scope represented as a folder within a *scope*. Ex: `hostname=W10DTBURNO`.
+- *scope resolution order*: the scope order in which configs are merged.
+- *mode*: An optional extra dimension of overrides within a *scope*. Ex: In the `default` scope, `default.yml` describes the default mode, and `high-frequency.yml` can specify another mode, with overrides to `default.yml`. Every scope can have *mode* files, but only one *mode* at a time can be specified.
 
 
-Below is the directory structure in which config files are stored in zookeeper
+Here's how scopes and scope identifiers resolve as a folder structure:
+
+```
+scope_name/
+├── scope_identifier/
+│   └── namespace/
+│       └── default.yml
+```
+
+Below is an example directory structure in which configs are stored using the following scopes and namespaces:
+
+**Scopes**
+- `hostname`: identifier for a specific computer (ex. w10dt100450, SAKUMA, etc)
+- `subject_id`: identifier for a specific subject (ex. 614173, etc)
+
+**Namespaces**
+- `open_ephys`: the open ephys software for running electrophysiology experiments.
+- `vr_frg`: the vr-foraging software for running animal behavior experiments.
+- 
+**Modes**
+- `default`: Every software has a default mode with base configuration
+- `vr_frg/with_sniff_detector`: the vr-foraging software can also be run in a mode including a sniff detector
+- `open_ephys/galen`: A certain user has a special mode they like to run open_ephys with. Note the mode has overrides in multiple scopes.
 
 ```
 defaults/
 ├── open_ephys/
 │   ├── default.yml
-│   ├── default.json
-│   ├── config.yml
 │   └── galen.yml
 ├── vr_frg/
 │   ├── default.yml
 │   └── with_sniff_detector.yml
 └── waterlog/
     └── default.yml
-computers/
+hostname/
 ├── w10dtburno/
 │   └── vr_frg/
-│       ├── default.yaml
-│       └── task_specific_setting.yml
+│       ├── default.yml
 ├── w10dt123123/
 │   └── waterlog/
-│       ├── default.json
-│       └── config.yml
+│       ├── default.yml
 └── w10dtgawk/
     └── open_ephys/
+        └── default.yml
         └── galen.yml
-subjects/
+subject_id/
 ├── 614173/
 │   └── vr_frg/
-│       ├── default.yaml
-│       └── config.yml
+│       └── default.yaml
+
 ```
 
-This organizational structure contains two layers that generate a config based on a structured override pattern. The layers contain configuration files, and based on the layer, determines the resulting config.
-1. Default layer - applied to all rigs
+> [!NOTE]
+> The *defaults* scope has an implied default scope identifier which is omitted.
+
+You can create any scopes you need (beyond `defaults`) to better adjust to your existing use case, but do note that we have been able to use the scopes `defaults`, `hostname`, and `subject_id` to accomplish all of our use cases across multiple software packages to date.
+
+## Fetching and Merging a Config
+The *scope resolution order* generates a config based on a structured override pattern.
+Overrides are applied via a recursive (aka: _deep_) update function.
+The result is that, for the same software running on many computers, files at the computer scope level are lean and contain only computer-specific overrides.
+
+### Example 1: Default Config
+Here's an example request.
+```python
+get_config(data_store=data_store,
+           namespace="open_ephys")
+```
+The above request pulls down the default config for the `open_ephys` software.
+To construct this config, the following merges are applied.
+* Within `defaults/open_ephys`, we start with `default.yml` and thats it!
+
+### Example 2: Rig-Specific Config
+Suppose the `open_ephys` software uses USB devices that have different COM Ports per computer, so we store them in a hostname-specific override.
+
+Here's the example request.
+```python
+get_config(data_store=data_store,
+           namespace="open_ephys",
+           scope_identifiers={"hostname": "w10dtgawk"})
+```
+The above request pulls down the default config for the `open_ephys` software for the hostname: `w10dtgawk`.
+To construct this config, the following merges are applied.
+* Within `hostname/w10dtgawk/open_ephys`, we start with `default.yml` as our current config.
+* Within `defaults/open_ephys`, we fetch `default.yml`. Our current config overrides (aka: `deep_update`s against) this `default.yml`.
+
+### Example 3: User-specific overrides for a specific machine
+Suppose scientist Galen wants to use the `open_ephys` software with custom presets on one of the lab computers, so he stores them in a galen-specific config.
+
+Here's an example request.
+```python
+get_config(data_store=data_store,
+           namespace="open_ephys",
+           scope_identifiers={"hostname": "w10dtgawk"},
+           mode="galen")
+```
+The above request pulls down a config for the `open_ephys` software on a computer with hostname: `w10dtgawk`. It also pulls overrides relevant to the `galen` mode.
+To construct this config, the following merges are applied.
+* Within `hostname/w10dtgawk/open_ephys`, we start with `galen.yml` as our current config.
+* Within `hostname/w10dtgawk/open_ephys`, we fetch `default.yml`. Our current config overrides this `default.yml`.
+* Within `defaults/open_ephys`, we fetch `galen.yml`. Our current config overrides this `galen.yml`.
+* Within `defaults/open_ephys`, we fetch `default.yml`. Our current config overrides this `default.yml`.
+
+### Example 4: Input-specific overrides for a specific machine
+Suppose the inputs to the software have settings that alter the software config, and these settings persist each time we run the same input.
+For example, with the software `vr_frg`, each mouse has different skull shape that affects the XYZ position of the lickspout stage.
+This offset can be recorded once, and it persists throughout the lifetime of that mouse, but it is part of the starting state of the `vr_frg` software, so its values are passed in via config.
+
+Here's an example request.
+```python
+get_config(data_store=data_store,
+           namespace="vr_frg",
+           scope_identifiers={"hostname": "w10dtburno", "subject_id": "614173"})
+```
+The above request pulls down a config (named default) for the `vr_frg` software on a computer with hostname: `w10dtburno` for mouse subject: 614173.
+To construct this config, the following merges are applied.
+* Within `subject_id/615173/vr_frg`, we start with `default.yml` as our current config.
+* Within `hostname/w10dtburno/vr_fg`, we fetch `default.yml`. Our current config overrides this `default.yml`.
+* Within `defaults/vr_frg`, we fetch `default.yml`. Our current config overrides this `default.yml`.
+
+> [!NOTE]
+> The `scope_identifiers` dict is ordered and specifies the merge order.
+
+### Example 5: Different Concurrent Hardware Configurations
+Suppose the experimental software `prototome` running on pc W11XLTEST needs to be run in different states with different combinations of the hardware attached to the same computer.
+Here's how we would store these configs, making use of *modes*:
+
+```
+├── defaults/
+│   └── prototome/
+│       └── default.yml  # settings for everything running prototome software
+└── hostname/
+    ├── W11XLTEST/
+    │   └── prototome/
+    │       ├── default.yml  # settings applying to all protome software running on this PC
+    │       ├── microtome.yml  # settings for all connected hardware for the custom microtome
+    │       ├── left_lasso.yml # settings for all connected hardware for the left lasso
+    │       └── right_lasso.yml # settings for all connected hardware for the right lasso
+    └── W11LEICA/
+        └── prototome/
+            └── default.yml
+```
+
+Now here's an added nuance.
+Suppose these different modes can all run concurrently!
+
+There's no built-in api function to do this, but you can manually pull down multiple configs and merge them locally.
+Provided that each config can run standalone, and each config communicates with separate hardware, or can safely override shared fields, theres nothing preventing you from pulling down 3 configs and merging them.
+
+
+## Saving and Unmerging a Config
+It's possible to write back a config with updated values and have those values repropagate up the override hierachy.
+To do so, use `save_config_deep`.
+Doing so will walk up the override hierarchy and replace updated fields values with the values to save in the locations where the override took place.
+
+Let's work through a couple examples:
+
+### Example 1: Tune a rig; save back rig-specific values
+** TODO: example for this **
+
+### Example 2: Tune a rig; Make new values apply to all rigs 
+** TODO: example for this **
+
+### Example 3: dynamically adding new fields.
+With _save_config_deep_, it's not possible to _add_ fields that were not present in any of the previous configs except in the highest-priority override level.
+** TODO: example **
+
+
+### Scope Details for this Setup
+
+1. `defaults` layer - applied to all rigs
     - Starts with ``defaults/{namespace}/default.yml`` 
     - ``defaults/{namespace}/{filename}`` merges with above via deep update.
-2. Computers layer (applied to specific rigs)
+2. `hostname` layer (applied to specific rigs)
     - ``computers/{hostname}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
     - ``computers/{hostname}/{namespace}/{filename}`` merges with above with deep update. 
-2. Scopes layer (applied to specific rigs)
+2. `subject_id` layer (applied to specific rigs)
     - ``subjects/{subject_id}/{namespace}/default.yml`` merges with previously merged configs in Defaults layer.
     - ``subjects/{subject_id}/{namespace}/{filename}`` merges with above with deep update. 
-
-When looking for default files in either Default or Computer layer, it will check the following file extensions in this specific order, first one found will be the primary default file. Ideally, there should only be a single "default file" in each directory. This is enforced with the write endpoint.
-
-    .yml -> .yaml -> .json
 
 Below is the precedence of merging config files from lowest to highest. Lower precedence fields will get overwritten by higher precedence fields. If a field doesn't exist, it will get appended. 
 
@@ -69,6 +246,69 @@ Below is the precedence of merging config files from lowest to highest. Lower pr
 - computers/{hostname}/{namespace}/{filename} 
 - subjects/{subject_id}/{namespace}/default.yml 
 - subjects/{subject_id}/{namespace}/{filename} 
+
+
+## How to use this Structure
+Use *scopes* to store properties intrinsic to the scope.
+For example, the subject scope contains config values with properties intrinsic to that.
+
+Use *namespaces* to group scopes.
+We usually use software as our namespace.
+
+
+
+## FAQs
+
+### What file formats are supported?
+Currently, we support json and yaml. Filenames within a folder must be unique, and this is enforced upon read/write.
+In other words, if the config originated from a yaml, you can save it back a json, and it will convert it from yaml to json.
+
+### Why not just have a centralized config schema across all devices that use this package?
+It's worth considering: why do you need all this? If you have a common config schema across all software that uses configs, then you don't need the concept of a namespace.
+
+In practice, this isn't always possible.
+You might inherit legacy code, or it may not be practical to apply and maintain an adapter that converts a config from a shared schema to a software-specific one.
+
+The other challenge is that this schema is intended to be a one-size-fits-all to apply to as many software packages as possible.
+To date, this has been the case even in some quite strange use cases, so you if you have questions about how to adapt this project to your needs, drop us an issue!
+
+### Do you validate configs?
+Currently no. Validation is left up to the user.
+
+### Does this system manage partial configs?
+Not necessarily, but something like this is possible.
+
+Up to this point, we've focused on breaking up configuration into defaults and overrides, but the resultant config data after the merges is a complete object, able to fully configure the specified software. Instead, you may want to have your config break up into separate sections to be saved independently and simply combined (rather than deeply merged). A use case for this could be if your software is heavily modularized, with independent components. The "complete" config would look like:
+```yaml
+laser:
+    com_port: COM7
+    power: 5
+camera_1: 
+    com_port: COM8
+    frequency_hz: 60
+camera_2:
+    com_port: COM14
+    frequency_hz: 30
+```
+
+And you may want to break this up into multiple files, i.e.:
+- laser.yml
+- camera_1.yml
+- camera_2.yml
+
+The way to do this in ficus would be to set up your devices as members of the *namespace*, i.e.:
+```
+defaults/
+├── laser/
+│   ├── default.yml
+├── camera_1/
+│   ├── default.yml
+└── camera_2/
+    └── default.yml
+    └── high_frequency.yml
+```
+
+Then, from the client software, you'd have to perform three separate `get_config` fetches, and combine them client-side. Ficus doesn't have logic to support server-side config aggregation.
 
 ##  Developers Guide
 

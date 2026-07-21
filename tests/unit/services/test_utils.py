@@ -3,17 +3,116 @@ import pytest
 from ficus.core.exceptions import (
     ConfigSerializeError,
     ConfigDecodeError,
-    InvalidScopeIdentifierError,
     UnsupportedFileTypeError,
+    InvalidScopeError,
+    InvalidNamespaceError,
+    InvalidScopeIdentifierError,
 )
-from ficus.services.configs import (
-    _deep_update,
+from ficus.services.utils import (
+    _ensure_paths,
+    _get_all_search_paths,
     _find_first_invalid_subpath,
-    _get_scope_from_identifier_names,
     _validate_and_convert_to_bytes,
     _validate_and_convert_to_dict,
+    _get_parts_from_path,
 )
-from tests.constants import ZK_ROOT_PATH
+from ficus.utils.dict_merge import _deep_update, _deep_update_existing_destructive
+from pathlib import Path, PurePath
+
+
+################################################################################
+#
+#   ensure_paths()
+#
+################################################################################
+
+def test_ensure_paths_existing_namespace_and_scope_ids(data_store):
+    """Existing namespace and scope identifiers are left intact."""
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    paths = _get_all_search_paths(data_store, "software_a", scope_identifiers)
+    _ensure_paths(data_store, paths=paths)
+    assert data_store.exists(data_store.rootdir / "defaults/software_a")
+    assert data_store.exists(data_store.rootdir / "hostname/w11dt000001/software_a")
+    assert data_store.exists(data_store.rootdir / "subject_id/614173/software_a")
+
+
+@pytest.mark.parametrize("namespace, scope_identifiers, kwargs, created_path", [
+    ("new_namespace", None,
+     {"create_missing_namespace": True},
+     "defaults/new_namespace"),
+    ("software_a", {"hostname": "new_host"},
+     {"create_missing_scope_id": True},
+     "hostname/new_host/software_a"),
+    ("software_a", {"rig_id": "rig1"},
+     {"create_missing_scope": True, "create_missing_scope_id": True},
+     "rig_id/rig1/software_a"),
+    (None, {"hostname": "new_host"},
+     {"create_missing_scope_id": True},
+     "hostname/new_host"),
+])
+def test_ensure_paths_creates_missing(data_store, namespace, scope_identifiers,
+                                      kwargs, created_path):
+    """Missing namespaces, scopes and scope identifiers are created when the
+    corresponding create flags are enabled."""
+    path = data_store.rootdir / created_path
+    assert not data_store.exists(path)
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    _ensure_paths(data_store, paths=paths, **kwargs)
+    assert data_store.exists(path)
+
+
+@pytest.mark.parametrize("namespace, scope_identifiers, exception", [
+    ("does_not_exist", None, InvalidNamespaceError),
+    ("software_a", {"hostname": "new_host"}, InvalidScopeIdentifierError),
+    ("software_a", {"rig_id": "rig1"}, InvalidScopeError),
+])
+def test_ensure_paths_raises_when_creation_disabled(data_store, namespace,
+                                                    scope_identifiers, exception):
+    """Missing structure raises by default since the create flags are disabled."""
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    scopes = set(scope_identifiers.keys()) if scope_identifiers else set()
+    with pytest.raises(exception):
+        _ensure_paths(data_store, paths=paths, scope_ids_must_exist=scopes)
+
+
+def test_ensure_paths_all_none_is_noop(data_store):
+    """No namespace and no scope identifiers performs no work and does not raise."""
+    paths = _get_all_search_paths(data_store, None, None)
+    _ensure_paths(data_store, paths=paths)
+
+################################################################################
+#
+#   _get_all_search_paths()
+#
+################################################################################
+
+def test_get_all_search_paths_defaults_only(data_store):
+    """With no scope identifiers only the defaults namespace path is returned."""
+    paths = _get_all_search_paths(data_store, "software_a")
+    assert paths == [data_store.rootdir / "defaults/software_a"]
+
+
+def test_get_all_search_paths_preserves_scope_priority_order(data_store):
+    """Paths are returned in merge priority order: defaults first, then scopes
+    in the order given by scope_identifiers."""
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}
+    paths = _get_all_search_paths(data_store, "software_a", scope_identifiers)
+    assert paths == [
+        data_store.rootdir / "defaults/software_a",
+        data_store.rootdir / "hostname/w11dt000001/software_a",
+        data_store.rootdir / "subject_id/614173/software_a",
+    ]
+
+
+def test_get_all_search_paths_none_scope_identifiers(data_store):
+    """Passing None for scope_identifiers behaves like an empty mapping."""
+    assert _get_all_search_paths(data_store, "software_a", None) == \
+        _get_all_search_paths(data_store, "software_a", {})
+
+
+def test_get_all_search_paths_none_namespace(data_store):
+    """Passing None for namespace behaves like an empty string or default namespace."""
+    assert _get_all_search_paths(data_store, None, None) == []
 
 
 ################################################################################
@@ -127,7 +226,7 @@ def test_validate_and_convert_to_bytes_valid_json():
     """Test _validate_and_convert_to_bytes with valid JSON input"""
     filename = "config.json"
     data = {"key": "value"}
-    result = _validate_and_convert_to_bytes(filename, data)
+    result = _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
     assert isinstance(result, bytes)
     print(result)
     assert result == b'{"key": "value"}'
@@ -137,7 +236,7 @@ def test_validate_and_convert_to_bytes_valid_json():
 def test_validate_and_convert_to_bytes_valid_yml(filename):
     """Test _validate_and_convert_to_bytes with valid YAML input"""
     data = {"key": "value"}
-    result = _validate_and_convert_to_bytes(filename, data)
+    result = _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
     assert isinstance(result, bytes)
     print(result)
     assert result == b"key: value\n"
@@ -148,7 +247,7 @@ def test_validate_and_convert_to_bytes_invalid_filetype():
     filename = "config.txt"
     data = {"key": "value"}
     with pytest.raises(UnsupportedFileTypeError):
-        _validate_and_convert_to_bytes(filename, data)
+        _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_bytes_invalid_data():
@@ -156,14 +255,14 @@ def test_validate_and_convert_to_bytes_invalid_data():
     filename = "config.yml"
     data = {"key": object()}
     with pytest.raises(ConfigSerializeError):
-        _validate_and_convert_to_bytes(filename, data)
+        _validate_and_convert_to_bytes(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_valid_json():
     """Test _validate_and_convert_to_dict with valid JSON input"""
     filename = "config.json"
     data = b'{"key": "value"}'
-    result = _validate_and_convert_to_dict(filename, data)
+    result = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert isinstance(result, dict)
     assert result == {"key": "value"}
 
@@ -172,7 +271,7 @@ def test_validate_and_convert_to_dict_valid_json():
 def test_validate_and_convert_to_dict_valid_yml(filename):
     """Test _validate_and_convert_to_dict with valid YAML input"""
     data = b"key: value"
-    result = _validate_and_convert_to_dict(filename, data)
+    result = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert isinstance(result, dict)
     assert result == {"key": "value"}
 
@@ -182,7 +281,7 @@ def test_validate_and_convert_to_dict_invalid_filetype():
     filename = "config.txt"
     data = b"asdlfkj"
     with pytest.raises(UnsupportedFileTypeError):
-        _validate_and_convert_to_dict(filename, data)
+        _validate_and_convert_to_dict(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_invalid_data():
@@ -190,14 +289,14 @@ def test_validate_and_convert_to_dict_invalid_data():
     filename = "config.yml"
     data = b"\x01"
     with pytest.raises(ConfigDecodeError):
-        _validate_and_convert_to_dict(filename, data)
+        _validate_and_convert_to_dict(PurePath(filename).suffix, data)
 
 
 def test_validate_and_convert_to_dict_empty_json():
     """Test _validate_and_convert_to_dict with empty json"""
     filename = "config.json"
     data = b"{}"
-    data = _validate_and_convert_to_dict(filename, data)
+    data = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert data == {}
 
 
@@ -205,7 +304,7 @@ def test_validate_and_convert_to_dict_empty_yaml():
     """Test _validate_and_convert_to_dict with empty json"""
     filename = "config.yml"
     data = b""
-    data = _validate_and_convert_to_dict(filename, data)
+    data = _validate_and_convert_to_dict(PurePath(filename).suffix, data)
     assert data == {}
 
 
@@ -216,55 +315,49 @@ def test_validate_and_convert_to_dict_empty_yaml():
 ################################################################################
 
 
-def test_find_first_invalid_subpath_valid(zk_mock):
+def test_find_first_invalid_subpath_valid(data_store):
     """Test _find_first_invalid_subpath with valid path"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a/config.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) is None
+    path = data_store.rootdir / Path("defaults/software_a/config.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) is None
 
 
-def test_find_first_invalid_subpath_invalid_file(zk_mock):
+def test_find_first_invalid_subpath_invalid_file(data_store):
     """Test _find_first_invalid_subpath with invalid file, ignores file check"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path, is_file=True) is None
+    path = data_store.rootdir / Path("defaults/software_a/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) is None
 
 
-def test_find_first_invalid_subpath_invalid_subpath(zk_mock):
+def test_find_first_invalid_subpath_invalid_subpath(data_store):
     """Test _find_first_invalid_subpath with invalid subpath (near end)"""
-    path = f"{ZK_ROOT_PATH}/defaults/software_a_BAD/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) == f"{ZK_ROOT_PATH}/defaults/software_a_BAD"
+    path = data_store.rootdir / Path("defaults/software_a_BAD/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == \
+        data_store.rootdir / Path("defaults/software_a_BAD")
 
 
-def test_find_first_invalid_subpath_invalid_subpath_early(zk_mock):
+def test_find_first_invalid_subpath_invalid_subpath_early(data_store):
     """Test _find_first_invalid_subpath with invalid subpath (near beginning)"""
-    path = "/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml"
-    assert _find_first_invalid_subpath(zk_mock, path) == "/scratchbad"
+    path = data_store.rootdir / Path("scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml")
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == \
+        data_store.rootdir / Path("scratchbad")
 
+
+def test_find_first_invalid_subpath_invalid_root(data_store):
+    """Test _find_first_invalid_subpath with wrong root"""
+    path = Path("/scratchbad/defaults/software_a_BAD/CONFIG_BAD.yml") # different root
+    assert _find_first_invalid_subpath(data_store=data_store, path=path) == Path("/")
 
 ################################################################################
 #
-#   test_get_scope_from_identifier_names()
+#   _get_parts_from_path()
 #
 ################################################################################
 
-
-def test_get_scope_from_identifier_names_valid_hostname_return_scopes():
-    identifier_names = {"hostname": "w11dt000001"}
-    expected_scope = {"computers": "w11dt000001"}
-    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
-
-
-def test_get_scope_from_multi_identifier_names_valid_hostname_return_scopes():
-    identifier_names = {"hostname": "w11dt000001", "subject_id": "614173"}
-    expected_scope = {"computers": "w11dt000001", "subjects": "614173"}
-    assert _get_scope_from_identifier_names(identifier_names) == expected_scope
-
-
-def test_get_scope_from_identifier_names_invalid_hostname_return_scopes():
-    identifier_names = {"unknown-scope": "w11dt000001"}
-    with pytest.raises(InvalidScopeIdentifierError):
-        _get_scope_from_identifier_names(identifier_names)
-
-
-def test_get_scope_from_identifier_names_empty_return_empty():
-    identifier_names = {}
-    assert _get_scope_from_identifier_names(identifier_names) == {}
+@pytest.mark.parametrize("path, expected_namespace, expected_scope_identifiers, expected_filename", [
+    (Path("defaults/software_a/config.yml"), "software_a", {}, "config.yml"),
+    (Path("hostname/w11dt000001/software_a/config.yml"), "software_a", {"hostname": "w11dt000001"}, "config.yml"),
+])
+def test_get_parts_from_path(data_store, path, expected_namespace, expected_scope_identifiers, expected_filename):
+    namespace, scope_identifier, filename = _get_parts_from_path(data_store=data_store, path=path)
+    assert namespace == expected_namespace
+    assert scope_identifier == expected_scope_identifiers
+    assert filename == expected_filename
