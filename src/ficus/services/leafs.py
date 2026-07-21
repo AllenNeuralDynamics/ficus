@@ -1,6 +1,7 @@
 from ficus.database.data_store import DataStore
 from ficus.services.utils import (
     DEFAULT_MODE,
+    DEFAULT_SUFFIX,
     SUFFIX_STR_TYPE,
     _file_path_from_parts,
     _get_all_search_paths,
@@ -10,7 +11,7 @@ from ficus.services.utils import (
 from ficus.utils.dict_merge import _deep_update
 
 
-def read_file(
+def read_leaf(
     data_store: DataStore,
     namespace: str,
     scope: str | None = None,
@@ -45,17 +46,17 @@ def read_file(
     content = data_store.read(file).decode()
     return content, file.suffix
 
-def read_file_data(
+def read_leaf_data(
     data_store: DataStore,
     namespace: str,
     scope: str | None = None,
     scope_identifier: str | None = None,
     mode: str = DEFAULT_MODE,
 ) -> dict:
-    content, suffix = read_file(data_store, namespace, scope, scope_identifier, mode)
+    content, suffix = read_leaf(data_store, namespace, scope, scope_identifier, mode)
     return _validate_and_convert_to_dict(suffix, content.encode())
 
-def create_file(
+def create_leaf(
     data_store: DataStore,
     namespace: str,
     suffix: SUFFIX_STR_TYPE,
@@ -80,17 +81,17 @@ def create_file(
         data_store.create(file_path, content.encode())
     return content
 
-def create_file_from_data(
+def create_leaf_from_data(
     data_store: DataStore,
     namespace: str,
     data: dict,
-    suffix: SUFFIX_STR_TYPE,
+    suffix: SUFFIX_STR_TYPE = DEFAULT_SUFFIX,
     scope: str | None = None,
     scope_identifier: str | None = None,
     mode: str = DEFAULT_MODE,
     overwrite: bool = False,
 ) -> dict:
-    new_content = create_file(
+    new_content = create_leaf(
         data_store=data_store,
         namespace=namespace,
         suffix=suffix,
@@ -102,7 +103,7 @@ def create_file_from_data(
     )
     return _validate_and_convert_to_dict(suffix, new_content.encode())
 
-def update_file_data(
+def update_leaf_data(
     data_store: DataStore,
     namespace: str,
     data: dict,
@@ -110,10 +111,10 @@ def update_file_data(
     scope_identifier: str | None = None,
     mode: str = DEFAULT_MODE,
 ) -> dict:
-    content, suffix = read_file(data_store, namespace, scope, scope_identifier, mode)
+    content, suffix = read_leaf(data_store, namespace, scope, scope_identifier, mode)
     current_data = _validate_and_convert_to_dict(suffix, content.encode())
     updated_data = _deep_update(current_data, data)
-    result_data = create_file_from_data(
+    result_data = create_leaf_from_data(
         data_store=data_store,
         namespace=namespace,
         data=updated_data,
@@ -125,7 +126,7 @@ def update_file_data(
     )
     return result_data
 
-def delete_file(
+def delete_leaf(
     data_store: DataStore,
     namespace: str,
     scope: str | None = None,

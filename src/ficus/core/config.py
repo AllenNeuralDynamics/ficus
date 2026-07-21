@@ -2,7 +2,7 @@ import json
 import os
 from loguru import logger
 from pathlib import Path
-from typing import Tuple, Type
+from typing import Tuple, Type, Literal
 
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     config_filename: str = "ficus_setup.json"
     # TODO: if this is ordered, then we also drive merge order from here.
     scopes: set[str] = {"hostname", "subject_id"}
-    store: str = "ZKStore"
+    store: Literal["zookeeper", "file_system"] = "zookeeper"
     root_dir: str = "scratch"
     host: str = "eng-logtools:2181"
 
