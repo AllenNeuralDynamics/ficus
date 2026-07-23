@@ -32,16 +32,17 @@ There are two main ways to use Ficus.
 
 ### Shared Ficus Setup
 <p align="center">
-  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="75%">
+  <img alt="" src="./assets/shared_ficus_setup.drawio.png" width="80%">
 </p>
 
 In this scenario, one Ficus instance is running and distributing configs to many consumers.
-The benefit here is that you can store all your configs in one place, making them easier to batch edit when you need to make major schema-related changes rather than needing to hunt down configs.
+This instance manages the merging/updating/saving of configs within a central data store.
+The benefit with this setup is that you can store all configs in one place, making them easier to batch edit when you need to make major schema-related changes rather than needing to hunt down config on each machine.
 This works well when maintaining lots of configs across many programs by one team.
 
 ### Local Ficus Setup
 <p align="center">
-  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="75%">
+  <img alt="" src="./assets/local_ficus_setup.drawio.png" width="80%">
 </p>
 
 In this scenario, Ficus runs as a python library pointing to a local folder to manage the merging/updating/saving of configs within this folder.
