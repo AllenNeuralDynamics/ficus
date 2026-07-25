@@ -1,0 +1,36 @@
+[project]
+name = "confierge"
+version = "0.1.0"
+
+readme = "README.md"
+requires-python = ">=3.11, <=3.13"
+dependencies = [
+    "pydantic>=2.13.4",
+    "requests>=2.32.5",
+]
+
+[dependency-groups]
+dev = [
+    "ficus",
+    "mypy>=1.19.1",
+    "pytest>=8.4.2",
+    "responses>=0.25",
+    "ruff>=0.15.15",
+    "uvicorn>=0.34",
+]
+
+[tool.uv.sources]
+ficus = { path = "../../", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+markers = [
+    "integration: tests that run against a live Ficus server instance (requires ficus dep)",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
