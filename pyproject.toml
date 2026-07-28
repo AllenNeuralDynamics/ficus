@@ -1,6 +1,6 @@
 [project]
 name = "ficus"
-version = "0.1.1"
+version = "0.1.2"
 description = "API to handle pulling configuration from SIPE's internal zookeeper server and potentially other config datastores"
 readme = "README.md"
 requires-python = ">=3.11, <=3.13"
