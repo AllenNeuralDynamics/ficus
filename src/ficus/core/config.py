@@ -4,6 +4,7 @@ from loguru import logger
 from pathlib import Path
 from typing import Tuple, Type, Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
@@ -39,6 +40,12 @@ class Settings(BaseSettings):
     host: str = "eng-logtools:2181"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("scopes", mode="after")
+    def validate_scopes(cls, v):
+        if "mode" in v:
+            raise ValueError("'mode' cannot be a Scope.")
+        return v
 
     @classmethod
     def settings_customise_sources(
