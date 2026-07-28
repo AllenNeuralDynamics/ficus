@@ -17,15 +17,15 @@ pytestmark = pytest.mark.integration
 
 
 def test_validate_scopes(integration_client: Confierge):
-    """Client scopes should be a subset of the scopes the server reports."""
-    integration_client._validate_scopes()  # raises on mismatch
+    """Known scopes should be accepted without raising."""
+    integration_client.validate_scopes({"hostname"})  # raises on mismatch
 
 
-def test_validate_scopes_superset_raises(ficus_server):
+def test_validate_scopes_superset_raises(ficus_server, tmp_path):
     """Requesting a scope not declared by the server must raise ValueError."""
-    integration_client = Confierge(base_url=f"{ficus_server}/v1", scopes={"hostname", "nonexistent"})
+    client = Confierge(base_url=ficus_server, cache_dir=tmp_path)
     with pytest.raises(ValueError, match="Invalid scopes"):
-        integration_client._validate_scopes()
+        client.validate_scopes({"hostname", "nonexistent"})
 
 
 # ---------------------------------------------------------------------------

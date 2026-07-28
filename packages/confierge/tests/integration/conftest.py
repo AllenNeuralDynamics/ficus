@@ -77,6 +77,6 @@ def ficus_server(tmp_path_factory, store_structure):
 
 
 @pytest.fixture
-def integration_client(ficus_server) -> Confierge:
-    return Confierge(base_url=f"{ficus_server}/v1", scopes={"hostname", "subject_id"})
+def integration_client(ficus_server, tmp_path) -> Confierge:
+    return Confierge(base_url=ficus_server, cache_dir=tmp_path)
 

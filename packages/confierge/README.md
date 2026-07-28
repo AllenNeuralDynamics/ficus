@@ -9,24 +9,21 @@ Simple client for fetching/posting configs to the Ficus API server. Client provi
 ### Example
 
 ```python
-from confierge import Confierge
-import platformdirs
+from confierge import Confierge, cache_dir
 from pydantic_settings import BaseSettings
 
 class MyConfigModel(BaseSettings):
     param1: str
     param2: int
 
-client = Confierge()
-cache_dir = platformdirs.site_data_dir("my_app", "my_organization")
-config = client.get_config_safe("my_app", cache_dir=cache_dir, model=MyConfigModel)"
+client = Confierge(ficus_url, cache_dir=cache_dir("my_app", "my_organization"))
+config = client.get_config_safe("my_app", model=MyConfigModel)"
 
 # Alternately, with a more specific scope:
 client.get_config_safe(
     "my_app",
     mode="high_freq",
     scopes={"hostname": os.getenv("COMPUTERNAME", "unknown")},
-    cache_dir=cache_dir,
     model=MyConfigModel
 )
 ```
@@ -34,16 +31,16 @@ client.get_config_safe(
 ## Caching Behavior
 
 
-``get_cache``:
+``_get_cache``:
 
 1. read cache from file
 2. error if missing
 
-``expire_cache``:
+``_expire_cache``:
 
 1. backdate existing cache (prefix with timestamp)
 
-``save_cache``:
+``_save_cache``:
 
 1. check if data is identical as cache, if identical skip
 2. call expire_cache 
