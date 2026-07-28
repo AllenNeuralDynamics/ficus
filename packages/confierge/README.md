@@ -9,14 +9,14 @@ Simple client for fetching/posting configs to the Ficus API server. Client provi
 ### Example
 
 ```python
-from confierge import Confierge, cache_dir
+from confierge import Confierge, get_cache_dir
 from pydantic_settings import BaseSettings
 
 class MyConfigModel(BaseSettings):
     param1: str
     param2: int
 
-client = Confierge(ficus_url, cache_dir=cache_dir("my_app", "my_organization"))
+client = Confierge(ficus_url, cache_dir=get_cache_dir("my_app", "my_organization"))
 config = client.get_config_safe("my_app", model=MyConfigModel)"
 
 # Alternately, with a more specific scope:

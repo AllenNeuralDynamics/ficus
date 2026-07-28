@@ -27,9 +27,9 @@ def client(tmp_path) -> Confierge:
 # ---------------------------------------------------------------------------
 
 
-def test_init_base_url_from_env(monkeypatch, tmp_path):
+def test_init_base_url_from_env(monkeypatch):
     monkeypatch.setenv("FICUS_BASE_URL", "http://env-host/v1")
-    assert Confierge(cache_dir=tmp_path).base_url == "http://env-host/v1"
+    assert Confierge().base_url == "http://env-host/v1"
 
 
 # ---------------------------------------------------------------------------

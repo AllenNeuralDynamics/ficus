@@ -14,7 +14,7 @@ import requests
 logger = getLogger(__name__)
 
 
-def cache_dir(appname: str, appauthor: Optional[str] = None, version: Optional[str] = None) -> Path:
+def get_cache_dir(appname: str, appauthor: Optional[str] = None, version: Optional[str] = None) -> Path:
     """Small method to construct a good cache directory for an application.
     Use platformdirs for more customization."""
     app_dir = platformdirs.site_data_dir(
@@ -32,9 +32,14 @@ class Confierge:
 
     Examples
     --------
-    >>> confierge = Confierge(base_url="http://ficus.test/v1", cache_dir=cache_dir("my_app"))
+    >>> confierge = Confierge(base_url="http://ficus.test/v1", cache_dir=get_cache_dir("my_app"))
     >>> config_data = confierge.get_config_safe("my_app")
     """
+
+    cache_dir: Path
+    base_url: str
+    configs_url: str
+    scopes_url: str
 
     def __init__(
         self,
@@ -49,7 +54,7 @@ class Confierge:
         self.scopes_url = f"{self.base_url}/v1/scopes"
 
         if cache_dir is None:
-            cache_dir = cache_dir("confierge")
+            cache_dir = get_cache_dir("confierge")
         self.cache_dir = cache_dir
 
         # TODO: Make cache file format configurable json/yaml
@@ -90,9 +95,7 @@ class Confierge:
         namespace: str,
         mode: Optional[str],
         scopes: Optional[dict[str, str]],
-    ) -> Path | None:
-        if self.cache_dir is None:
-            return None
+    ) -> Path:
         scope_part = "_".join(f"{k}-{v}" for k, v in sorted((scopes or {}).items()))
         mode_part = f"{mode}" if mode else ""
         return self.cache_dir / f"{namespace}_{scope_part}_{mode_part}.json"
@@ -110,8 +113,6 @@ class Confierge:
         scopes: Optional[dict[str, str]],
     ) -> dict[str, Any] | None:
         """Generate cache file path based on namespace, identifiers, and mode."""
-        if self.cache_dir is None:
-            return None
         cache_file = self._cache_file_path(namespace, mode, scopes)
         cached_data = cache_file.read_text() if cache_file and cache_file.exists() else None
 
@@ -129,8 +130,6 @@ class Confierge:
         data: dict[str, Any],
     ):
         """Save data to cache file. If file exists, expire old cache. If data the same, skip."""
-        if self.cache_dir is None:
-            return
         curr = self._get_cache(namespace, mode, scopes)
         if curr == data:
             logger.info("New data is identical to cached data, skipping cache save.")
@@ -194,46 +193,39 @@ class Confierge:
         try:
             data = self.get_config(namespace, mode, scopes)
         except requests.RequestException:
-            if self.cache_dir is None:
-                raise
-            else:
-                cache_file = self._cache_file_path(namespace, mode, scopes)
-                cached_data = self._get_cache(namespace, mode, scopes)
+            cache_file = self._cache_file_path(namespace, mode, scopes)
+            cached_data = self._get_cache(namespace, mode, scopes)
 
-                if cached_data is not None:
-                    data = cached_data
-                    logger.warning(
-                        f"Error fetching config, using cached config from {cache_file}",
-                        exc_info=True,
-                    )
-                else:
-                    raise
+            if cached_data is not None:
+                data = cached_data
+                logger.warning(
+                    f"Error fetching config, using cached config from {cache_file}",
+                    exc_info=True,
+                )
+            else:
+                raise
 
         # validate the data
         if model is not None:
             try:
                 config = model.model_validate(data)
             except ValidationError:
-                if self.cache_dir is None:
-                    raise
+                # TODO: save the invalid data to a separate file for debugging
+                cache_file = self._cache_file_path(namespace, mode, scopes)
+                cached_data = self._get_cache(namespace, mode, scopes)
+                if cached_data is not None:
+                    config = model.model_validate(json.loads(cached_data))
+                    logger.warning(
+                        f"Could not validate new data, using cached config from {cache_file}",
+                        exc_info=True,
+                    )
                 else:
-                    # TODO: save the invalid data to a separate file for debugging
-                    cache_file = self._cache_file_path(namespace, mode, scopes)
-                    cached_data = self._get_cache(namespace, mode, scopes)
-                    if cached_data is not None:
-                        config = model.model_validate(json.loads(cached_data))
-                        logger.warning(
-                            f"Could not validate new data, using cached config from {cache_file}",
-                            exc_info=True,
-                        )
-                    else:
-                        raise
+                    raise
         else:
             config = data
 
         # Cache the new config
-        if self.cache_dir is not None:
-            self._save_cache(namespace, mode, scopes, data=data)
+        self._save_cache(namespace, mode, scopes, data=data)
 
         return config
 
