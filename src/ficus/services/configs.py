@@ -41,8 +41,8 @@ def get_config(
     """
     Get config data from store based on namespace and scopes.
 
-    If mode is given, ficus will find the mode overrides (<mode>.yml) within each scope, and use 
-    those values to override the default mode (default.yml) in each scope. If mode is None, just 
+    If mode is given, ficus will find the mode overrides (<mode>.yml) within each scope, and use
+    those values to override the default mode (default.yml) in each scope. If mode is None, just
     default.yml will be used from each scope.
 
     If merge is true, function will merge config files found in each scope. The merge is done in
@@ -88,6 +88,7 @@ def get_config(
         InvalidScopeIdentifierError
             if a required scope identifier does not exist.
     """
+    cfg_not_found_msg = f"Could not find config: {mode}.{list(VALID_EXTENSIONS)}"
     try:
         file_override_paths = get_override_stack(data_store=data_store,
                                                       namespace=namespace,
@@ -95,9 +96,9 @@ def get_config(
                                                       mode=mode,
                                                       scope_ids_must_exist=scope_ids_must_exist)
     except FileNotFoundError:
-        raise ConfigNotFoundError()
+        raise ConfigNotFoundError(cfg_not_found_msg)
     if not file_override_paths:
-        raise ConfigNotFoundError()
+        raise ConfigNotFoundError(cfg_not_found_msg)
     config = ConfigObject(
         data = {},
         namespace = namespace,
@@ -110,7 +111,7 @@ def get_config(
         override_data_bytes = data_store.read(filepath)
         override_data = _validate_and_convert_to_dict(filepath.suffix, override_data_bytes)
         config.data = _deep_update(override_data, config.data)
-    
+
     return config
 
 
@@ -205,7 +206,7 @@ def _save_one_config_override( #TODO: refactor to use file_crud methods
         if not overwrite:
             raise ConfigExistsError(f"Cannot overwrite config with mode '{mode}' in {target_folder}"
                                     " without overwrite=True")
-        
+
         if suffix is None: # use the suffix of the existing file
             suffix = mode_in_scope[0].suffix
         elif suffix != mode_in_scope[0].suffix:
@@ -267,7 +268,7 @@ def save_config(
         if new fields are created, append them at the lowest level scope.
         Error if new fields are created and this flag is set to False.
     create_missing_namespace: bool
-        If True, create the namespace in the default scope of the data store if it 
+        If True, create the namespace in the default scope of the data store if it
         does not already exist.
 
     Returns
@@ -280,7 +281,7 @@ def save_config(
     UnsupportedFileTypeError
         Raised if the provided suffix is not in the list of valid extensions.
     ConfigMutatedError
-        Raised if the configuration data has new fields and 
+        Raised if the configuration data has new fields and
         `append_new_fields_to_last_scope` is False.
     """
     if suffix is not None and suffix not in VALID_EXTENSIONS:
@@ -294,7 +295,7 @@ def save_config(
                                         create_missing_namespace=create_missing_namespace)
     if not override_stack:
         _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
-                    mode=mode, suffix=suffix, data=data, 
+                    mode=mode, suffix=suffix, data=data,
                     create_missing_namespace=create_missing_namespace)
         return
     # Convert all suffixes to the desired suffix.
@@ -314,7 +315,7 @@ def save_config(
     data_cpy = copy.deepcopy(data)
     for idx, filepath in reversed(list(enumerate(override_stack_new_suffix))):
         filepath_old_suffix = override_stack[idx]
-        old_level_cfg = _validate_and_convert_to_dict(filepath_old_suffix.suffix, 
+        old_level_cfg = _validate_and_convert_to_dict(filepath_old_suffix.suffix,
                                                       data_store.read(filepath_old_suffix))
         level_cfg = copy.deepcopy(old_level_cfg)
         _deep_update_existing_destructive(level_cfg, data_cpy)
@@ -394,8 +395,8 @@ def update_config(
         dict
             Leftover fields that were not merged into the existing configuration.
     """
-    
-    config = get_config(data_store=data_store, namespace=namespace, mode=mode, 
+
+    config = get_config(data_store=data_store, namespace=namespace, mode=mode,
                              scope_identifiers=scope_identifiers)
     updated_data = _deep_update(config.data, data)
     return save_config(data=updated_data, data_store=data_store, namespace=namespace, mode=mode,
@@ -487,6 +488,7 @@ def delete_config(
             _delete_one_config_override(data_store=data_store, namespace=ns, scope_identifier=scope_id,
                           mode=Path(filename).stem)
 
+
 def get_override_stack(
     data_store: DataStore,
     namespace: str,
@@ -529,11 +531,11 @@ def get_override_stack(
             For example:
                 [./defaults/software_a/default.yml, ./hostname/w11dt000001/software_a/default.yml]
                 or, if mode is provided (not default):
-                [./defaults/software_a/default.yml, 
-                 ./defaults/software_a/mode.yml, 
-                 ./hostname/w11dt000001/software_a/default.yml, 
+                [./defaults/software_a/default.yml,
+                 ./defaults/software_a/mode.yml,
+                 ./hostname/w11dt000001/software_a/default.yml,
                  ./hostname/w11dt000001/software_a/mode.yml]
-            
+
     Raises:
     -------
         FileNotFoundError
@@ -548,7 +550,7 @@ def get_override_stack(
     """
     # Warning: we don't check to see if multiple defaults are present.
     override_stack = []
-    valid_filestems = {"default", mode}
+    valid_filestems = {DEFAULT_MODE, mode}
     paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
     # Make sure that paths exist in the data store
     paths = _ensure_paths(data_store=data_store, paths=paths,
@@ -573,3 +575,59 @@ def get_override_stack(
             raise FileNotFoundError()
     return override_stack
 
+
+def get_all_modes(
+    data_store: DataStore,
+    namespace: str,
+    scope_identifiers: dict[ScopeName, str] | None = None,
+    scope_ids_must_exist: set[ScopeName] | None = None,
+    lowest_scope_only: bool = True
+) -> set[str]:
+    """Get all modes for the given namespace and scope identifiers.
+
+    Parameters:
+    -----------
+        data_store: DataStore
+            storage location to search.
+        namespace: str
+            The namespace for the configuration files.
+        scope_identifiers: dict[ScopeName, str]
+            A dict, keyed by scope name, of identifiers per scope to filter by.
+            If None are provided, only include the default scope.
+        scope_ids_must_exist: set[ScopeName] | None
+            Scopes whose identifier folders are required to exist. A missing
+            identifier for one of these scopes raises InvalidScopeIdentifierError.
+        lowest_scope_only: bool
+            if True, only return modes present in the lowest scope. Otherwise,
+            return modes found in any scope.
+
+    Returns:
+    --------
+        a list of modes.
+
+    Raises:
+    -------
+        InvalidNamespaceError
+            if the namespace does not exist.
+        InvalidScopeError
+            if a scope does not exist.
+        InvalidScopeIdentifierError
+            if a scope identifier does not exist.
+    """
+    found_modes = set()
+    paths = _get_all_search_paths(data_store, namespace, scope_identifiers)
+    # Make sure that paths exist in the data store
+    paths = _ensure_paths(data_store=data_store, paths=paths,
+                          create_missing_namespace=False,
+                          scope_ids_must_exist=scope_ids_must_exist)
+    # Get defaults, followed by config name in each namespace.
+    for folder_path in reversed(paths):
+        # Sort alphabetized with defaults first.
+        for found_file in data_store.list_files(folder_path):
+            fp = Path(found_file)
+            # Append valid mode.
+            if ((not fp.suffix) or fp.suffix.lower() in VALID_EXTENSIONS):
+                found_modes.add(fp.stem)
+        if lowest_scope_only:
+            break
+    return found_modes

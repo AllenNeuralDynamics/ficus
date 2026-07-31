@@ -9,6 +9,9 @@ Focuses on:
 - 404 for missing namespace
 """
 
+from ficus.services.utils import DEFAULT_MODE
+
+
 BASE = "/v1/configs"
 
 
@@ -65,6 +68,16 @@ def test_get_config_with_multiple_scope_identifiers(client):
 def test_get_config_not_found_returns_404(client):
     response = client.get(f"{BASE}/nonexistent_namespace")
     assert response.status_code == 404
+
+
+def test_get_all_modes(client):
+    response = client.get(
+        f"{BASE}/software_a/modes",
+        params={
+            "lowest_scope_only": False,
+            "scope_identifiers": "hostname:w10dtburno"},
+    )
+    assert response.json() == ['config', DEFAULT_MODE]
 
 
 # ---------------------------------------------------------------------------
