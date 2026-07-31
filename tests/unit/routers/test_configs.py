@@ -42,7 +42,7 @@ def test_get_config_default_scope_returns_merged_data(client):
 def test_get_config_with_single_scope_identifier(client):
     response = client.get(
         f"{BASE}/software_a",
-        params={"scope_identifiers": "hostname:w11dt000001"},
+        params={"hostname": "w11dt000001"},
     )
     assert response.status_code == 200
     data = response.json()["config"]["data"]
@@ -50,12 +50,24 @@ def test_get_config_with_single_scope_identifier(client):
     assert "computer-default-value" in data
 
 
+def test_get_config_with_mode_and_scope(client):
+    response = client.get(
+        f"{BASE}/software_a",
+        params={"mode": "config", "hostname": "w11dt000001"},
+    )
+    assert response.status_code == 200
+    data = response.json()["config"]["data"]
+    assert "default-default-value" in data
+    assert "computer-default-value" in data
+    assert data["name"] == "config"
+
+
 def test_get_config_with_multiple_scope_identifiers(client):
     response = client.get(
         f"{BASE}/software_a",
         params=[
-            ("scope_identifiers", "hostname:w11dt000001"),
-            ("scope_identifiers", "subject_id:614173"),
+            ("hostname", "w11dt000001"),
+            ("subject_id", "614173"),
         ],
     )
     assert response.status_code == 200
@@ -81,31 +93,6 @@ def test_get_all_modes(client):
 
 
 # ---------------------------------------------------------------------------
-# scope_identifiers format validation (Option B)
-# ---------------------------------------------------------------------------
-
-def test_get_config_bad_scope_identifier_missing_colon_returns_422(client):
-    response = client.get(
-        f"{BASE}/software_a",
-        params={"scope_identifiers": "badformat"},
-    )
-    assert response.status_code == 422
-    assert "key:value" in response.json()["detail"]
-
-
-def test_get_config_scope_identifier_with_colon_in_value(client):
-    """Values containing ':' should be preserved (split on first colon only)."""
-    # A scope identifier like "env:us:east" should parse key="env", value="us:east".
-    # The namespace won't exist so we expect 404, not 422.
-    response = client.get(
-        f"{BASE}/software_a",
-        params={"scope_identifiers": "hostname:us:east"},
-    )
-    # Parsing succeeds (no 422); the namespace/scope lookup may 404 but format is valid
-    assert response.status_code != 422
-
-
-# ---------------------------------------------------------------------------
 # POST /{namespace}
 # ---------------------------------------------------------------------------
 
@@ -123,7 +110,7 @@ def test_post_config_with_scope_identifier(client):
     # and save_config creates a fresh file — isolating the routing/parsing logic.
     response = client.post(
         f"{BASE}/new_scoped_app",
-        params={"scope_identifiers": "hostname:w11dt000001"},
+        params={"hostname": "w11dt000001"},
         json={"new-setting": "value"},
     )
     assert response.status_code == 200
