@@ -88,7 +88,12 @@ def get_config(
         InvalidScopeIdentifierError
             if a required scope identifier does not exist.
     """
-    cfg_not_found_msg = f"Could not find config: {mode}.{list(VALID_EXTENSIONS)}"
+    required_scope_ids = {k:v for k,v in scope_identifiers.items() if k in scope_ids_must_exist}
+    cfg_not_found_msg = (
+        f"Could not find config: {mode}.{list(VALID_EXTENSIONS)} for the specified "
+        f"namespace ({namespace})"
+        + f" and required scope identifiers ({required_scope_ids})." if required_scope_ids else "."
+    )
     try:
         file_override_paths = get_override_stack(data_store=data_store,
                                                       namespace=namespace,
