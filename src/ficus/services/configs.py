@@ -88,6 +88,10 @@ def get_config(
         InvalidScopeIdentifierError
             if a required scope identifier does not exist.
     """
+    if scope_identifiers is None:
+        scope_identifiers = {}
+    if scope_ids_must_exist is None:
+        scope_ids_must_exist = set()
     required_scope_ids = {k:v for k,v in scope_identifiers.items() if k in scope_ids_must_exist}
     cfg_not_found_msg = (
         f"Could not find config: {mode}.{list(VALID_EXTENSIONS)} for the specified "
@@ -96,10 +100,13 @@ def get_config(
     )
     try:
         file_override_paths = get_override_stack(data_store=data_store,
-                                                      namespace=namespace,
-                                                      scope_identifiers=scope_identifiers,
-                                                      mode=mode,
-                                                      scope_ids_must_exist=scope_ids_must_exist)
+                                                 namespace=namespace,
+                                                 scope_identifiers=scope_identifiers,
+                                                 mode=mode,
+                                                 scope_ids_must_exist=scope_ids_must_exist,
+                                                 mode_must_exist_in_any_scope=True,
+                                                 mode_must_exist_in_lowest_scope=True,
+                                                 create_missing_namespace=False)
     except FileNotFoundError:
         raise ConfigNotFoundError(cfg_not_found_msg)
     if not file_override_paths:
@@ -108,7 +115,7 @@ def get_config(
         data = {},
         namespace = namespace,
         mode = mode,
-        scope_identifiers = scope_identifiers or {},
+        scope_identifiers = scope_identifiers,
         override_stack = file_override_paths
     )
     # Iterate backwards so we can return immediately if not merging.
@@ -295,8 +302,8 @@ def save_config(
                                         namespace=namespace,
                                         scope_identifiers=scope_identifiers,
                                         mode=mode,
-                                        must_exist_in_any_scope=False,
-                                        must_exist_in_lowest_scope=False,
+                                        mode_must_exist_in_any_scope=False,
+                                        mode_must_exist_in_lowest_scope=False,
                                         create_missing_namespace=create_missing_namespace)
     if not override_stack:
         _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
@@ -500,8 +507,8 @@ def get_override_stack(
     mode: str = "default",
     scope_identifiers: dict[ScopeName, str] | None = None,
     scope_ids_must_exist: set[ScopeName] | None = None,
-    must_exist_in_any_scope: bool = True,
-    must_exist_in_lowest_scope: bool = True,
+    mode_must_exist_in_any_scope: bool = True,
+    mode_must_exist_in_lowest_scope: bool = True,
     create_missing_namespace: bool = False,
 ) -> list[Path]:
     """For a given namespace, scope_identifiers, and mode, return the full
@@ -522,9 +529,9 @@ def get_override_stack(
         scope_ids_must_exist: set[ScopeName] | None
             Scopes whose identifier folders are required to exist. A missing
             identifier for one of these scopes raises InvalidScopeIdentifierError.
-        must_exist_in_any_scope: bool
+        mode_must_exist_in_any_scope: bool
             If True, the mode must exist in at least one scope, otherwise a FileNotFoundError is raised.
-        must_exist_in_lowest_scope: bool
+        mode_must_exist_in_lowest_scope: bool
             If True, the mode must exist in the lowest scope, otherwise a FileNotFoundError is raised.
         create_missing_namespace: bool
             If True, create the namespace folder if it does not exist.
@@ -544,8 +551,8 @@ def get_override_stack(
     Raises:
     -------
         FileNotFoundError
-            Raised if the must_exist_in_any_scope=True and mode is not found anywhere or
-             if must_exist_in_lowest_scope=True and mode is not found in lowest scope.
+            Raised if the mode_must_exist_in_any_scope=True and mode is not found anywhere or
+             if mode_must_exist_in_lowest_scope=True and mode is not found in lowest scope.
         InvalidNamespaceError
             if the namespace does not exist.
         InvalidScopeError
@@ -571,11 +578,11 @@ def get_override_stack(
             if fp.stem in valid_filestems and ((not fp.suffix)
                                                or fp.suffix.lower() in VALID_EXTENSIONS):
                 override_stack.append(folder_path / found_file)
-    if must_exist_in_any_scope:
+    if mode_must_exist_in_any_scope:
         found_filenames = [f.stem for f in override_stack]
         if mode not in found_filenames:
             raise FileNotFoundError()
-    if must_exist_in_lowest_scope:
+    if mode_must_exist_in_lowest_scope:
         if override_stack[-1].stem != mode:
             raise FileNotFoundError()
     return override_stack
