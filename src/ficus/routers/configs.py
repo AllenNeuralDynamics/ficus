@@ -147,7 +147,7 @@ def delete_config_endpoint(
 
 
 @router.get("/{namespace}/modes")
-def get_all_scopes_endpoint(
+def get_all_modes_endpoint(
     namespace: str,
     scope_identifiers: dict[str, str] = Depends(_parse_scopes),
     lowest_scope_only: bool = True,
