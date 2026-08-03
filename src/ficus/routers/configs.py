@@ -12,6 +12,7 @@ from ficus.services.configs import (
     save_config,
     update_config,
     delete_config,
+    get_all_modes,
 )
 from .utils import data_store
 
@@ -141,5 +142,24 @@ def delete_config_endpoint(
         return ConfigResponse(
             message="Successfully deleted configuration file",
         )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{namespace}/modes")
+def get_all_modes_endpoint(
+    namespace: str,
+    scope_identifiers: dict[str, str] = Depends(_parse_scopes),
+    lowest_scope_only: bool = True,
+    data_store: DataStore = Depends(data_store),
+) -> list[str]:
+    try:
+        modes = get_all_modes(
+            data_store,
+            namespace=namespace,
+            scope_identifiers=scope_identifiers,
+            lowest_scope_only=lowest_scope_only
+        )
+        return sorted(list(modes))
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
