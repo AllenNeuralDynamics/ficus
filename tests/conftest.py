@@ -40,6 +40,11 @@ def store_structure():
                         "default.json": {"computer-default-value": "to rule them all"},
                         "config.yml": {"computer-layer-value": "boop boop"}
                     }
+                },
+                "w10dtburno": {
+                    "software_a": {
+                        "config.yml": {"burno-key": "burno-value"}
+                    }
                 }
             },
             "subject_id": {
