@@ -10,7 +10,6 @@ import platformdirs
 from pydantic import BaseModel, ValidationError
 import requests
 
-
 logger = getLogger(__name__)
 
 
@@ -235,10 +234,20 @@ class Confierge:
         config_data: dict,
         mode: Optional[str] = None,
         scopes: Optional[dict[str, str]] = None,
+        overwrite_defaults: bool = False,
+        create_if_missing: bool = False,
+        append_new_fields_to_last_scope: bool = False,
     ):
         """Post config data to save to the database"""
         url = f"{self.configs_url}/{namespace}"
         params = {"mode": mode} if mode else {}
+        params.update(
+            {
+                "overwrite_defaults": overwrite_defaults,
+                "create_if_missing": create_if_missing,
+                "append_new_fields_to_last_scope": append_new_fields_to_last_scope,
+            }
+        )
 
         if scopes:
             self.validate_scopes(set(scopes.keys()))
