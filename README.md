@@ -216,8 +216,62 @@ Doing so will walk up the override hierarchy and replace updated fields values w
 
 Let's work through a couple examples:
 
-### Example 1: Tune a rig; save back rig-specific values
-** TODO: example for this **
+### Example 1: Pull a hostname config; save subject-specific stage coordinates
+Suppose you start by loading the config for a specific rig, then discover that one subject needs different stage coordinates. Those coordinates should be saved as a subject-specific override, not written back to the rig-level hostname config.
+
+```python
+from ficus.services.configs import get_config, save_config
+from aind_behavior_vr_foraging.rig import AindVrForagingRig
+
+
+namespace = "vr_frg"
+mode = "default"
+
+# Pull the config that applies to this rig.
+rig_config = get_config(
+    data_store=data_store,
+    namespace=namespace,
+    scope_identifiers={"hostname": "w10dtburno"},
+    mode=mode,
+)
+
+# Update only the subject-specific offset values in your application model.
+rig = AindVrForagingRig(**rig_config.data)
+rig.manipulator.subject_offset = calculate_subject_offset(data_dir, rig)
+
+# Dump only the keys that should become a subject override.
+subject_stage_override = rig.model_dump(
+    include={"manipulator": {"subject_offset": True}}
+)
+
+save_config(
+    data_store=data_store,
+    namespace=namespace,
+    mode=mode,
+    data=subject_stage_override,
+    scope_identifiers={"subject_id": "new_subject"},
+    append_new_fields_to_last_scope=True,
+)
+```
+
+What gets written back to each scope:
+
+- `subject_id/new_subject/vr_frg/default.yml` gets only `manipulator.subject_offset`, because that is the only key included in `subject_stage_override`.
+- If `subject_id/new_subject` does not already exist, `save_config(..., append_new_fields_to_last_scope=True)` will create that scope identifier folder before writing the override file.
+- `hostname/w10dtburno/vr_frg/default.yml` gets nothing from this save call, because the call targets only `scope_identifiers={"subject_id": "new_subject"}`.
+- Any other rig-level fields already present in `rig_config.data`, such as COM ports or hostname-specific hardware settings, are not written back because they are not included in the payload passed to `save_config`.
+
+The resulting subject override file would look like this:
+
+```yaml
+manipulator:
+    subject_offset:
+        x_mm: 1.25
+        y_mm: -0.4
+        z_mm: 0.85
+```
+
+This is the pattern to use when you want to read a merged rig config, compute a subject-specific adjustment from it, and persist only that adjustment at the `subject_id` scope.
 
 ### Example 2: Tune a rig; Make new values apply to all rigs 
 ** TODO: example for this **
@@ -225,32 +279,6 @@ Let's work through a couple examples:
 ### Example 3: dynamically adding new fields.
 With _save_config_deep_, it's not possible to _add_ fields that were not present in any of the previous configs except in the highest-priority override level.
 ** TODO: example **
-
-### Example 4: Creating a new scope identifier
-Suppose the default and `hostname` layers already exist, and you want to create a new final `subject_id` override for a single subject without changing the earlier layers.
-
-```python
-save_config(
-    data_store=data_store,
-    namespace="software_a",
-    scope_identifiers={
-        "hostname": "w11dt000001",
-        "subject_id": "new_subject",
-    },
-    mode="config",
-    data={"working": True},
-    append_new_fields_to_last_scope=True,
-)
-```
-
-This is allowed because:
-
-- `defaults/software_a/config.yml` already exists
-- `hostname/w11dt000001/software_a/config.yml` already exists
-- `subject_id/new_subject/software_a/config.yml` does not exist
-- `subject_id` is the highest-priority scope in the dict and is the only missing scope identifier
-
-In that case, Ficus creates the new `subject_id` folder and writes the config only to that new subject leaf. It does not rewrite the default or hostname files.
 
 ### Scope Details for this Setup
 

@@ -339,7 +339,6 @@ def save_config(
                                   data=data,
                                   create_missing_namespace=create_missing_namespace,
                                   create_missing_scope_id=True)
-        return {}
     
     # Convert all suffixes to the desired suffix.
     # (Flat _save_one_config_override will convert the file format.)

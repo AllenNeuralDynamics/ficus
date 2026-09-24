@@ -358,14 +358,14 @@ def test_deep_save_existing_field_to_new_highest_priority_scope_id(data_store):
         scope_identifiers=scope_identifiers,
         mode=mode,
     )
-    config.data["computer-layer-value"] = "subject override"
+    subject_config = {"default-layer-value": "subject override"}
 
     save_config(
         data_store=data_store,
         namespace=namespace,
         mode=mode,
-        data=config.data,
-        scope_identifiers=scope_identifiers,
+        data=subject_config,
+        scope_identifiers={"subject_id": "new_subject"},
         append_new_fields_to_last_scope=True,
     )
 
@@ -385,7 +385,7 @@ def test_deep_save_existing_field_to_new_highest_priority_scope_id(data_store):
         scope="subject_id",
         scope_identifier="new_subject",
     )
-    assert new_subject_data["computer-layer-value"] == "subject override"
+    assert new_subject_data["default-layer-value"] == "subject override"
 
 
 def test_deep_save_missing_non_last_scope_id_raises(data_store):
