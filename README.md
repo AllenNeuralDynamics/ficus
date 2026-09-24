@@ -273,6 +273,34 @@ manipulator:
 
 This is the pattern to use when you want to read a merged rig config, compute a subject-specific adjustment from it, and persist only that adjustment at the `subject_id` scope.
 
+Now that the subject-specific override exists, future reads and writes can use the full scope hierarchy as normal:
+
+```python
+# Pull the config that applies to this rig and subject.
+rig_config = get_config(
+    data_store=data_store,
+    namespace=namespace,
+    scope_identifiers={"hostname": "w10dtburno", "subject_id": "new_subject"},
+    mode=mode,
+)
+
+rig = AindVrForagingRig(**rig_config.data)
+
+# Re-tune just the subject-specific manipulator values.
+rig.manipulator.subject_offset = calculate_subject_offset(data_dir, rig)
+
+# Save back with the same scope identifier hierarchy.
+save_config(
+    data_store=data_store,
+    namespace=namespace,
+    mode=mode,
+    data=rig.model_dump(),
+    scope_identifiers={"hostname": "w10dtburno", "subject_id": "new_subject"},
+)
+```
+
+In that follow-up save, Ficus keeps the override at the subject level because `manipulator.subject_offset` now already exists in `subject_id/new_subject/vr_frg/default.yml`. Hostname-level fields continue to save back to the hostname scope, and subject-level fields continue to save back to the subject scope.
+
 ### Example 2: Tune a rig; Make new values apply to all rigs 
 ** TODO: example for this **
 
