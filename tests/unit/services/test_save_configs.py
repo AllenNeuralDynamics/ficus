@@ -230,6 +230,21 @@ def test_deep_save_multiple_scopes_no_changes(data_store):
         data=config.data,
     )
 
+def test_deep_save_new_namespace_new_scope_id(data_store):
+    namespace="new_namespace"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
+    mode="config"
+    config = {"testing": "ni-haody"}
+    save_config(
+        data_store=data_store,
+        namespace=namespace,
+        scope_identifiers=scope_identifiers,
+        mode=mode,
+        data=config,
+        create_missing_namespace=True,
+        append_new_fields_to_last_scope=True,
+    )
+
 def test_deep_save_new_namespace(data_store):
     namespace="new_namespace"
     scope_identifiers = {"hostname": "newnewnew", "subject_id": "614173"}
@@ -304,7 +319,7 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     assert "testing" in data and data["testing"] == "ni-haody"
 
 
-def test_deep_save_missing_last_scope_id_creates_scope(data_store):
+def test_deep_save_new_scope_id(data_store):
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
     mode = "config"
