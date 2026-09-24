@@ -304,6 +304,48 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     assert "testing" in data and data["testing"] == "ni-haody"
 
 
+def test_deep_save_missing_last_scope_id_creates_scope(data_store):
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
+    mode = "config"
+    data = {"testing": "ni-haody"}
+
+    save_config(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        data=data,
+        scope_identifiers=scope_identifiers,
+        append_new_fields_to_last_scope=True,
+    )
+
+    saved = read_leaf_data(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        scope="subject_id",
+        scope_identifier="new_subject",
+    )
+    assert saved == data
+
+
+def test_deep_save_missing_non_last_scope_id_raises(data_store):
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "missing_host", "subject_id": "614173"}
+    mode = "config"
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(InvalidScopeIdentifierError):
+        save_config(
+            data_store=data_store,
+            namespace=namespace,
+            mode=mode,
+            data=data,
+            scope_identifiers=scope_identifiers,
+            append_new_fields_to_last_scope=True,
+        )
+
+
 def test_deep_save_multiple_scopes_restrict_overriding_defaults(data_store):
     namespace="software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "614173"}

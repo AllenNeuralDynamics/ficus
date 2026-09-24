@@ -10,6 +10,8 @@ from ficus.core.exceptions import (
     ConfigNotFoundError,
     PathNotFoundError,
     UnsupportedFileTypeError,
+    InvalidScopeIdentifierError,
+
 )
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigObject
@@ -305,11 +307,40 @@ def save_config(
                                         mode_must_exist_in_any_scope=False,
                                         mode_must_exist_in_lowest_scope=False,
                                         create_missing_namespace=create_missing_namespace)
+    
     if not override_stack:
+        # If there is no override stack, save the config to the default location.
         _save_one_config_override(data_store=data_store, namespace=namespace, scope_identifier=None,
                     mode=mode, suffix=suffix, data=data,
                     create_missing_namespace=create_missing_namespace)
         return
+
+    # determine which scope identifiers are missing in the existing override stack
+    requested_scope_identifiers = set(scope_identifiers)
+    existing_scope_identifiers = set()
+    for filepath in override_stack:
+        _, scope_identifier, _ = _get_parts_from_path(data_store=data_store, path=filepath)
+        if scope_identifier:
+            existing_scope_identifiers.update(scope_identifier)
+    missing_scope_identifiers = requested_scope_identifiers - existing_scope_identifiers
+    
+    if append_new_fields_to_last_scope and missing_scope_identifiers:
+        highest_scope, highest_scope_id = next(reversed(scope_identifiers.items()))
+        if len(missing_scope_identifiers) > 1:
+            raise InvalidScopeIdentifierError(f"Missing more than the highest-priority scope identifier: {missing_scope_identifiers}")
+        if highest_scope not in missing_scope_identifiers:
+            raise InvalidScopeIdentifierError(f"Can only create the highest-priority scope identifier: {highest_scope}")
+
+        _save_one_config_override(data_store=data_store,
+                                  namespace=namespace,
+                                  scope_identifier={highest_scope: highest_scope_id},
+                                  mode=mode,
+                                  suffix=suffix,
+                                  data=data,
+                                  create_missing_namespace=create_missing_namespace,
+                                  create_missing_scope_id=True)
+        return {}
+    
     # Convert all suffixes to the desired suffix.
     # (Flat _save_one_config_override will convert the file format.)
     override_stack_new_suffix = copy.deepcopy(override_stack)

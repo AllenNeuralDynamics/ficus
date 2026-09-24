@@ -226,6 +226,31 @@ Let's work through a couple examples:
 With _save_config_deep_, it's not possible to _add_ fields that were not present in any of the previous configs except in the highest-priority override level.
 ** TODO: example **
 
+### Example 4: Creating a new scope identifier
+Suppose the default and `hostname` layers already exist, and you want to create a new final `subject_id` override for a single subject without changing the earlier layers.
+
+```python
+save_config(
+    data_store=data_store,
+    namespace="software_a",
+    scope_identifiers={
+        "hostname": "w11dt000001",
+        "subject_id": "new_subject",
+    },
+    mode="config",
+    data={"working": True},
+    append_new_fields_to_last_scope=True,
+)
+```
+
+This is allowed because:
+
+- `defaults/software_a/config.yml` already exists
+- `hostname/w11dt000001/software_a/config.yml` already exists
+- `subject_id/new_subject/software_a/config.yml` does not exist
+- `subject_id` is the highest-priority scope in the dict and is the only missing scope identifier
+
+In that case, Ficus creates the new `subject_id` folder and writes the config only to that new subject leaf. It does not rewrite the default or hostname files.
 
 ### Scope Details for this Setup
 
