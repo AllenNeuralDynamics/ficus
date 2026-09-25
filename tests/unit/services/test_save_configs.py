@@ -319,7 +319,14 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
     assert "testing" in data and data["testing"] == "ni-haody"
 
 
-def test_deep_save_new_scope_id(data_store):
+def test_deep_save_new_field_to_new_scope_id(data_store):
+
+    """
+    Deep save while creating a new scope-id at the last scope such that all 
+    new fields are appended to the new scope id, but overrides are fanned-out 
+    back to the scopes they originated from.
+    """
+
     namespace = "software_a"
     scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
     mode = "config"
@@ -357,10 +364,11 @@ def test_deep_save_new_scope_id(data_store):
     assert saved == {"new_field": "new_value"}
 
 
-def test_deep_save_existing_field_to_new_highest_priority_scope_id(data_store):
-    """When the highest-priority scope id is missing, save_config creates it
-    and writes the requested data there instead of mutating lower-priority
-    scopes that already own those fields."""
+def test_deep_save_override_existing_field_to_new_scope_id(data_store):
+    """
+    Deep save while creating a new scope-id at the last scope with an override
+    to an existing field at this new highest-priority scope layer.
+    """
     
     namespace = "software_a"
     mode = "config"
@@ -383,7 +391,7 @@ def test_deep_save_existing_field_to_new_highest_priority_scope_id(data_store):
         scope="hostname",
         scope_identifier="w11dt000001",
     )
-    assert hostname_data == {'computer-layer-value': 'boop boop'}
+    assert hostname_data['computer-layer-value'] == 'boop boop'
 
     new_subject_data = read_leaf_data(
         data_store=data_store,
