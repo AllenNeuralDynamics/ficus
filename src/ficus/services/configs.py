@@ -267,7 +267,8 @@ def save_config(
         the config namespace.
     scope_identifiers: dict[ScopeName, str]
         dict of scope identifiers sorted in lowest-override-priority to
-        highest-override-priority.
+        highest-override-priority. A new identifier can be created only when it is  
+        last in the scope hierarchy.
     data: dict
         The configuration data to be saved.
     mode: str
