@@ -330,16 +330,24 @@ def save_config(
             raise InvalidScopeIdentifierError(f"Missing more than the highest-priority scope identifier: {missing_scope_identifiers}")
         if highest_scope not in missing_scope_identifiers:
             raise InvalidScopeIdentifierError(f"Can only create the highest-priority scope identifier: {highest_scope}")
-
+        # create new highest-priority scope identifier if it is missing with blank data
         _save_one_config_override(data_store=data_store,
                                   namespace=namespace,
                                   scope_identifier={highest_scope: highest_scope_id},
                                   mode=mode,
                                   suffix=suffix,
-                                  data=data,
+                                  data={},
                                   create_missing_namespace=create_missing_namespace,
                                   create_missing_scope_id=True)
-    
+        # recreate the override stack after adding the new highest-priority scope identifier
+        override_stack = get_override_stack(data_store=data_store,
+                                            namespace=namespace,
+                                            scope_identifiers=scope_identifiers,
+                                            mode=mode,
+                                            mode_must_exist_in_any_scope=False,
+                                            mode_must_exist_in_lowest_scope=False,
+                                            create_missing_namespace=create_missing_namespace)
+
     # Convert all suffixes to the desired suffix.
     # (Flat _save_one_config_override will convert the file format.)
     override_stack_new_suffix = copy.deepcopy(override_stack)
