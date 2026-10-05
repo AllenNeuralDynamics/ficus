@@ -56,6 +56,7 @@ class Confierge:
         if cache_dir is None:
             cache_dir = get_cache_dir("confierge")
         self.cache_dir = cache_dir
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # TODO: Make cache file format configurable json/yaml
 
