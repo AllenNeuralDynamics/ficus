@@ -230,6 +230,21 @@ def test_deep_save_multiple_scopes_no_changes(data_store):
         data=config.data,
     )
 
+def test_deep_save_new_namespace_new_scope_id(data_store):
+    namespace="new_namespace"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
+    mode="config"
+    config = {"testing": "ni-haody"}
+    save_config(
+        data_store=data_store,
+        namespace=namespace,
+        scope_identifiers=scope_identifiers,
+        mode=mode,
+        data=config,
+        create_missing_namespace=True,
+        append_new_fields_to_last_scope=True,
+    )
+
 def test_deep_save_new_namespace(data_store):
     namespace="new_namespace"
     scope_identifiers = {"hostname": "newnewnew", "subject_id": "614173"}
@@ -302,6 +317,107 @@ def test_deep_save_add_new_field_to_lowest_scope(data_store):
                           mode=mode,
                           scope="subject_id", scope_identifier="614173")
     assert "testing" in data and data["testing"] == "ni-haody"
+
+
+def test_deep_save_new_field_to_new_scope_id(data_store):
+
+    """
+    Deep save while creating a new scope-id at the last scope such that all 
+    new fields are appended to the new scope id, but overrides are fanned-out 
+    back to the scopes they originated from.
+    """
+
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "w11dt000001", "subject_id": "new_subject"}
+    mode = "config"
+
+    config = get_config(data_store=data_store, namespace=namespace,
+                           scope_identifiers=scope_identifiers, mode=mode)
+    config.data["new_field"] = "new_value"
+    config.data["computer-layer-value"] = "new boop boop"
+    
+    save_config(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        data=config.data,
+        scope_identifiers=scope_identifiers,
+        append_new_fields_to_last_scope=True,
+    )
+
+    hostname_data = read_leaf_data(
+            data_store=data_store,
+            namespace=namespace,
+            mode=mode,
+            scope="hostname",
+            scope_identifier="w11dt000001",
+        )
+    assert hostname_data == {'computer-layer-value': 'new boop boop'}
+
+    saved = read_leaf_data(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        scope="subject_id",
+        scope_identifier="new_subject",
+    )
+    assert saved == {"new_field": "new_value"}
+
+
+def test_deep_save_override_existing_field_to_new_scope_id(data_store):
+    """
+    Deep save while creating a new scope-id at the last scope with an override
+    to an existing field at this new highest-priority scope layer.
+    """
+    
+    namespace = "software_a"
+    mode = "config"
+
+    subject_config = {"computer-layer-value": "subject override"}
+
+    save_config(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        data=subject_config,
+        scope_identifiers={"subject_id": "new_subject"},
+        append_new_fields_to_last_scope=True,
+    )
+
+    hostname_data = read_leaf_data(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        scope="hostname",
+        scope_identifier="w11dt000001",
+    )
+    assert hostname_data['computer-layer-value'] == 'boop boop'
+
+    new_subject_data = read_leaf_data(
+        data_store=data_store,
+        namespace=namespace,
+        mode=mode,
+        scope="subject_id",
+        scope_identifier="new_subject",
+    )
+    assert new_subject_data["computer-layer-value"] == "subject override"
+
+
+def test_deep_save_missing_non_last_scope_id_raises(data_store):
+    namespace = "software_a"
+    scope_identifiers = {"hostname": "missing_host", "subject_id": "614173"}
+    mode = "config"
+    data = {"testing": "ni-haody"}
+
+    with pytest.raises(InvalidScopeIdentifierError):
+        save_config(
+            data_store=data_store,
+            namespace=namespace,
+            mode=mode,
+            data=data,
+            scope_identifiers=scope_identifiers,
+            append_new_fields_to_last_scope=True,
+        )
 
 
 def test_deep_save_multiple_scopes_restrict_overriding_defaults(data_store):
