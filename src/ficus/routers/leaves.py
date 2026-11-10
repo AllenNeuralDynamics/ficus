@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import ConfigData
@@ -93,7 +93,7 @@ def post_leaf_raw(
     suffix: SUFFIX_STR_TYPE = DEFAULT_SUFFIX,
     scope_pair: tuple[str | None, str | None] = Depends(_validate_scope_pair),
     mode: str = DEFAULT_MODE,
-    content: str = "",
+    content: str = Body(default="", media_type="text/plain"),
     overwrite: bool = False,
     data_store: DataStore = Depends(data_store),
 ):

@@ -131,7 +131,9 @@ def test_post_leaf_data_overwrite_succeeds(client):
 def test_post_leaf_raw_creates_leaf(client):
     response = client.post(
         f"{BASE}/new_raw_app/raw",
-        params={"suffix": ".yml", "content": "key: value\n"},
+        params={"suffix": ".yml"},
+        content="key: value\n",
+        headers={"Content-Type": "text/plain"},
     )
     assert response.status_code == 200
     assert response.json() == {"content": "key: value\n"}
@@ -140,7 +142,9 @@ def test_post_leaf_raw_creates_leaf(client):
 def test_post_leaf_raw_conflict_returns_409(client):
     response = client.post(
         f"{BASE}/software_a/raw",
-        params={"suffix": ".yml", "content": "key: value\n"},
+        params={"suffix": ".yml"},
+        content="key: value\n",
+        headers={"Content-Type": "text/plain"},
     )
     assert response.status_code == 409
 
@@ -183,3 +187,15 @@ def test_delete_leaf_then_get_returns_404(client):
 def test_delete_leaf_not_found_returns_404(client):
     response = client.delete(f"{BASE}/nonexistent_namespace")
     assert response.status_code == 404
+
+
+def test_raw_leaf_accepts_content_in_body(client):
+    content = "# keep this comment\nvalue: " + "x" * 5000 + "\n"
+    response = client.post(
+        "/v1/leaves/new_raw/raw",
+        params={"suffix": ".yml"},
+        content=content,
+        headers={"Content-Type": "text/plain"},
+    )
+    assert response.status_code == 200
+    assert client.get("/v1/leaves/new_raw/raw").json()["content"] == content
