@@ -170,6 +170,20 @@ def test_get_config_safe_raises_when_no_cache_and_network_error(client: Confierg
             client.get_config_safe("app")
 
 
+@rsps.activate
+def test_get_config_safe_keeps_valid_cache_when_new_data_fails_validation(client: Confierge):
+    cached = {"field1": "cached", "field2": 7}
+    client._save_cache("app", None, None, data=cached)
+    rsps.add(
+        rsps.GET,
+        f"{BASE_URL}/v1/configs/app",
+        json={"config": {"data": {"field1": "invalid", "field2": "not an int"}}},
+    )
+    result = client.get_config_safe("app", model=SampleModel)
+    assert result == SampleModel(**cached)
+    assert client._get_cache("app", None, None) == cached
+
+
 # ---------------------------------------------------------------------------
 # post_config_file
 # ---------------------------------------------------------------------------
