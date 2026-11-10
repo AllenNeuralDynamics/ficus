@@ -94,3 +94,7 @@ class DataStore(ABC):
     @abstractmethod
     def list_files(self, path: Path | str) -> list[str]:
         pass
+
+    @abstractmethod
+    def list_directories(self, path: Path | str) -> list[str]:
+        pass
