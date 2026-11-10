@@ -2,6 +2,7 @@ import os
 
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from kazoo.handlers.threading import KazooTimeoutError
 from loguru import logger
 from typing import Any, Dict
@@ -37,6 +38,12 @@ async def lifespan(app: FastAPI):
 app_name = os.getenv("API_NAME", "ficus")
 app = FastAPI(
     root_path=f"/{app_name}", docs_url="/docs", openapi_url="/openapi.json", lifespan=lifespan
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 
 

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     store: Literal["zookeeper", "file_system"] = "zookeeper"
     root_dir: str = "scratch"
     host: str = "eng-logtools:2181"
+    cors_origins: list[str] = []
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
