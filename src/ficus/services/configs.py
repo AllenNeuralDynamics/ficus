@@ -14,7 +14,7 @@ from ficus.core.exceptions import (
 
 )
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigObject
+from ficus.schemas.configs import ConfigLayer, ConfigObject
 from pathlib import Path, PurePath
 from ficus.services.utils import (
     DEFAULT_MODE,
@@ -39,6 +39,7 @@ def get_config(
     scope_identifiers: dict[ScopeName, str] | None = None,
     mode: str = "default",
     scope_ids_must_exist: set[ScopeName] | None = None,
+    include_layers: bool = False,
 ) -> ConfigObject:
     """
     Get config data from store based on namespace and scopes.
@@ -118,13 +119,16 @@ def get_config(
         namespace = namespace,
         mode = mode,
         scope_identifiers = scope_identifiers,
-        override_stack = file_override_paths
+        override_stack = file_override_paths,
+        layers = [] if include_layers else None,
     )
     # Iterate backwards so we can return immediately if not merging.
     for filepath in reversed(file_override_paths):
         override_data_bytes = data_store.read(filepath)
         override_data = _validate_and_convert_to_dict(filepath.suffix, override_data_bytes)
         config.data = _deep_update(override_data, config.data)
+        if include_layers:
+            config.layers.insert(0, ConfigLayer(path=filepath, data=override_data))
 
     return config
 

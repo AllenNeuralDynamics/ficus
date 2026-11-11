@@ -37,6 +37,20 @@ def test_get_config_default_scope_returns_merged_data(client):
     body = response.json()
     assert body["message"] == "Successfully retrieved configuration"
     assert "default-default-value" in body["config"]["data"]
+    assert "layers" not in body["config"]
+
+
+def test_get_config_with_layers_returns_parsed_sources_in_merge_order(client):
+    response = client.get(
+        f"{BASE}/software_a",
+        params={"hostname": "w11dt000001", "layers": "true"},
+    )
+    assert response.status_code == 200
+    config = response.json()["config"]
+    assert [layer["path"] for layer in config["layers"]] == config["override_stack"]
+    assert config["layers"][0]["data"]["default-default-value"] == "the one ring"
+    assert config["layers"][1]["data"]["computer-default-value"] == "to rule them all"
+    assert "computer-default-value" in config["data"]
 
 
 def test_get_config_with_single_scope_identifier(client):
