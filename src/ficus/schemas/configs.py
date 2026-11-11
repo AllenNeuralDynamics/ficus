@@ -52,3 +52,13 @@ class Leaf(LeafRef):
     """A leaf plus its parsed contents."""
 
     data: ConfigData
+
+
+class AcrossConfigItem(BaseModel):
+    identifier: str
+    values: ConfigData
+    sources: dict[str, str | None]
+
+
+class AcrossConfigResponse(BaseModel):
+    items: list[AcrossConfigItem]

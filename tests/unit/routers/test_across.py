@@ -7,8 +7,8 @@ def test_across_scope_works_with_both_stores(data_store):
     items = resolve_across(
         data_store, "software_a", "hostname", "default", ["computer-default-value"]
     )
-    assert [item["identifier"] for item in items] == ["w10dtburno", "w11dt000001"]
-    assert items[1]["values"]["computer-default-value"] == "to rule them all"
+    assert [item.identifier for item in items] == ["w10dtburno", "w11dt000001"]
+    assert items[1].values["computer-default-value"] == "to rule them all"
 
 
 def test_across_scope_returns_values_and_sources(client):
