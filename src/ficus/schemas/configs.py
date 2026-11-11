@@ -25,7 +25,13 @@ class ConfigObject(BaseModel):
     mode: str
     scope_identifiers: dict[str, str]
     override_stack: list[Path]
+    layers: list["ConfigLayer"] | None = None
     # components: list[Leaf] # TODO: switch override stack to list[Leaf]
+
+
+class ConfigLayer(BaseModel):
+    path: Path
+    data: ConfigData
 
 # class Leaf(BaseModel):
 #     content: str
