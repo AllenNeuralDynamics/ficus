@@ -1,7 +1,8 @@
 import json
 import yaml
+from types import SimpleNamespace
 
-from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.exceptions import BadVersionError, NoNodeError, NotEmptyError
 
 
 class Node:
@@ -9,6 +10,7 @@ class Node:
         self.name = name
         self.value = value
         self.children = children if children else {}
+        self.version = 0
 
 
 def print_node(node: Node, indentation=0):
@@ -39,8 +41,8 @@ class FakeZK:
             for part in parts:
                 node = node.children[part]
             if node.value is not None:
-                return json.dumps(node.value).encode("utf-8"), list(node.children.keys())
-            return "".encode("utf-8"), list(node.children.keys())
+                return json.dumps(node.value).encode("utf-8"), SimpleNamespace(version=node.version)
+            return "".encode("utf-8"), SimpleNamespace(version=node.version)
         except KeyError:
             raise NoNodeError
 
@@ -73,7 +75,11 @@ class FakeZK:
         return self._get_zk_node(path)
 
     def get_children(self, path):
-        return self._get_zk_node(path)[1]
+        parts = path.strip("/").split("/")
+        node = self.root
+        for part in parts:
+            node = node.children[part]
+        return list(node.children.keys())
 
     def set(self, path: str, data: bytes, version: int = -1):
         if not isinstance(data, bytes):
@@ -98,7 +104,12 @@ class FakeZK:
                 if part not in node.children:
                     node.children[part] = Node(name=part)
                 node = node.children[part]
+            current = node.children.get(filename)
+            if current and version != -1 and version != current.version:
+                raise BadVersionError
             node.children[filename] = Node(name=filename, value=processed_data)
+            node.children[filename].version = current.version + 1 if current else 0
+            return SimpleNamespace(version=node.children[filename].version)
         except KeyError:
             raise NoNodeError
 
