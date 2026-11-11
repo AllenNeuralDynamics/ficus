@@ -139,13 +139,13 @@ def test_post_leaf_raw_creates_leaf(client):
     assert response.json() == {"content": "key: value\n"}
 
 
-def test_post_leaf_raw_accepts_legacy_query_content(client):
+def test_post_leaf_raw_requires_body(client):
     response = client.post(
         f"{BASE}/legacy_raw/raw",
         params={"content": "key: legacy\n"},
     )
-    assert response.status_code == 200
-    assert client.get(f"{BASE}/legacy_raw/raw").json()["content"] == "key: legacy\n"
+    assert response.status_code == 422
+    assert client.get(f"{BASE}/legacy_raw/raw").status_code == 404
 
 
 def test_post_leaf_raw_prefers_body_over_query_content(client):

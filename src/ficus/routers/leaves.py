@@ -93,8 +93,7 @@ def post_leaf_raw(
     suffix: SUFFIX_STR_TYPE = DEFAULT_SUFFIX,
     scope_pair: tuple[str | None, str | None] = Depends(_validate_scope_pair),
     mode: str = DEFAULT_MODE,
-    content: str | None = Body(default=None, media_type="text/plain"),
-    legacy_content: str = Query(default="", alias="content"),
+    content: str = Body(media_type="text/plain"),
     overwrite: bool = False,
     data_store: DataStore = Depends(data_store),
 ):
@@ -107,7 +106,7 @@ def post_leaf_raw(
             scope,
             scope_identifier,
             mode,
-            content=content if content is not None else legacy_content,
+            content=content,
             overwrite=overwrite,
         )
     except FileExistsError:
