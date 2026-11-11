@@ -3,7 +3,7 @@ name = "confierge"
 version = "0.1.2"
 
 readme = "README.md"
-requires-python = ">=3.11, <=3.13"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "platformdirs>=4.11.0",
     "pydantic>=2.13.4",
