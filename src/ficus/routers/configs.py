@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigDataResponse, ConfigResponse
+from ficus.schemas.configs import AcrossConfigResponse, ConfigDataResponse, ConfigResponse
 from ficus.services.configs import (
     DEFAULT_MODE,
     VALID_EXTENSIONS_TYPE,
@@ -175,10 +175,10 @@ def get_configs_across_scope(
     mode: str = DEFAULT_MODE,
     fields: str | None = None,
     data_store: DataStore = Depends(data_store),
-) -> dict:
+) -> AcrossConfigResponse:
     try:
         names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
-        return {"items": resolve_across(data_store, namespace, scope, mode, names)}
+        return AcrossConfigResponse(items=resolve_across(data_store, namespace, scope, mode, names))
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:

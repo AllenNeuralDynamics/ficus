@@ -33,6 +33,16 @@ class ConfigLayer(BaseModel):
     path: Path
     data: ConfigData
 
+
+class AcrossConfigItem(BaseModel):
+    identifier: str
+    values: ConfigData
+    sources: dict[str, str | None]
+
+
+class AcrossConfigResponse(BaseModel):
+    items: list[AcrossConfigItem]
+
 # class Leaf(BaseModel):
 #     content: str
 #     suffix: str

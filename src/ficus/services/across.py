@@ -1,4 +1,5 @@
 from ficus.database.data_store import DataStore
+from ficus.schemas.configs import AcrossConfigItem
 from ficus.services.configs import get_config
 from ficus.services.discovery import list_scope_identifiers
 
@@ -32,7 +33,7 @@ def resolve_across(
     scope: str,
     mode: str,
     fields: list[str] | None,
-) -> list[dict]:
+) -> list[AcrossConfigItem]:
     items = []
     for identifier in list_scope_identifiers(data_store, scope):
         config = get_config(
@@ -56,5 +57,5 @@ def resolve_across(
                 ),
                 None,
             ) if value is not _MISSING else None
-        items.append({"identifier": identifier, "values": values, "sources": sources})
+        items.append(AcrossConfigItem(identifier=identifier, values=values, sources=sources))
     return items
