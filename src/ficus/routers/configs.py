@@ -1,10 +1,11 @@
 from typing import Annotated
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigDataResponse, ConfigResponse
+from ficus.schemas.configs import ConfigDataResponse, ConfigResponse, DryRunResponse
 from ficus.services.configs import (
     DEFAULT_MODE,
     VALID_EXTENSIONS_TYPE,
@@ -14,9 +15,16 @@ from ficus.services.configs import (
     delete_config,
     get_all_modes,
 )
+from ficus.services.preview import dry_run_save_config, preview_config
+from ficus.utils.dict_merge import _deep_update
 from .utils import data_store
 
 router = APIRouter(prefix="/configs")
+
+
+class PreviewRequest(BaseModel):
+    path: Path
+    data: dict
 
 # We want to support arbitrary scopes passed in as query parameters but there's not a natural way
 # to set that up with how fastapi, as it assumes dict arguments are passed in the body.
@@ -76,10 +84,23 @@ def save_config_endpoint(
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
     create_missing_namespace: bool = True,
+    dry_run: bool = False,
     scope_identifiers: dict[str, str] = Depends(_parse_scopes),
     data_store: DataStore = Depends(data_store),
-) -> ConfigResponse:
+) -> ConfigResponse | DryRunResponse:
     try:
+        if dry_run:
+            return DryRunResponse(changes=dry_run_save_config(
+                data_store,
+                namespace=namespace,
+                mode=mode,
+                scope_identifiers=scope_identifiers,
+                data=data,
+                suffix=suffix,
+                overwrite_defaults=overwrite_defaults,
+                append_new_fields_to_last_scope=append_new_fields_to_last_scope,
+                create_missing_namespace=create_missing_namespace,
+            ))
         save_config(
             data_store,
             namespace,
@@ -106,10 +127,25 @@ def update_config_endpoint(
     suffix: VALID_EXTENSIONS_TYPE | None = None,
     overwrite_defaults: bool = False,
     append_new_fields_to_last_scope: bool = False,
+    dry_run: bool = False,
     scope_identifiers: dict[str, str] = Depends(_parse_scopes),
     data_store: DataStore = Depends(data_store),
-) -> ConfigResponse:
+) -> ConfigResponse | DryRunResponse:
     try:
+        if dry_run:
+            current = get_config(
+                data_store, namespace, mode=mode, scope_identifiers=scope_identifiers
+            )
+            return DryRunResponse(changes=dry_run_save_config(
+                data_store,
+                namespace=namespace,
+                mode=mode,
+                scope_identifiers=scope_identifiers,
+                data=_deep_update(current.data, data),
+                suffix=suffix,
+                overwrite_defaults=overwrite_defaults,
+                append_new_fields_to_last_scope=append_new_fields_to_last_scope,
+            ))
         update_config(
             data_store,
             namespace,
@@ -125,6 +161,25 @@ def update_config_endpoint(
         )
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{namespace}/preview", openapi_extra=scope_params_openapi)
+def preview_config_endpoint(
+    namespace: str,
+    draft: PreviewRequest,
+    mode: str = DEFAULT_MODE,
+    scope_identifiers: dict[str, str] = Depends(_parse_scopes),
+    data_store: DataStore = Depends(data_store),
+) -> ConfigDataResponse:
+    try:
+        config = preview_config(
+            data_store, namespace, draft.path, draft.data, mode, scope_identifiers
+        )
+        return ConfigDataResponse(message="Successfully previewed configuration", config=config)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.delete("/{namespace}", openapi_extra=scope_params_openapi)
