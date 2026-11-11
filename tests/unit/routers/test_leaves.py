@@ -139,6 +139,26 @@ def test_post_leaf_raw_creates_leaf(client):
     assert response.json() == {"content": "key: value\n"}
 
 
+def test_post_leaf_raw_accepts_legacy_query_content(client):
+    response = client.post(
+        f"{BASE}/legacy_raw/raw",
+        params={"content": "key: legacy\n"},
+    )
+    assert response.status_code == 200
+    assert client.get(f"{BASE}/legacy_raw/raw").json()["content"] == "key: legacy\n"
+
+
+def test_post_leaf_raw_prefers_body_over_query_content(client):
+    response = client.post(
+        f"{BASE}/dual_raw/raw",
+        params={"content": "key: legacy\n"},
+        content="key: current\n",
+        headers={"Content-Type": "text/plain"},
+    )
+    assert response.status_code == 200
+    assert client.get(f"{BASE}/dual_raw/raw").json()["content"] == "key: current\n"
+
+
 def test_post_leaf_raw_conflict_returns_409(client):
     response = client.post(
         f"{BASE}/software_a/raw",
