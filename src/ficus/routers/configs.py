@@ -17,6 +17,7 @@ from ficus.services.configs import (
 )
 from ficus.services.preview import dry_run_save_config, preview_config
 from ficus.utils.dict_merge import _deep_update
+from ficus.services.across import resolve_across
 from .utils import data_store
 
 router = APIRouter(prefix="/configs")
@@ -220,3 +221,20 @@ def get_all_modes_endpoint(
         return sorted(list(modes))
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{namespace}/across/{scope}")
+def get_configs_across_scope(
+    namespace: str,
+    scope: str,
+    mode: str = DEFAULT_MODE,
+    fields: str | None = None,
+    data_store: DataStore = Depends(data_store),
+) -> dict:
+    try:
+        names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
+        return {"items": resolve_across(data_store, namespace, scope, mode, names)}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
