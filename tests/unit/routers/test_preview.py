@@ -1,4 +1,22 @@
+from ficus.services.configs import get_config
+from ficus.services.preview import dry_run_save_config
+
 BASE = "/v1/configs/software_a"
+
+
+def test_dry_run_does_not_write_to_either_store(data_store):
+    current = get_config(data_store, "software_a")
+    path = current.override_stack[0]
+    original_bytes = data_store.read(path)
+    changes = dry_run_save_config(
+        data_store,
+        namespace="software_a",
+        scope_identifiers={},
+        data={"default-default-value": "draft"},
+        overwrite_defaults=True,
+    )
+    assert changes[0]["after"]["default-default-value"] == "draft"
+    assert data_store.read(path) == original_bytes
 
 
 def test_preview_merges_draft_without_writing(client):
