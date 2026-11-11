@@ -61,6 +61,13 @@ class PreviewStore(DataStore):
                     existing.add(file_path.name)
         return sorted(existing)
 
+    def list_directories(self, path: Path | str) -> list[str]:
+        path = self._sanitize(path)
+        list_source = getattr(self.source, "list_directories", None)
+        existing = set(list_source(path)) if list_source and self.source.exists(path) else set()
+        existing.update(directory.name for directory in self.directories if directory.parent == path)
+        return sorted(existing)
+
 
 def preview_config(
     data_store: DataStore,
