@@ -27,15 +27,39 @@ def _field_names(data: dict, prefix: str = "") -> list[str]:
     return names
 
 
+def _source(layers, name: str) -> str | None:
+    """Path of the highest layer that sets anything at `name`."""
+    return next(
+        (str(layer.path) for layer in reversed(layers) if _field(layer.data, name) is not _MISSING),
+        None,
+    )
+
+
+def _identifiers(data_store: DataStore, scope: str, identifiers: list[str] | None) -> list[str]:
+    if identifiers is None:
+        return list_scope_identifiers(data_store, scope)
+    if scope not in data_store.scopes:
+        raise ValueError(f"Unknown scope: {scope}")
+    return list(dict.fromkeys(identifiers))
+
+
 def resolve_across(
     data_store: DataStore,
     namespace: str,
     scope: str,
     mode: str,
     fields: list[str] | None,
+    identifiers: list[str] | None = None,
 ) -> list[AcrossConfigItem]:
+    """Resolve `fields` for each identifier of `scope`.
+
+    `identifiers` limits the result to those identifiers, in the given order; an identifier
+    with no folder resolves to the lower layers. `sources[name]` is the highest layer that
+    sets anything at `name`. When `name` resolves to a non-empty object, `sources` also has
+    an entry for every leaf below it, so each field is attributed to its own file.
+    """
     items = []
-    for identifier in list_scope_identifiers(data_store, scope):
+    for identifier in _identifiers(data_store, scope, identifiers):
         config = get_config(
             data_store,
             namespace,
@@ -49,13 +73,9 @@ def resolve_across(
         for name in names:
             value = _field(config.data, name)
             values[name] = None if value is _MISSING else value
-            sources[name] = next(
-                (
-                    str(layer.path)
-                    for layer in reversed(config.layers)
-                    if _field(layer.data, name) is not _MISSING
-                ),
-                None,
-            ) if value is not _MISSING else None
+            sources[name] = None if value is _MISSING else _source(config.layers, name)
+            if isinstance(value, dict) and value:
+                for leaf in _field_names(value, name):
+                    sources.setdefault(leaf, _source(config.layers, leaf))
         items.append(AcrossConfigItem(identifier=identifier, values=values, sources=sources))
     return items

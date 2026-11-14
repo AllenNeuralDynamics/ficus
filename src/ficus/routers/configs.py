@@ -174,11 +174,19 @@ def get_configs_across_scope(
     scope: str,
     mode: str = DEFAULT_MODE,
     fields: str | None = None,
+    identifiers: str | None = None,
     data_store: DataStore = Depends(data_store),
 ) -> AcrossConfigResponse:
+    """Resolve fields across identifiers of a scope.
+
+    `fields` and `identifiers` are comma-separated; omit either to get all of them.
+    """
     try:
         names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
-        return AcrossConfigResponse(items=resolve_across(data_store, namespace, scope, mode, names))
+        ids = [i.strip() for i in identifiers.split(",") if i.strip()] if identifiers else None
+        return AcrossConfigResponse(
+            items=resolve_across(data_store, namespace, scope, mode, names, ids)
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:
