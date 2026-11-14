@@ -33,8 +33,9 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
 class Settings(BaseSettings):
     """Settings for a Ficus Instance."""
     config_filename: str = "ficus_setup.json"
-    # TODO: if this is ordered, then we also drive merge order from here.
-    scopes: set[str] = {"hostname", "subject_id"}
+    # The seed scope precedence (lowest first) for a store without one; configs merge in this order.
+    # Scopes added through POST /v1/scopes/{scope} are appended and kept in the store.
+    scopes: list[str] = ["hostname", "subject_id"]
     store: Literal["zookeeper", "file_system"] = "zookeeper"
     root_dir: str = "scratch"
     host: str = "eng-logtools:2181"
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     def validate_scopes(cls, v):
         if "mode" in v:
             raise ValueError("'mode' cannot be a Scope.")
-        return v
+        return list(dict.fromkeys(v))
 
     @classmethod
     def settings_customise_sources(

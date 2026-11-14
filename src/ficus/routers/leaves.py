@@ -20,12 +20,18 @@ router = APIRouter(prefix="/leaves")
 def _validate_scope_pair(
     scope: str | None = Query(default=None),
     scope_identifier: str | None = Query(default=None),
+    data_store: DataStore = Depends(data_store),
 ) -> tuple[str | None, str | None]:
-    """Require that scope and scope_identifier are always provided together."""
+    """Require scope and scope_identifier together, and a known scope (no writes create scopes)."""
     if (scope is None) != (scope_identifier is None):
         raise HTTPException(
             status_code=422,
             detail="scope and scope_identifier must both be provided or both be omitted",
+        )
+    if scope is not None and scope not in data_store.reload_scopes():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown scope {scope!r}. Known scopes: {', '.join(data_store.scope_order)}.",
         )
     return scope, scope_identifier
 
