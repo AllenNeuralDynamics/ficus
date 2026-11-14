@@ -12,7 +12,8 @@ class PreviewStore(DataStore):
     def __init__(self, source: DataStore):
         self.source = source
         self.rootdir = source.rootdir
-        self.scopes = source.scopes
+        self._seed = list(source.scope_order)
+        self.scope_order = list(source.scope_order)
         self.files: dict[Path, bytes | None] = {}
         self.directories: set[Path] = set()
 

@@ -1,17 +1,62 @@
+import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from pathlib import Path
 
 from ficus.core.exceptions import InvalidScopeError
+
+# Where a store keeps its scope precedence once a scope has been added through the API.
+SCOPE_REGISTRY = Path(".ficus") / "scopes.json"
+# Without a registry, the seed's order; a seed given as a set (no order) puts these first.
+DEFAULT_PRECEDENCE = ("hostname", "subject_id")
+
+
+def ordered_scopes(scopes: Iterable[str]) -> list[str]:
+    """A seed as an ordered list: lists keep their order; sets put the AIND scopes first."""
+    if isinstance(scopes, (list, tuple)):
+        return list(dict.fromkeys(scopes))
+    rank = {name: i for i, name in enumerate(DEFAULT_PRECEDENCE)}
+    return sorted(set(scopes), key=lambda s: (rank.get(s, len(rank)), s))
 
 class DataStore(ABC):
     """Base Class for interacting with generic storage: Folders, Database, etc.
     """
 
-    def __init__(self, rootdir: Path | str, scopes: set[str],
+    def __init__(self, rootdir: Path | str, scopes: Iterable[str],
                  create_missing_scopes: bool = True):
         self.rootdir: Path = Path(rootdir)
-        self.scopes: set = scopes
-        self.validate_scopes(scopes, create_missing=create_missing_scopes)
+        self._seed: list[str] = ordered_scopes(scopes)
+        self.scope_order: list[str] = list(self._seed)
+        self.reload_scopes()
+        self.validate_scopes(set(self.scope_order), create_missing=create_missing_scopes)
+
+    @property
+    def scopes(self) -> set[str]:
+        """The scopes this store knows (see scope_order for their precedence)."""
+        return set(self.scope_order)
+
+    def reload_scopes(self) -> list[str]:
+        """Read the precedence: the registry if any (plus seed scopes it lacks), else the seed.
+
+        Scopes merge in this order, lowest first, whatever order a request lists them in.
+        """
+        order = list(self._seed)
+        registry = self.rootdir / SCOPE_REGISTRY
+        if self.exists(registry):
+            stored = json.loads(self.read(registry).decode("utf-8"))
+            order = list(dict.fromkeys(stored)) + [s for s in self._seed if s not in stored]
+        self.scope_order = order
+        return order
+
+    def write_scope_order(self, order: list[str]) -> None:
+        """Persist the precedence (only done when a scope is added through the API)."""
+        registry = self.rootdir / SCOPE_REGISTRY
+        data = json.dumps(order).encode("utf-8")
+        if self.exists(registry):
+            self.update(registry, data, force=True)
+        else:
+            self.create(registry, data)
+        self.scope_order = list(order)
 
     def _sanitize(self, path: str | Path) -> Path:
         """Coax path into path that is relative to self.rootdir.

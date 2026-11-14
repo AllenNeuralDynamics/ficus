@@ -119,6 +119,33 @@ For `/v1/leaves/{namespace}` and `/v1/leaves/{namespace}/raw`, omit both `scope`
 
 You can create any scopes you need (beyond `defaults`) to better adjust to your existing use case, but do note that we have been able to use the scopes `defaults`, `hostname`, and `subject_id` to accomplish all of our use cases across multiple software packages to date.
 
+### Scope precedence, the `scope=` parameter, and creating scopes
+
+Ficus owns the merge order. `GET /v1/scopes` lists the scopes in precedence order (lowest first);
+configs merge `defaults`, then these, later winning, **whatever order a request lists them in**.
+
+Pass scopes as repeated `scope=<scope>:<identifier>` parameters, which can't clash with Ficus's own
+query parameters:
+
+```
+GET /v1/configs/vr-foraging?mode=rig&scope=hostname:W10DTBURNO&scope=subject_id:614173
+```
+
+The original `?hostname=W10DTBURNO&subject_id=614173` style still works and follows the same
+precedence; mixing both styles, repeating a scope, or naming a scope Ficus doesn't know (with
+`scope=`, and on `/v1/leaves`) is a 422. Saving a config never creates a scope.
+
+Scopes are created with their own endpoint, so a typo can't create one:
+
+```
+POST /v1/scopes/room        -> 201 ["hostname", "subject_id", "room"]
+```
+
+A new scope goes last in the precedence; the order is kept in the store (`.ficus/scopes.json`), so
+it survives restarts and is shared by every Ficus on the same store. The `SCOPES` setting seeds the
+precedence of a store that has none. Reserved names (`defaults`, `mode`, `scope`, `suffix`, …) and
+anything but lowercase letters, digits, `_` or `-` are refused.
+
 ## Fetching and Merging a Config
 The *scope resolution order* generates a config based on a structured override pattern.
 Overrides are applied via a recursive (aka: _deep_) update function.
