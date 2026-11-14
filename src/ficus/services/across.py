@@ -53,14 +53,27 @@ def _source(leaves: list[Leaf], name: str) -> LeafRef | None:
     return None
 
 
+def _identifiers(
+    data_store: DataStore, scope: str, namespace: str, identifiers: list[str] | None
+) -> list[str]:
+    """The given identifiers (deduplicated, in order), or every identifier of ``scope`` that has
+    a leaf for ``namespace``."""
+    if identifiers is None:
+        return list_scope_identifiers(data_store, scope, namespace=namespace)
+    if scope not in data_store.scopes:
+        raise ValueError(f"Unknown scope: {scope}")
+    return list(dict.fromkeys(identifiers))
+
+
 def resolve_across(
     data_store: DataStore,
     namespace: str,
     scope: str,
     mode: str,
     fields: list[str] | None,
+    identifiers: list[str] | None = None,
 ) -> list[AcrossConfigItem]:
-    """Resolve ``fields`` for every identifier of ``scope`` that has a leaf for ``namespace``.
+    """Resolve ``fields`` for identifiers of ``scope``.
 
     Parameters:
     -----------
@@ -72,12 +85,18 @@ def resolve_across(
             The config mode to resolve.
         fields: list[str] | None
             Dotted field paths to report. None reports every leaf field of each resolved config.
+        identifiers: list[str] | None
+            Only these identifiers, in this order. None means every identifier of ``scope`` that
+            has a leaf for ``namespace``. An identifier with no folder resolves to the lower
+            leaves (a new rig shows its defaults).
 
     Returns:
     --------
         list[AcrossConfigItem]
             One item per identifier. ``values[field]`` is the resolved value and
             ``sources[field]`` the leaf that set it; both are None when the field is absent.
+            When a field resolves to a non-empty object, ``sources`` also has an entry for every
+            field below it, so each one names the leaf that set it.
             An identifier whose leaves can't be read has ``error`` set and empty values/sources,
             so one broken rig doesn't hide the rest.
 
@@ -91,7 +110,7 @@ def resolve_across(
     if namespace not in list_namespaces(data_store):
         raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     items = []
-    for identifier in list_scope_identifiers(data_store, scope, namespace=namespace):
+    for identifier in _identifiers(data_store, scope, namespace, identifiers):
         try:
             config = get_config(
                 data_store,
@@ -112,5 +131,8 @@ def resolve_across(
             value = _field(config.data, name)
             values[name] = None if value is _MISSING else value
             sources[name] = None if value is _MISSING else _source(config.leaves, name)
+            if isinstance(value, dict) and value:
+                for sub in _field_names(value, name):
+                    sources.setdefault(sub, _source(config.leaves, sub))
         items.append(AcrossConfigItem(identifier=identifier, values=values, sources=sources))
     return items
