@@ -19,29 +19,57 @@ from .utils import data_store
 
 router = APIRouter(prefix="/configs")
 
-# We want to support arbitrary scopes passed in as query parameters but there's not a natural way
-# to set that up with how fastapi, as it assumes dict arguments are passed in the body.
-# We can parse out query params matching scope names manually though.
 def _parse_scopes(request: Request, data_store: DataStore = Depends(data_store)) -> dict[str, str]:
-    """Check query parameters for Parse query parameters into a dict of scope identifiers.
+    """Scope identifiers in Ficus's precedence (lowest first), whatever order the request lists them in.
 
-    Example: ``?hostname=host1&subject_id=123``.
+    Two styles, not mixed: ``?scope=hostname:host1&scope=subject_id:123`` (any scope, no clash with
+    other parameters) or the legacy ``?hostname=host1&subject_id=123``. A scope Ficus doesn't know
+    (``scope=`` style), a repeated scope or a malformed pair is a 422; saving never creates a scope.
     """
-    return {k: v for k, v in request.query_params.items() if k in data_store.scopes}
+    order = data_store.reload_scopes()
+    pairs: list[tuple[str, str]] = []
+    scoped = request.query_params.getlist("scope")
+    legacy = [(k, v) for k, v in request.query_params.multi_items() if k in order]
+    if scoped and legacy:
+        raise HTTPException(
+            status_code=422,
+            detail="Use scope=<scope>:<identifier> or ?<scope>=<identifier>, not both.",
+        )
+    for raw in scoped:
+        name, sep, identifier = raw.partition(":")
+        if not sep or not name or not identifier:
+            raise HTTPException(
+                status_code=422, detail=f"Scope {raw!r} must be <scope>:<identifier>."
+            )
+        if name not in order:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown scope {name!r}. Known scopes: {', '.join(order)}.",
+            )
+        pairs.append((name, identifier))
+    pairs += legacy
+    names = [name for name, _ in pairs]
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+        raise HTTPException(
+            status_code=422, detail=f"Scope {', '.join(repeated)} given more than once."
+        )
+    return dict(sorted(pairs, key=lambda pair: order.index(pair[0])))
 
-# Since we're parsing scopes manually, FastAPI doesn't know to add scopes to the openapi spec,
-# so we have to tell it by injecting this bit into each endpoint's openapi_extra.
+# Scopes are parsed by hand (above), so FastAPI can't document them on its own.
 scope_params_openapi = {
     "parameters": [
         {
-            "name": "scopes",
+            "name": "scope",
             "in": "query",
             "required": False,
-            "schema": {
-                "type": "object",
-                "default": {}
-            },
-            "description": "Scope identifiers as query parameters. Example: `?hostname=host1&subject_id=123`",
+            "schema": {"type": "array", "items": {"type": "string"}},
+            "style": "form",
+            "explode": True,
+            "description": "Scope identifiers as `<scope>:<identifier>`, repeated, e.g. "
+                           "`?scope=hostname:host1&scope=subject_id:123`. Merged in Ficus's scope "
+                           "precedence (GET /v1/scopes), not in the order given. The legacy "
+                           "`?hostname=host1&subject_id=123` style still works (same precedence).",
         }
     ]
 }
