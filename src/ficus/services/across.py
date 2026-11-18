@@ -5,6 +5,10 @@ sees it (defaults merged with its own leaf) and report, per requested field, the
 and the leaf that set it.
 """
 
+from typing import Any
+
+from typing_extensions import Sentinel
+
 from ficus.core.exceptions import (
     ConfigDecodeError,
     InvalidNamespaceError,
@@ -16,10 +20,10 @@ from ficus.services.configs import get_config
 from ficus.services.discovery import list_namespaces, list_scope_identifiers
 
 
-_MISSING = object()
+_MISSING = Sentinel("_MISSING")
 
 
-def _field(data: dict, name: str):
+def _field(data: dict, name: str) -> Any | _MISSING:
     """The value at dotted path ``name`` (``camera.frame_rate``), or ``_MISSING`` if absent."""
     value = data
     for part in name.split("."):
