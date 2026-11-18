@@ -43,7 +43,7 @@ def test_get_config_default_scope_returns_merged_data(client):
 def test_get_config_with_leaves_returns_each_leaf_in_merge_order(client):
     response = client.get(
         f"{BASE}/software_a",
-        params={"hostname": "w11dt000001", "leaves": "true"},
+        params={"hostname": "w11dt000001", "include_leaves": "true"},
     )
     assert response.status_code == 200
     config = response.json()["config"]
@@ -66,7 +66,7 @@ def test_get_config_leaves_report_each_files_own_mode(client):
     each leaf names its own mode."""
     config = client.get(
         f"{BASE}/software_a",
-        params={"hostname": "w11dt000001", "mode": "config", "leaves": "true"},
+        params={"hostname": "w11dt000001", "mode": "config", "include_leaves": "true"},
     ).json()["config"]
     assert [(leaf["scope"], leaf["mode"], leaf["suffix"]) for leaf in config["leaves"]] == [
         (None, "default", ".yml"),
