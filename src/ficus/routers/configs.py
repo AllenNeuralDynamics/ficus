@@ -232,6 +232,18 @@ def get_configs_across_scope(
     fields: str | None = None,
     data_store: DataStore = Depends(data_store),
 ) -> AcrossConfigResponse:
+    """Compare resolved fields across the identifiers of a scope.
+
+    One item per identifier that has a leaf for `namespace`. `fields` is a comma-separated list
+    of dotted paths (`camera.frame_rate`); omit it to get every field. `values[field]` is the
+    value that identifier resolves to, and `sources[field]` the leaf that set it (`scope: null`
+    means the defaults).
+
+    A field no leaf sets has `values: null` **and** `sources: null`. A field a leaf sets to null
+    has `values: null` and a non-null source. Without `fields`, each item lists its own fields,
+    so items can differ; take the union for a table. An identifier whose leaf can't be read has
+    `error` set and empty `values` and `sources`.
+    """
     try:
         names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
         return AcrossConfigResponse(items=resolve_across(data_store, namespace, scope, mode, names))

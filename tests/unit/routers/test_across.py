@@ -80,3 +80,15 @@ def test_across_scope_reports_an_unreadable_leaf_on_its_own_row(client, filesys_
     assert items["w10dtburno"]["sources"] == {}
     assert items["w11dt000001"]["error"] is None
     assert items["w11dt000001"]["values"]["computer-default-value"] == "to rule them all"
+
+
+def test_across_scope_tells_an_explicit_null_from_a_missing_field(client, filesys_store):
+    leaf = filesys_store.rootdir / "hostname" / "w11dt000001" / "software_a" / "default.json"
+    filesys_store.update(leaf, b'{"computer-default-value": "to rule them all", "cleared": null}')
+    response = client.get(
+        "/v1/configs/software_a/across/hostname", params={"fields": "cleared,missing"}
+    )
+    rig = {item["identifier"]: item for item in response.json()["items"]}["w11dt000001"]
+    assert rig["values"] == {"cleared": None, "missing": None}
+    assert rig["sources"]["cleared"]["scope_identifier"] == "w11dt000001"
+    assert rig["sources"]["missing"] is None
