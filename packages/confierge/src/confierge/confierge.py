@@ -214,7 +214,8 @@ class Confierge:
                 cache_file = self._cache_file_path(namespace, mode, scopes)
                 cached_data = self._get_cache(namespace, mode, scopes)
                 if cached_data is not None:
-                    config = model.model_validate(json.loads(cached_data))
+                    config = model.model_validate(cached_data)
+                    data = cached_data
                     logger.warning(
                         f"Could not validate new data, using cached config from {cache_file}",
                         exc_info=True,
