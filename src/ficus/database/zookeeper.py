@@ -135,6 +135,14 @@ class ZKStore(DataStore):
             files = [child for child in children if self.is_file(path / child)]
             return files
 
+    def list_directories(self, path: Path | str) -> list[str]:
+        path = self._sanitize(path)
+        if not self.exists(path):
+            raise FileNotFoundError(f"Path {path} does not exist.")
+        with ZKClientContextManager(self.hosts) as zk:
+            children = zk.get_children(path.as_posix())
+            return [child for child in children if not self.is_file(path / child)]
+
 
 
 

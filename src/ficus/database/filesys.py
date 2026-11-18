@@ -84,3 +84,7 @@ class FileSysStore(DataStore):
         if path.is_file():
             raise ValueError(f"Cannot list files on a file: {path}")
         return [item.name for item in path.iterdir() if item.is_file()]
+
+    def list_directories(self, path: Path | str) -> list[str]:
+        path = self._sanitize(path)
+        return [item.name for item in path.iterdir() if item.is_dir()]
