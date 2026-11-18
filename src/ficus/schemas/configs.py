@@ -55,9 +55,11 @@ class Leaf(LeafRef):
 
 
 class AcrossConfigItem(BaseModel):
+    """One identifier's resolved values, and the leaf that set each one (None if absent)."""
+
     identifier: str
     values: ConfigData
-    sources: dict[str, str | None]
+    sources: dict[str, LeafRef | None]
 
 
 class AcrossConfigResponse(BaseModel):
