@@ -14,7 +14,7 @@ from ficus.core.exceptions import (
 
 )
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigObject
+from ficus.schemas.configs import ConfigObject, Leaf
 from pathlib import Path, PurePath
 from ficus.services.utils import (
     DEFAULT_MODE,
@@ -39,6 +39,7 @@ def get_config(
     scope_identifiers: dict[ScopeName, str] | None = None,
     mode: str = "default",
     scope_ids_must_exist: set[ScopeName] | None = None,
+    include_leaves: bool = False,
 ) -> ConfigObject:
     """
     Get config data from store based on namespace and scopes.
@@ -70,6 +71,8 @@ def get_config(
         scope_ids_must_exist: set[ScopeName] | None
             Scopes whose identifier folders are required to exist. A missing
             identifier for one of these scopes raises InvalidScopeIdentifierError.
+        include_leaves: bool
+            Also return each leaf (file) that was merged, lowest first, with its parsed data.
         merge: bool
             Whether to merge config files found in each scope. If false, only the config file in
             the last scope from identifier names will be returned.
@@ -118,15 +121,35 @@ def get_config(
         namespace = namespace,
         mode = mode,
         scope_identifiers = scope_identifiers,
-        override_stack = file_override_paths
+        override_stack = file_override_paths,
     )
+    leaves: list[Leaf] = []
     # Iterate backwards so we can return immediately if not merging.
     for filepath in reversed(file_override_paths):
         override_data_bytes = data_store.read(filepath)
         override_data = _validate_and_convert_to_dict(filepath.suffix, override_data_bytes)
         config.data = _deep_update(override_data, config.data)
+        if include_leaves:
+            leaves.insert(0, _leaf_from_path(data_store, filepath, override_data))
 
+    if include_leaves:
+        config.leaves = leaves
     return config
+
+
+def _leaf_from_path(data_store: DataStore, filepath: Path, data: dict) -> Leaf:
+    """Describe the leaf at filepath. The mode is the file's own (a scope without the requested
+    mode contributes its default file)."""
+    namespace, scope_identifier, _ = _get_parts_from_path(data_store=data_store, path=filepath)
+    scope, identifier = next(iter(scope_identifier.items()), (None, None))
+    return Leaf(
+        namespace=namespace,
+        scope=scope,
+        scope_identifier=identifier,
+        mode=filepath.stem,
+        suffix=filepath.suffix,
+        data=data,
+    )
 
 
 def _save_one_config_override( #TODO: refactor to use file_crud methods

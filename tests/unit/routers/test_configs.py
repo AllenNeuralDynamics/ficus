@@ -37,6 +37,44 @@ def test_get_config_default_scope_returns_merged_data(client):
     body = response.json()
     assert body["message"] == "Successfully retrieved configuration"
     assert "default-default-value" in body["config"]["data"]
+    assert "leaves" not in body["config"]
+
+
+def test_get_config_with_leaves_returns_each_leaf_in_merge_order(client):
+    response = client.get(
+        f"{BASE}/software_a",
+        params={"hostname": "w11dt000001", "include_leaves": "true"},
+    )
+    assert response.status_code == 200
+    config = response.json()["config"]
+    defaults, rig = config["leaves"]
+    assert {k: v for k, v in defaults.items() if k != "data"} == {
+        "namespace": "software_a",
+        "scope": None,
+        "scope_identifier": None,
+        "mode": "default",
+        "suffix": ".yml",
+    }
+    assert (rig["scope"], rig["scope_identifier"], rig["mode"]) == ("hostname", "w11dt000001", "default")
+    assert defaults["data"]["default-default-value"] == "the one ring"
+    assert rig["data"]["computer-default-value"] == "to rule them all"
+    assert "computer-default-value" in config["data"]
+
+
+def test_get_config_leaves_report_each_files_own_mode(client):
+    """Under a non-default mode each scope contributes its default file and its mode file;
+    each leaf names its own mode."""
+    config = client.get(
+        f"{BASE}/software_a",
+        params={"hostname": "w11dt000001", "mode": "config", "include_leaves": "true"},
+    ).json()["config"]
+    assert [(leaf["scope"], leaf["mode"], leaf["suffix"]) for leaf in config["leaves"]] == [
+        (None, "default", ".yml"),
+        (None, "config", ".yml"),
+        ("hostname", "default", ".json"),
+        ("hostname", "config", ".yml"),
+    ]
+    assert len(config["leaves"]) == len(config["override_stack"])
 
 
 def test_get_config_with_single_scope_identifier(client):

@@ -53,10 +53,11 @@ scope_params_openapi = {
     ]
 }
 
-@router.get("/{namespace}", openapi_extra=scope_params_openapi)
+@router.get("/{namespace}", openapi_extra=scope_params_openapi, response_model_exclude_unset=True)
 def get_config_endpoint(
     namespace: str,
     mode: str = DEFAULT_MODE,
+    include_leaves: bool = False,
     scope_identifiers: dict[str, str] = Depends(_parse_scopes),
     data_store: DataStore = Depends(data_store),
 ) -> ConfigDataResponse:
@@ -66,6 +67,7 @@ def get_config_endpoint(
             namespace,
             mode=mode,
             scope_identifiers=scope_identifiers,
+            include_leaves=include_leaves,
         )
         return ConfigDataResponse(
             message="Successfully retrieved configuration",
