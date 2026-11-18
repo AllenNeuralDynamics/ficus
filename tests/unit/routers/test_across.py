@@ -44,3 +44,23 @@ def test_across_scope_returns_all_fields_when_filter_is_omitted(client):
 
 def test_across_scope_rejects_unknown_scope(client):
     assert client.get("/v1/configs/software_a/across/unknown").status_code == 422
+
+
+def test_across_scope_skips_identifiers_without_the_namespace(client, filesys_store):
+    """A rig folder that never runs this namespace is not a row of defaults."""
+    filesys_store.create(
+        filesys_store.rootdir / "hostname" / "other-rig" / "software_b" / "default.json", b"{}"
+    )
+    response = client.get(
+        "/v1/configs/software_a/across/hostname", params={"fields": "default-default-value"}
+    )
+    assert response.status_code == 200
+    assert [item["identifier"] for item in response.json()["items"]] == [
+        "w10dtburno",
+        "w11dt000001",
+    ]
+
+
+def test_across_scope_unknown_namespace_is_404(client):
+    response = client.get("/v1/configs/no_such_namespace/across/hostname")
+    assert response.status_code == 404

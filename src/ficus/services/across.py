@@ -5,10 +5,11 @@ sees it (defaults merged with its own leaf) and report, per requested field, the
 and the leaf that set it.
 """
 
+from ficus.core.exceptions import InvalidNamespaceError
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import AcrossConfigItem, Leaf, LeafRef
 from ficus.services.configs import get_config
-from ficus.services.discovery import list_scope_identifiers
+from ficus.services.discovery import list_namespaces, list_scope_identifiers
 
 
 _MISSING = object()
@@ -51,7 +52,7 @@ def resolve_across(
     mode: str,
     fields: list[str] | None,
 ) -> list[AcrossConfigItem]:
-    """Resolve ``fields`` for every identifier of ``scope``.
+    """Resolve ``fields`` for every identifier of ``scope`` that has a leaf for ``namespace``.
 
     Parameters:
     -----------
@@ -69,9 +70,18 @@ def resolve_across(
         list[AcrossConfigItem]
             One item per identifier. ``values[field]`` is the resolved value and
             ``sources[field]`` the leaf that set it; both are None when the field is absent.
+
+    Raises:
+    -------
+        InvalidNamespaceError
+            if ``namespace`` has no defaults.
+        ValueError
+            if ``scope`` is unknown.
     """
+    if namespace not in list_namespaces(data_store):
+        raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     items = []
-    for identifier in list_scope_identifiers(data_store, scope):
+    for identifier in list_scope_identifiers(data_store, scope, namespace=namespace):
         config = get_config(
             data_store,
             namespace,
