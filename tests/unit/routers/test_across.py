@@ -64,3 +64,19 @@ def test_across_scope_skips_identifiers_without_the_namespace(client, filesys_st
 def test_across_scope_unknown_namespace_is_404(client):
     response = client.get("/v1/configs/no_such_namespace/across/hostname")
     assert response.status_code == 404
+
+
+def test_across_scope_reports_an_unreadable_leaf_on_its_own_row(client, filesys_store):
+    """One rig with a broken leaf gets an error; the others still resolve."""
+    broken = filesys_store.rootdir / "hostname" / "w10dtburno" / "software_a" / "default.json"
+    filesys_store.create(broken, b"{not json")
+    response = client.get(
+        "/v1/configs/software_a/across/hostname", params={"fields": "computer-default-value"}
+    )
+    assert response.status_code == 200
+    items = {item["identifier"]: item for item in response.json()["items"]}
+    assert items["w10dtburno"]["error"]
+    assert items["w10dtburno"]["values"] == {}
+    assert items["w10dtburno"]["sources"] == {}
+    assert items["w11dt000001"]["error"] is None
+    assert items["w11dt000001"]["values"]["computer-default-value"] == "to rule them all"

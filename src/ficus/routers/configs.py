@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ficus.core.exceptions import ConfigNotFoundError, InvalidNamespaceError, InvalidScopeError
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import AcrossConfigResponse, ConfigDataResponse, ConfigResponse, DryRunResponse
 from ficus.services.configs import (
@@ -234,7 +235,7 @@ def get_configs_across_scope(
     try:
         names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
         return AcrossConfigResponse(items=resolve_across(data_store, namespace, scope, mode, names))
-    except ValueError as error:
+    except (InvalidScopeError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    except Exception as error:
+    except (InvalidNamespaceError, ConfigNotFoundError) as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

@@ -60,6 +60,7 @@ class AcrossConfigItem(BaseModel):
     identifier: str
     values: ConfigData
     sources: dict[str, LeafRef | None]
+    error: str | None = None  # why this identifier couldn't be resolved; values/sources are empty
 
 
 class AcrossConfigResponse(BaseModel):

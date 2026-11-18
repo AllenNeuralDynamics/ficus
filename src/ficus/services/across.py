@@ -5,7 +5,11 @@ sees it (defaults merged with its own leaf) and report, per requested field, the
 and the leaf that set it.
 """
 
-from ficus.core.exceptions import InvalidNamespaceError
+from ficus.core.exceptions import (
+    ConfigDecodeError,
+    InvalidNamespaceError,
+    UnsupportedFileTypeError,
+)
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import AcrossConfigItem, Leaf, LeafRef
 from ficus.services.configs import get_config
@@ -70,6 +74,8 @@ def resolve_across(
         list[AcrossConfigItem]
             One item per identifier. ``values[field]`` is the resolved value and
             ``sources[field]`` the leaf that set it; both are None when the field is absent.
+            An identifier whose leaves can't be read has ``error`` set and empty values/sources,
+            so one broken rig doesn't hide the rest.
 
     Raises:
     -------
@@ -82,13 +88,19 @@ def resolve_across(
         raise InvalidNamespaceError(f"Namespace not found in defaults: {namespace}")
     items = []
     for identifier in list_scope_identifiers(data_store, scope, namespace=namespace):
-        config = get_config(
-            data_store,
-            namespace,
-            mode=mode,
-            scope_identifiers={scope: identifier},
-            include_leaves=True,
-        )
+        try:
+            config = get_config(
+                data_store,
+                namespace,
+                mode=mode,
+                scope_identifiers={scope: identifier},
+                include_leaves=True,
+            )
+        except (ConfigDecodeError, UnsupportedFileTypeError) as error:
+            items.append(
+                AcrossConfigItem(identifier=identifier, values={}, sources={}, error=str(error))
+            )
+            continue
         names = fields if fields is not None else _field_names(config.data)
         values = {}
         sources = {}
