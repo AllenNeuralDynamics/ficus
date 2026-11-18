@@ -37,7 +37,6 @@ class ConfigObject(BaseModel):
     override_stack: list[Path]
     leaves: list["Leaf"] | None = None
 
-
 class LeafRef(BaseModel):
     """Identifies one leaf (one config file) in the store."""
 
@@ -52,3 +51,12 @@ class Leaf(LeafRef):
     """A leaf plus its parsed contents."""
 
     data: ConfigData
+
+class FieldDeclaration(BaseModel):
+    field: str
+    value: Any
+    source_leaf: LeafRef | None
+
+class AcrossConfigResponse(BaseModel):
+    configs: dict[str, ConfigObject | ConfigErrorResponse]
+    field_sources: dict[str, list[FieldDeclaration]] = {}
