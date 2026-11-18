@@ -56,7 +56,3 @@ class FieldDeclaration(BaseModel):
     field: str
     value: Any
     source_leaf: LeafRef | None
-
-class AcrossConfigResponse(BaseModel):
-    configs: dict[str, ConfigObject | ConfigErrorResponse]
-    field_sources: dict[str, list[FieldDeclaration]] = {}

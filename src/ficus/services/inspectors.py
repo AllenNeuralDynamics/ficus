@@ -6,6 +6,7 @@ and the leaf that set it.
 """
 
 import itertools
+from typing import Any
 
 import glom
 
@@ -18,6 +19,7 @@ from ficus.schemas.configs import ConfigErrorResponse, ConfigObject, FieldDeclar
 from ficus.services.configs import get_config
 from ficus.services.discovery import list_scope_identifiers
 from ficus.services.utils import DEFAULT_MODE
+from ficus.utils.dict_merge import deep_diff
 
 
 def get_all_field_declarations(config: ConfigObject, field: str) -> list[FieldDeclaration]:
@@ -124,3 +126,7 @@ def find_declarations_in_scope(config: ConfigObject, field: str, scope: str, mod
             scoped_declarations.append(declaration)
 
     return scoped_declarations
+
+def compare_configs(config_1: ConfigObject, config_2: ConfigObject) -> tuple[dict[str, Any], dict[str, Any]]:
+    same, different = deep_diff(config_1.data, config_2.data)
+    return same, different
