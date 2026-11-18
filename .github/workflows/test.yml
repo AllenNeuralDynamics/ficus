@@ -9,6 +9,6 @@ on:
 
 jobs:
   test:
-    uses: AllenNeuralDynamics/.github/.github/workflows/test.yml@main
+    uses: AllenNeuralDynamics/.github/.github/workflows/test.yml@update-uv-version
     with:
       runner_label: 'ubuntu-latest'
