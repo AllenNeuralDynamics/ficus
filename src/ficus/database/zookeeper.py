@@ -82,7 +82,7 @@ class ZKStore(DataStore):
             try:
                 data, stat = zk.get(path.as_posix())
                 # Save stat to check if the path was altered when we try an update later.
-                self._path_versions[path.as_posix()] = stat
+                self._path_versions[path.as_posix()] = stat.version
                 return data
             except NoNodeError:
                 raise PathNotFoundError(f"Path: {path} does not exist.")
@@ -93,7 +93,8 @@ class ZKStore(DataStore):
             # force if specified, or if we've never read the data in the first place.
             version = -1 if force else self._path_versions.get(path.as_posix(), -1)
             try:
-                zk.set(path.as_posix(), data, version=version)
+                stat = zk.set(path.as_posix(), data, version=version)
+                self._path_versions[path.as_posix()] = stat.version
             except ZKBadVersionError:
                 raise BadVersionError(f"Content at {path} has been updated by "
                                       f"another entity since reading.")
