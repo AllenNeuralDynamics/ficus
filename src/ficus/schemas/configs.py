@@ -35,18 +35,20 @@ class ConfigObject(BaseModel):
     mode: str
     scope_identifiers: dict[str, str]
     override_stack: list[Path]
-    layers: list["ConfigLayer"] | None = None
-    # components: list[Leaf] # TODO: switch override stack to list[Leaf]
+    leaves: list["Leaf"] | None = None
 
 
-class ConfigLayer(BaseModel):
-    path: Path
+class LeafRef(BaseModel):
+    """Identifies one leaf (one config file) in the store."""
+
+    namespace: str
+    scope: str | None  # None for the defaults leaf
+    scope_identifier: str | None
+    mode: str
+    suffix: str
+
+
+class Leaf(LeafRef):
+    """A leaf plus its parsed contents."""
+
     data: ConfigData
-
-# class Leaf(BaseModel):
-#     content: str
-#     suffix: str
-#     namespace: str
-#     mode: str
-#     scope: str | None
-#     scope_identifier: str | None
