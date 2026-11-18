@@ -114,6 +114,9 @@ subject_id/
 > [!NOTE]
 > The *defaults* scope has an implied default scope identifier which is omitted.
 
+For `/v1/leaves/{namespace}` and `/v1/leaves/{namespace}/raw`, omit both `scope` and
+`scope_identifier` to access the defaults leaf. Passing `scope=defaults` alone returns 422.
+
 You can create any scopes you need (beyond `defaults`) to better adjust to your existing use case, but do note that we have been able to use the scopes `defaults`, `hostname`, and `subject_id` to accomplish all of our use cases across multiple software packages to date.
 
 ## Fetching and Merging a Config
