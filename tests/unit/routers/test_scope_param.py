@@ -114,7 +114,7 @@ def test_creating_a_scope_twice_conflicts(client):
 
 
 @pytest.mark.parametrize(
-    "name", ["defaults", "mode", "scope", "suffix", "layers", "Bad Name", "1room", "a/b", "x" * 65]
+    "name", ["defaults", "mode", "scope", "suffix", "include_leaves", "Bad Name", "1room", "a/b", "x" * 65]
 )
 def test_reserved_or_malformed_scope_names_are_refused(client, name):
     response = client.post(f"/v1/scopes/{name}")

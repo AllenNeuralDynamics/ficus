@@ -16,7 +16,7 @@ RESERVED_SCOPE_NAMES = frozenset(
         "append_new_fields_to_last_scope",
         "create_missing_namespace",
         "dry_run",
-        "layers",
+        "include_leaves",
         "fields",
         "identifiers",
         "namespace",
