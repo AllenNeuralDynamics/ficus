@@ -19,6 +19,16 @@ class ConfigErrorResponse(BaseModel):
     details: str
 
 
+class DryRunChange(BaseModel):
+    path: str
+    before: ConfigData | None
+    after: ConfigData | None
+
+
+class DryRunResponse(BaseModel):
+    changes: list[DryRunChange]
+
+
 class ConfigObject(BaseModel):
     data: ConfigData
     namespace: str
