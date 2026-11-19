@@ -127,6 +127,8 @@ def find_declarations_in_scope(config: ConfigObject, field: str, scope: str, mod
 
     return scoped_declarations
 
-def compare_configs(config_1: ConfigObject, config_2: ConfigObject) -> tuple[dict[str, Any], dict[str, Any]]:
-    same, different = deep_diff(config_1.data, config_2.data)
-    return same, different
+def compare_configs(
+    config_1: ConfigObject, config_2: ConfigObject
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Compare two resolved configs: ``(same, different, removed)``, as in ``deep_diff``."""
+    return deep_diff(config_1.data, config_2.data)
