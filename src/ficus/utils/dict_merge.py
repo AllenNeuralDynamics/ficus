@@ -51,38 +51,59 @@ def _deep_update_existing_destructive(dest, source):
             else:
                 dest[key] = source.pop(key)
 
-def deep_diff(dict1: dict, dict2: dict) -> tuple[dict, dict]:
-    """Recursively compare dict2 against dict1 and return keys that are different in dict2."""
-    same = {}
-    diff = {}
-    for key in dict2:
-        if isinstance(dict2[key], dict) and isinstance(dict1.get(key), dict):
-            nested_same, nested_diff = deep_diff(dict1[key], dict2[key])
-            if nested_diff:
-                diff[key] = nested_diff
+def deep_diff(dict1: dict, dict2: dict) -> tuple[dict, dict, dict]:
+    """Recursively compare dict2 against dict1.
+
+    Returns:
+    --------
+        tuple[dict, dict, dict]
+            ``(same, different, removed)``: keys whose values are equal in both, keys that are
+            new or changed in dict2 (with dict2's values), and keys in dict1 that dict2 lacks
+            (with dict1's values). A key set to None is not the same as a missing key.
+
+    Examples
+    --------
+    >>> deep_diff({"a": 1, "b": {"c": 2, "d": 3}}, {"a": 1, "b": {"c": 5}, "e": None})
+    ({'a': 1}, {'b': {'c': 5}, 'e': None}, {'b': {'d': 3}})
+    """
+    same: dict = {}
+    different: dict = {}
+    removed: dict = {}
+    for key, value in dict2.items():
+        if key not in dict1:
+            different[key] = value
+        elif isinstance(value, dict) and isinstance(dict1[key], dict):
+            nested_same, nested_different, nested_removed = deep_diff(dict1[key], value)
             if nested_same:
                 same[key] = nested_same
-        elif dict2[key] != dict1.get(key):
-            diff[key] = dict2[key]
-        elif dict2[key] == dict1.get(key):
-            same[key] = dict2[key]
-    return same, diff
+            if nested_different:
+                different[key] = nested_different
+            if nested_removed:
+                removed[key] = nested_removed
+        elif value == dict1[key]:
+            same[key] = value
+        else:
+            different[key] = value
+    for key, value in dict1.items():
+        if key not in dict2:
+            removed[key] = value
+    return same, different, removed
 
 
 def flatten_recursive_dict(mapping: dict, key_prefix: str = "") -> dict[str, Any]:
     """Flatten a nested dictionary, stringifying keys with dot notation for nested keys.
-    
+
+    An empty dict is kept as a value, so a field set to ``{}`` isn't lost.
+
     Examples
     --------
-    >>> d = {'a': 1, 'b': {'c': 2, 'd': 3}}
-    >>> flatten_recursive_dict(d)
-    {'a': 1, 'b.c': 2, 'b.d': 3}
-
+    >>> flatten_recursive_dict({'a': 1, 'b': {'c': 2, 'd': 3}, 'e': {}})
+    {'a': 1, 'b.c': 2, 'b.d': 3, 'e': {}}
     """
     flat_dict = {}
     for key, value in mapping.items():
         key = f"{key_prefix}.{key}" if key_prefix else str(key)
-        if isinstance(value, dict):
+        if isinstance(value, dict) and value:
             flat_dict.update(flatten_recursive_dict(value, key_prefix=key))
         else:
             flat_dict[key] = value
