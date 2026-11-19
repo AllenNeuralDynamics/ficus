@@ -80,7 +80,7 @@ def filesys_store(tmp_path, store_structure):
                                                                         content))
 
     create_structure(tmp_path, store_structure)
-    return FileSysStore(rootdir= tmp_path / "scratch", scopes={"hostname", "subject_id"})
+    return FileSysStore(rootdir= tmp_path / "scratch", scopes=["hostname", "subject_id"])
 
 @pytest.fixture
 def zookeeper_store(monkeypatch, store_structure):
@@ -109,7 +109,7 @@ def zookeeper_store(monkeypatch, store_structure):
     monkeypatch.setattr(ficus.database.zookeeper, "KazooClient", fake_zk)
 
     zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"),
-                       scopes={"hostname", "subject_id"})
+                       scopes=["hostname", "subject_id"])
     yield zk_store
 
 
