@@ -19,12 +19,10 @@ BASE = "/v1/configs"
 # GET /v1/scopes
 # ---------------------------------------------------------------------------
 
-def test_get_scopes_returns_set(client):
+def test_get_scopes_returns_precedence(client):
     response = client.get("/v1/scopes")
     assert response.status_code == 200
-    scopes = response.json()
-    assert "hostname" in scopes
-    assert "subject_id" in scopes
+    assert response.json() == ["hostname", "subject_id"]
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +111,19 @@ def test_get_config_with_multiple_scope_identifiers(client):
     assert "default-default-value" in data
     assert "computer-default-value" in data
     assert "subject-default-value" in data
+
+
+def test_get_config_merges_in_scope_precedence_not_request_order(client):
+    """The settings' scope order decides the merge, whatever order the request lists scopes in."""
+    def stack(params):
+        response = client.get(f"{BASE}/software_a", params=params)
+        assert response.status_code == 200
+        return response.json()["config"]["override_stack"]
+
+    forward = stack([("hostname", "w11dt000001"), ("subject_id", "614173")])
+    backward = stack([("subject_id", "614173"), ("hostname", "w11dt000001")])
+    assert forward == backward
+    assert "hostname" in forward[1] and "subject_id" in forward[2]
 
 
 def test_get_config_not_found_returns_404(client):

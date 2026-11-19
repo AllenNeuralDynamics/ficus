@@ -122,6 +122,8 @@ You can create any scopes you need (beyond `defaults`) to better adjust to your 
 ## Fetching and Merging a Config
 The *scope resolution order* generates a config based on a structured override pattern.
 Overrides are applied via a recursive (aka: _deep_) update function.
+Over HTTP, the order is the instance's `scopes` setting, lowest first (`GET /v1/scopes` lists it), after `defaults`; the order of a request's query parameters doesn't matter.
+With the default `["hostname", "subject_id"]`, a subject's files override a computer's, which override the defaults.
 The result is that, for the same software running on many computers, files at the computer scope level are lean and contain only computer-specific overrides.
 
 ### Example 1: Default Config
