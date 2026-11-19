@@ -4,8 +4,14 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ficus.core.exceptions import ConfigNotFoundError, InvalidNamespaceError, InvalidScopeError
 from ficus.database.data_store import DataStore
-from ficus.schemas.configs import ConfigDataResponse, ConfigResponse, DryRunResponse
+from ficus.schemas.configs import (
+    AcrossConfigResponse,
+    ConfigDataResponse,
+    ConfigResponse,
+    DryRunResponse,
+)
 from ficus.services.configs import (
     DEFAULT_MODE,
     VALID_EXTENSIONS_TYPE,
@@ -15,6 +21,7 @@ from ficus.services.configs import (
     delete_config,
     get_all_modes,
 )
+from ficus.services.inspectors import resolve_across
 from ficus.services.preview import dry_run_save_config, preview_config
 from ficus.utils.dict_merge import _deep_update
 from .utils import data_store
@@ -220,3 +227,39 @@ def get_all_modes_endpoint(
         return sorted(list(modes))
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{namespace}/across/{scope}")
+def get_configs_across_scope(
+    namespace: str,
+    scope: str,
+    mode: str = DEFAULT_MODE,
+    fields: str | None = None,
+    identifiers: str | None = None,
+    data_store: DataStore = Depends(data_store),
+) -> AcrossConfigResponse:
+    """Compare resolved fields across the identifiers of a scope.
+
+    One item per identifier that has a leaf for `namespace`. `identifiers` (comma-separated)
+    limits the items to those identifiers, in that order; an identifier with no folder resolves
+    to the lower leaves (a new rig shows its defaults). `fields` is a comma-separated list of
+    glom paths (`camera.frame_rate`); omit it to get every field. `values[field]` is the value
+    that identifier resolves to, and `sources[field]` the leaf that set it (`scope: null` means
+    the defaults). When a field resolves to an object, `sources` also names the leaf behind each
+    field below it.
+
+    A field no leaf sets has `values: null` **and** `sources: null`. A field a leaf sets to null
+    has `values: null` and a non-null source. Without `fields`, each item lists its own fields,
+    so items can differ; take the union for a table. An identifier whose leaf can't be read has
+    `error` set and empty `values` and `sources`.
+    """
+    try:
+        names = [name.strip() for name in fields.split(",") if name.strip()] if fields else None
+        ids = [i.strip() for i in identifiers.split(",") if i.strip()] if identifiers else None
+        return AcrossConfigResponse(
+            items=resolve_across(data_store, namespace, scope, mode, names, ids)
+        )
+    except (InvalidScopeError, ValueError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except (InvalidNamespaceError, ConfigNotFoundError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error

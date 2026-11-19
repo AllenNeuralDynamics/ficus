@@ -37,7 +37,6 @@ class ConfigObject(BaseModel):
     override_stack: list[Path]
     leaves: list["Leaf"] | None = None
 
-
 class LeafRef(BaseModel):
     """Identifies one leaf (one config file) in the store."""
 
@@ -52,3 +51,21 @@ class Leaf(LeafRef):
     """A leaf plus its parsed contents."""
 
     data: ConfigData
+
+class FieldDeclaration(BaseModel):
+    field: str
+    value: Any
+    source_leaf: LeafRef | None
+
+
+class AcrossConfigItem(BaseModel):
+    """One identifier's resolved values, and the leaf that set each one (None if absent)."""
+
+    identifier: str
+    values: ConfigData
+    sources: dict[str, LeafRef | None]
+    error: str | None = None  # why this identifier couldn't be resolved; values/sources are empty
+
+
+class AcrossConfigResponse(BaseModel):
+    items: list[AcrossConfigItem]
