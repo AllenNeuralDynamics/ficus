@@ -202,7 +202,7 @@ def test_post_config_file_sends_params(client: Confierge):
                     "mode": "dev.yml",
                     "hostname": "myhost",
                     "overwrite_defaults": "False",
-                    "create_missing_namespace": "True",
+                    "create_missing_namespace": "False",
                     "append_new_fields_to_last_scope": "False",
                 }
             )
@@ -212,7 +212,7 @@ def test_post_config_file_sends_params(client: Confierge):
 
 
 @rsps.activate
-def test_post_config_file_can_refuse_to_create_a_namespace(client: Confierge):
+def test_post_config_file_can_create_a_namespace(client: Confierge):
     """create_if_missing goes to Ficus as create_missing_namespace, the name it reads."""
     rsps.add(
         rsps.POST,
@@ -220,11 +220,11 @@ def test_post_config_file_can_refuse_to_create_a_namespace(client: Confierge):
         status=201,
         match=[
             matchers.query_param_matcher(
-                {"create_missing_namespace": "False"}, strict_match=False
+                {"create_missing_namespace": "True"}, strict_match=False
             )
         ],
     )
-    client.post_config_file("app", {"x": 1}, create_if_missing=False)
+    client.post_config_file("app", {"x": 1}, create_if_missing=True)
 
 
 @rsps.activate

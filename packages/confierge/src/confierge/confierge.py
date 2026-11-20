@@ -237,7 +237,7 @@ class Confierge:
         mode: Optional[str] = None,
         scopes: Optional[dict[str, str]] = None,
         overwrite_defaults: bool = False,
-        create_if_missing: bool = True,
+        create_if_missing: bool = False,
         append_new_fields_to_last_scope: bool = False,
     ):
         """Post config data to save to the database.

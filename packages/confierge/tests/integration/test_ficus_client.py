@@ -71,15 +71,13 @@ def test_get_config_not_found_raises(integration_client: Confierge):
 # POST /v1/configs/{namespace}: create_if_missing reaches Ficus
 # ---------------------------------------------------------------------------
 
-def test_post_config_file_creates_a_new_namespace_by_default(integration_client: Confierge):
-    integration_client.post_config_file("confierge_new_ns", {"a": 1})
-    assert integration_client.get_config("confierge_new_ns") == {"a": 1}
-
-
-def test_post_config_file_without_create_if_missing_refuses_a_new_namespace(
-    integration_client: Confierge,
-):
+def test_post_config_file_refuses_a_new_namespace_by_default(integration_client: Confierge):
     with pytest.raises(requests.HTTPError):
-        integration_client.post_config_file("confierge_absent_ns", {"a": 1}, create_if_missing=False)
+        integration_client.post_config_file("confierge_absent_ns", {"a": 1})
     with pytest.raises(requests.HTTPError):
         integration_client.get_config("confierge_absent_ns")
+
+
+def test_post_config_file_creates_a_namespace_when_asked(integration_client: Confierge):
+    integration_client.post_config_file("confierge_new_ns", {"a": 1}, create_if_missing=True)
+    assert integration_client.get_config("confierge_new_ns") == {"a": 1}
