@@ -12,4 +12,33 @@ jobs:
     uses: AllenNeuralDynamics/.github/.github/workflows/tag-release-sipe.yml@main
     with:
       build_docs: false
-      
+
+  # The release's image, tagged with the release name (e.g. ghcr.io/allenneuraldynamics/ficus:v0.2.4).
+  # Runs here rather than on the tag: a tag pushed with GITHUB_TOKEN doesn't start other workflows.
+  publish-release-image:
+    needs: tag-and-publish
+    if: needs.tag-and-publish.outputs.tag_already_exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ needs.tag-and-publish.outputs.tag_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.tag-and-publish.outputs.project_version }}
