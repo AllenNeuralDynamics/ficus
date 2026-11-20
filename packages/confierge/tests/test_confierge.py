@@ -196,9 +196,35 @@ def test_post_config_file_sends_params(client: Confierge):
         rsps.POST,
         f"{BASE_URL}/v1/configs/app",
         status=201,
-        match=[matchers.query_param_matcher({"mode": "dev.yml", "hostname": "myhost"})],
+        match=[
+            matchers.query_param_matcher(
+                {
+                    "mode": "dev.yml",
+                    "hostname": "myhost",
+                    "overwrite_defaults": "False",
+                    "create_missing_namespace": "True",
+                    "append_new_fields_to_last_scope": "False",
+                }
+            )
+        ],
     )
     client.post_config_file("app", {"x": 1}, mode="dev.yml", scopes={"hostname": "myhost"})
+
+
+@rsps.activate
+def test_post_config_file_can_refuse_to_create_a_namespace(client: Confierge):
+    """create_if_missing goes to Ficus as create_missing_namespace, the name it reads."""
+    rsps.add(
+        rsps.POST,
+        f"{BASE_URL}/v1/configs/app",
+        status=201,
+        match=[
+            matchers.query_param_matcher(
+                {"create_missing_namespace": "False"}, strict_match=False
+            )
+        ],
+    )
+    client.post_config_file("app", {"x": 1}, create_if_missing=False)
 
 
 @rsps.activate
