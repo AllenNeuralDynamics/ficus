@@ -115,6 +115,7 @@ def zookeeper_store(monkeypatch, store_structure):
     zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"),
                        scopes=SCOPES)
     yield zk_store
+    zk_store.close()
 
 
 @pytest.fixture(params=["filesys_store", "zookeeper_store"])

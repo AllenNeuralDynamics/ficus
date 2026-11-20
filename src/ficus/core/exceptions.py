@@ -44,3 +44,6 @@ class MultipleScopeIdentifiersError(Exception):
 
 class BadVersionError(Exception):
     pass
+
+class StoreUnavailableError(Exception):
+    """The data store can't be reached right now; the API answers 503."""

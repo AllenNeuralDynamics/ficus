@@ -2,18 +2,18 @@ import sys
 
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
-from kazoo.handlers.threading import KazooTimeoutError
+from fastapi.responses import JSONResponse
 from loguru import logger
 from typing import Any, Dict
 
 from ficus.database.data_store import DataStore
-from ficus.database.zookeeper import kazoo_timeout_handler
 from ficus.routers import router
 
 from ficus.database.zookeeper import ZKStore
 from ficus.database.filesys import FileSysStore
 
 from ficus.core.config import settings, Settings as FicusSettings
+from ficus.core.exceptions import StoreUnavailableError
 from ficus.core.proxy import ForwardedPrefixMiddleware
 from ficus.routers.utils import data_store
 
@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
 
     yield
     logger.info("Shutting down Ficus API...")
+    app.state.data_store.close()
 
 
 app = FastAPI(
@@ -47,7 +48,9 @@ if not settings.root_path:
 
 
 app.include_router(router)
-app.add_exception_handler(KazooTimeoutError, kazoo_timeout_handler)
+@app.exception_handler(StoreUnavailableError)
+async def store_unavailable_handler(request: Request, exc: StoreUnavailableError):
+    return JSONResponse(status_code=503, content={"message": str(exc)})
 
 
 @app.get("/", tags=["Health"])
