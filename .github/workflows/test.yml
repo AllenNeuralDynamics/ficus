@@ -9,6 +9,6 @@ on:
 
 jobs:
   test:
-    uses: AllenNeuralDynamics/.github/.github/workflows/test.yml@update-uv-version
+    uses: AllenNeuralDynamics/.github/.github/workflows/test.yml@7a24118ba0fba194934660f00102c6e478e1f7be # main, "Update setup-uv action version"
     with:
       runner_label: 'ubuntu-latest'

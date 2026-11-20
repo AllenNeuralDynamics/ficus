@@ -240,13 +240,17 @@ class Confierge:
         create_if_missing: bool = False,
         append_new_fields_to_last_scope: bool = False,
     ):
-        """Post config data to save to the database"""
+        """Post config data to save to the database.
+
+        ``create_if_missing`` creates the namespace if Ficus doesn't have it yet (Ficus's
+        ``create_missing_namespace``).
+        """
         url = f"{self.configs_url}/{namespace}"
         params = {"mode": mode} if mode else {}
         params.update(
             {
                 "overwrite_defaults": overwrite_defaults,
-                "create_if_missing": create_if_missing,
+                "create_missing_namespace": create_if_missing,
                 "append_new_fields_to_last_scope": append_new_fields_to_last_scope,
             }
         )
