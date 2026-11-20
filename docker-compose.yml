@@ -1,7 +1,11 @@
-services: 
+services:
     ficus:
-      build: 
+      build:
         context: .
         dockerfile: Dockerfile
-      ports: 
+      # Settings: copy .env.example to .env (optional; the defaults apply without it).
+      env_file:
+        - path: .env
+          required: false
+      ports:
         - "8888:8000"

@@ -4,7 +4,12 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from ficus.core.exceptions import ConfigNotFoundError, InvalidNamespaceError, InvalidScopeError
+from ficus.core.exceptions import (
+    ConfigNotFoundError,
+    InvalidNamespaceError,
+    InvalidScopeError,
+    StoreUnavailableError,
+)
 from ficus.database.data_store import DataStore
 from ficus.schemas.configs import (
     AcrossConfigResponse,
@@ -82,6 +87,8 @@ def get_config_endpoint(
             message="Successfully retrieved configuration",
             config=config,
         )
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as e:  # TODO: make services.configs.get_config only raise ConfigNotFoundError
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -126,6 +133,8 @@ def save_config_endpoint(
         return ConfigResponse(
             message="Successfully saved configuration file",
         )
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -170,6 +179,8 @@ def update_config_endpoint(
         return ConfigResponse(
             message="Successfully updated configuration file",
         )
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -189,6 +200,8 @@ def preview_config_endpoint(
         return ConfigDataResponse(message="Successfully previewed configuration", config=config)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -208,6 +221,8 @@ def delete_config_endpoint(
         return ConfigResponse(
             message="Successfully deleted configuration file",
         )
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -227,6 +242,8 @@ def get_all_modes_endpoint(
             lowest_scope_only=lowest_scope_only
         )
         return sorted(list(modes))
+    except StoreUnavailableError:
+        raise  # 503, not a missing config
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 

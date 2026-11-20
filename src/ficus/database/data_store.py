@@ -32,6 +32,9 @@ class DataStore(ABC):
         # Relative path cases.
         return self.rootdir / path
 
+    def close(self) -> None:
+        """Release the store's resources (e.g. a connection). Nothing to release by default."""
+
     def validate_scopes(self, scopes: set[str], create_missing: bool = True):
         """ Ensures scopes exist in the store."""
         missing_scopes = set()
