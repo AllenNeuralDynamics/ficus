@@ -132,8 +132,27 @@ class FakeZK:
     def start(self, timeout=15):
         pass
 
+    def add_listener(self, listener):
+        pass
+
     def stop(self):
         pass
 
     def close(self):
+        pass
+
+
+class StubConnection:
+    """Stands in for ZKConnection: always connected, hands out ``zk``."""
+
+    def __init__(self, zk):
+        self.zk = zk
+
+    def __enter__(self):
+        return self.zk
+
+    def __exit__(self, *exc):
+        return False
+
+    def ensure_connected(self):
         pass
