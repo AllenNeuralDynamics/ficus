@@ -129,7 +129,7 @@ class FakeZK:
         except KeyError:
             raise NoNodeError
 
-    def start(self):
+    def start(self, timeout=15):
         pass
 
     def stop(self):

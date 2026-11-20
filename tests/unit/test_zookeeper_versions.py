@@ -11,10 +11,11 @@ def test_update_uses_integer_version_from_read_and_tracks_next_version(monkeypat
         get=Mock(return_value=(b"old", SimpleNamespace(version=3))),
         set=Mock(side_effect=[SimpleNamespace(version=4), SimpleNamespace(version=5)]),
     )
-    monkeypatch.setattr(zookeeper, "ZKClientContextManager", lambda _hosts: nullcontext(zk))
+    monkeypatch.setattr(zookeeper, "ZKClientContextManager", lambda _hosts, _timeout: nullcontext(zk))
     store = zookeeper.ZKStore.__new__(zookeeper.ZKStore)
     store.rootdir = Path("/ficus")
     store.hosts = []
+    store.timeout = 15.0
     store._path_versions = {}
 
     assert store.read("config.yml") == b"old"

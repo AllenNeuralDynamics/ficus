@@ -5,10 +5,14 @@ from tests.zk_data import Node, print_node
 
 from pathlib import Path
 
+from ficus.core.config import Settings
 from ficus.database.filesys import FileSysStore
 from ficus.database.zookeeper import ZKStore
 import ficus.database.zookeeper
 from ficus.services.configs import _validate_and_convert_to_bytes
+
+# The settings' default scopes (not Settings(), which would read this machine's env).
+SCOPES = Settings.model_fields["scopes"].default
 
 
 @pytest.fixture
@@ -80,7 +84,7 @@ def filesys_store(tmp_path, store_structure):
                                                                         content))
 
     create_structure(tmp_path, store_structure)
-    return FileSysStore(rootdir= tmp_path / "scratch", scopes=["hostname", "subject_id"])
+    return FileSysStore(rootdir= tmp_path / "scratch", scopes=SCOPES)
 
 @pytest.fixture
 def zookeeper_store(monkeypatch, store_structure):
@@ -109,7 +113,7 @@ def zookeeper_store(monkeypatch, store_structure):
     monkeypatch.setattr(ficus.database.zookeeper, "KazooClient", fake_zk)
 
     zk_store = ZKStore(hosts=["fakehost:9000"], rootdir=Path("scratch"),
-                       scopes=["hostname", "subject_id"])
+                       scopes=SCOPES)
     yield zk_store
 
 
