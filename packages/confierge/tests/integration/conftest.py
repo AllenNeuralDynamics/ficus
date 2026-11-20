@@ -46,7 +46,7 @@ def ficus_server(tmp_path_factory, store_structure):
     tmp = tmp_path_factory.mktemp("ficus_store")
     _create_filesys_structure(tmp, store_structure)
 
-    store = FileSysStore(rootdir=tmp / "scratch", scopes={"hostname", "subject_id"})
+    store = FileSysStore(rootdir=tmp / "scratch", scopes=["hostname", "subject_id"])
 
     app = FastAPI()
     app.state.data_store = store

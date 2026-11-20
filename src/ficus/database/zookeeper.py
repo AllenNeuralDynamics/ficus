@@ -18,17 +18,18 @@ class ZKClientContextManager:
     """Reentrant context manager to manage one zookeeper connection with nested
     connection calls."""
 
-    def __init__(self, hosts: list[str]):
+    def __init__(self, hosts: list[str], timeout: float = 15.0):
         self._depth: int = 0 # Tracks the nesting level.
         self._lock: Lock = Lock()
         self.hosts: list[str] = hosts
+        self.timeout: float = timeout  # seconds to wait for the connection
         self._zk: KazooClient | None = None
 
     def __enter__(self):
         with self._lock:
             if self._depth == 0:
                 self._zk = KazooClient(hosts=",".join(self.hosts))
-                self._zk.start()
+                self._zk.start(timeout=self.timeout)
 
             self._depth += 1
             return self._zk
@@ -50,15 +51,18 @@ class ZKStore(DataStore):
     """CRUD functions for Zookeeper-based data store."""
 
     def __init__(self, hosts: list[str], rootdir: Path | str, scopes: set[str],
-                 create_missing_scopes: bool = True):
+                 create_missing_scopes: bool = True, timeout: float = 15.0):
         """
         Parameters
         ----------
         hosts:
             list of hosts. ex: `["127.0.0.1:8000", "127.0.0.1:9000"]`
+        timeout:
+            seconds to wait for a connection before raising ``KazooTimeoutError``.
         """
         self.log = logger.bind(custom_name=self.__class__.__name__)
         self.hosts = hosts
+        self.timeout = timeout
         self._path_versions = {}  # dict of all file reads to track versions
                                   # when calling update() on the same path.
         super().__init__(rootdir=rootdir, scopes=scopes,
@@ -67,7 +71,7 @@ class ZKStore(DataStore):
     # crud functions
     def create(self, path: Path | str, data: bytes | None) -> None:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             if self.exists(path) and self.is_file(path):
                 raise FileExistsError(f"Path {path} already exists.")
             if data is None:  # assume path is folder.
@@ -77,7 +81,7 @@ class ZKStore(DataStore):
 
     def read(self, path: Path | str) -> bytes:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             data = None
             try:
                 data, stat = zk.get(path.as_posix())
@@ -89,7 +93,7 @@ class ZKStore(DataStore):
 
     def update(self, path: Path | str, data: bytes, force: bool = False) -> None:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             # force if specified, or if we've never read the data in the first place.
             version = -1 if force else self._path_versions.get(path.as_posix(), -1)
             try:
@@ -101,7 +105,7 @@ class ZKStore(DataStore):
 
     def delete(self, path: Path | str, recursive: bool = False) -> None:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             try:
                 zk.delete(path.as_posix(), recursive=recursive)
             except ZKNotEmptyError:
@@ -112,14 +116,14 @@ class ZKStore(DataStore):
     # utility
     def exists(self, path: Path | str) -> bool:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             exists = zk.exists(path.as_posix())
             return exists
             #return zk.exists(path.as_posix())
 
     def is_file(self, path: Path | str) -> bool:
         path = self._sanitize(path)
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             data, _ = zk.get(path.as_posix())
             children: list = zk.get_children(path.as_posix())
             is_file = len(children) == 0 and len(data) > 0
@@ -129,7 +133,7 @@ class ZKStore(DataStore):
         path = self._sanitize(path)
         if not self.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist.")
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             if self.is_file(path):
                 raise ValueError(f"Cannot list files on a file: {path}")
             children: list = zk.get_children(path.as_posix())
@@ -140,7 +144,7 @@ class ZKStore(DataStore):
         path = self._sanitize(path)
         if not self.exists(path):
             raise FileNotFoundError(f"Path {path} does not exist.")
-        with ZKClientContextManager(self.hosts) as zk:
+        with ZKClientContextManager(self.hosts, self.timeout) as zk:
             children = zk.get_children(path.as_posix())
             return [child for child in children if not self.is_file(path / child)]
 
