@@ -33,8 +33,8 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
 class Settings(BaseSettings):
     """Settings for a Ficus Instance."""
     config_filename: str = "ficus_setup.json"
-    # TODO: if this is ordered, then we also drive merge order from here.
-    scopes: set[str] = {"hostname", "subject_id"}
+    # Scope precedence, lowest first: configs merge defaults, then these in this order.
+    scopes: list[str] = ["hostname", "subject_id"]
     store: Literal["zookeeper", "file_system"] = "zookeeper"
     root_dir: str = "scratch"
     host: str = "eng-logtools:2181"
@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     def validate_scopes(cls, v):
         if "mode" in v:
             raise ValueError("'mode' cannot be a Scope.")
+        if len(set(v)) != len(v):
+            raise ValueError(f"Scopes must be unique: {v}")
         return v
 
     @classmethod

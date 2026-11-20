@@ -7,10 +7,10 @@ class DataStore(ABC):
     """Base Class for interacting with generic storage: Folders, Database, etc.
     """
 
-    def __init__(self, rootdir: Path | str, scopes: set[str],
+    def __init__(self, rootdir: Path | str, scopes: list[str],
                  create_missing_scopes: bool = True):
         self.rootdir: Path = Path(rootdir)
-        self.scopes: set = scopes
+        self.scopes: list[str] = list(scopes)  # precedence, lowest first
         self.validate_scopes(scopes, create_missing=create_missing_scopes)
 
     def _sanitize(self, path: str | Path) -> Path:

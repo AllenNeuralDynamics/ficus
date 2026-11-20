@@ -37,11 +37,13 @@ class PreviewRequest(BaseModel):
 # to set that up with how fastapi, as it assumes dict arguments are passed in the body.
 # We can parse out query params matching scope names manually though.
 def _parse_scopes(request: Request, data_store: DataStore = Depends(data_store)) -> dict[str, str]:
-    """Check query parameters for Parse query parameters into a dict of scope identifiers.
+    """Parse query parameters into a dict of scope identifiers, in Ficus's scope precedence.
 
-    Example: ``?hostname=host1&subject_id=123``.
+    Example: ``?subject_id=123&hostname=host1`` gives ``{"hostname": "host1", "subject_id": "123"}``
+    with the default scopes: the merge order is the settings', not the request's.
     """
-    return {k: v for k, v in request.query_params.items() if k in data_store.scopes}
+    params = request.query_params
+    return {scope: params[scope] for scope in data_store.scopes if scope in params}
 
 # Since we're parsing scopes manually, FastAPI doesn't know to add scopes to the openapi spec,
 # so we have to tell it by injecting this bit into each endpoint's openapi_extra.
