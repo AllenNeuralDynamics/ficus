@@ -1,31 +1,44 @@
-name: Tag and Publish
+name: Publish release image
 
+# Runs when someone publishes a GitHub release: nothing is released or published on a merge.
+# The release's tag must be v<version>, with <version> as in pyproject.toml (e.g. v0.3.0).
 on:
-  push:
-    branches:
-      - main
-      - dev
-  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
-  tag-and-publish:
-    uses: AllenNeuralDynamics/.github/.github/workflows/tag-release-sipe.yml@main
-    with:
-      build_docs: false
-
-  # The release's image, tagged with the release name (e.g. ghcr.io/allenneuraldynamics/ficus:v0.2.4).
-  # Runs here rather than on the tag: a tag pushed with GITHUB_TOKEN doesn't start other workflows.
-  publish-release-image:
-    needs: tag-and-publish
-    if: needs.tag-and-publish.outputs.tag_already_exists == 'false'
+  publish:
+    # confierge has its own releases (confierge-v...): not this image
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Set image name
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the version in pyproject.toml
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::The release tag is $TAG but pyproject.toml says $version: bump the version (uv version --bump ...) or tag v$version."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Set image name and tags
         id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tags="$name:$TAG"
+          # a pre-release gets only its own tag; a release also becomes :latest
+          if [ "$PRERELEASE" != "true" ]; then tags="$tags,$name:latest"; fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -37,8 +50,9 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
+          context: .
           push: true
-          tags: ${{ steps.image.outputs.name }}:${{ needs.tag-and-publish.outputs.tag_name }}
+          tags: ${{ steps.image.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ needs.tag-and-publish.outputs.project_version }}
+            org.opencontainers.image.version=${{ env.VERSION }}
